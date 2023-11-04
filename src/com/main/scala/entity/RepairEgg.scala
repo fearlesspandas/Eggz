@@ -24,9 +24,9 @@ case class RepairEgg(
       ZIO.succeed(ExitCode.success)
     } else
       for {
-        updatedSelf <- this.setHealth(health + repairValue).flatMap(_.setEnergy(this.energy - cost)).flatMap{
-          case stor:Storage.Service[String] => stor.add("Set health and energy values")
-        }.fold[Eggz.Service](_ => this,{case x:Eggz.Service => x})
+        updatedSelf <- this.setHealth(health + repairValue).flatMap(_.setEnergy(this.energy - cost)).flatMap {
+          case stor: Storage.Service[String] => stor.add("Set health and energy values")
+        }.fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
         ud <- Globz.update(updatedSelf)
         //        e <- Globz.update(this.setEnergy(energy - cost))
 
@@ -40,6 +40,13 @@ case class RepairEgg(
         _ <- ZIO.fromOption(r).flatMap(e => e.setHealth(e.health + repairValue)).flatMap(Globz.update(_)).mapError(_ => "")
       } yield ExitCode.success
 
+  override def setHealth(health: Double): IO[Eggz.EggzError, Eggz.Service] = IO {
+    this.copy(health = health)
+  }.mapError(_ => GenericEggzError("failed set health"))
+
+  override def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] = IO {
+    this.copy(energy = value)
+  }.mapError(_ => GenericEggzError("failed set energy"))
 
   override def add(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
@@ -50,20 +57,12 @@ case class RepairEgg(
     (for {
       r <- ZIO.fromOption(inventory).flatMap(_.remove(item: _*))
     } yield this.copy(inventory = Some(r))).mapError(_ => GenericServiceError(""))
-
-  override def setHealth(health: Double): IO[Eggz.EggzError, Eggz.Service] = IO {
-    this.copy(health = health)
-  }.mapError(_ => GenericEggzError("failed set health"))
-
-  override def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] = IO {
-    this.copy(energy = value)
-  }.mapError(_ => GenericEggzError("failed set energy"))
-
+  
   override def getAll(): IO[Storage.ServiceError, Set[String]] =
-    ( for{
+    (for {
       i <- ZIO.fromOption(inventory)
       inv <- i.getAll()
-    }yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
+    } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
 }
 
 object RepairEgg {
