@@ -31,7 +31,8 @@ case class RepairEgg(
           .setHealth(health + repairValue)
           .flatMap(_.setEnergy(this.energy - cost))
           .flatMap {
-            case stor: Storage.Service[String] => stor.add("Set health and energy values")
+            case stor: Storage.Service[String] =>
+              stor.add(s"Set health and energy values: ${stor.health}:${stor.energy}")
           }
           .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
         ud <- Globz.update(updatedSelf)

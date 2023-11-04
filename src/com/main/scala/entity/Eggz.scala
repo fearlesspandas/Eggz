@@ -25,6 +25,7 @@ object Eggz {
   trait Service extends EggzOps.Service {
     val id: ID
     val health: Double
+    val energy: Double
     val top: Option[ID]
     val bottom: Option[ID]
     val right: Option[ID]

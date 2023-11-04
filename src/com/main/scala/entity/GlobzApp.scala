@@ -36,11 +36,11 @@ object GlobzApp extends zio.App {
                 .tickAll()
                 .zipPar(putStrLn(s"all eggs current: ${all}").fold(e => (), x => x))
               t <- ZIO
-                .fromOption(
-                  all.collectFirst { case x: Storage.Service[String] => x }
+                .collectAllPar(
+                  all.collect { case x: Storage.Service[String] => x.getAll() }
                 )
-                .flatMap(_.getAll())
-              _ <- putStrLn(s"Inventories: ${t}")
+              //.flatMap(_)
+              _ <- putStrLn(s"Inventories: ${t.flatMap(x => x)}")
               //.mapError(_ => null.asInstanceOf[Nothing])
               //            _ <- putStrLn(s"all eggs current: ${all}").fold(e => (),x=>x)
             } yield true).fold(_ => true, x => x)
