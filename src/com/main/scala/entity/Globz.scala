@@ -1,8 +1,10 @@
 package src.com.main.scala.entity
 
 import src.com.main.scala.entity.EggzOps.ID
-import zio.{ExitCode, Has, IO, ZIO}
-
+import zio.ExitCode
+import zio.Has
+import zio.IO
+import zio.ZIO
 
 object Globz {
   type Globz = Has[Globz.Service]
@@ -11,7 +13,8 @@ object Globz {
   type GLOBZ_IN = Eggz.Service
 
   //define operations without service impl
-  def update(eggz: GLOBZ_IN): ZIO[Globz, GLOBZ_ERR, GLOBZ_OUT] = ZIO.accessM[Globz](_.get.update(eggz))
+  def update(eggz: GLOBZ_IN): ZIO[Globz, GLOBZ_ERR, GLOBZ_OUT] =
+    ZIO.accessM[Globz](_.get.update(eggz))
 
   def remove(id: ID): ZIO[Globz, GLOBZ_ERR, Unit] = ZIO.accessM(_.get.remove(id))
 
@@ -33,5 +36,3 @@ object Globz {
     def tickAll(): ZIO[Globz, GLOBZ_ERR, ExitCode]
   }
 }
-
-
