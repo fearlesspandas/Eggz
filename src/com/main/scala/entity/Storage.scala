@@ -16,11 +16,13 @@ object Storage {
   type REF_STORE[I] = Set[I]
 
   trait Service[I] {
-    val refs: REF_STORE[I]
+    //val refs: REF_STORE[I]
 
     def add(item: I*): IO[ServiceError, Storage.Service[I]]
 
     def remove(item: I*): IO[ServiceError, Storage.Service[I]]
+
+    def getAll():IO[ServiceError,Set[I]]
   }
 
 //    def add[I](item:I*):ZIO[Storage[I],ServiceError,Storage.Service[I]] = ZIO.accessM(_.get.add(item:_*))
@@ -43,6 +45,10 @@ case class basicStorage[I](refs: REF_STORE[I] = Set()) extends Storage.Service[I
   override def remove(item: I*): IO[Storage.ServiceError, Storage.Service[I]] = IO {
     basicStorage(refs.filter(i => !item.toSet.contains(i)))
   }.mapError(_ => GenericServiceError("whoopsie"))
+
+  override def getAll(): IO[Storage.ServiceError,Set[I]] = IO {
+    this.refs.toSet[I]
+  }.mapError(_ => GenericServiceError("error fetching inventory"))
 }
 
 object basicStorage {

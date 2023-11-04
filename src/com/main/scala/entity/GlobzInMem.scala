@@ -8,7 +8,7 @@ import zio.{ExitCode, Has, IO, ZIO, ZLayer}
 
 
 case class GlobzInMem() extends Globz.Service {
-  private val db = new util.HashMap[String, Eggz]()
+  private val db = new util.HashMap[String, Eggz.Service]()
 
   override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] = IO {
     db.put(eggz.id, eggz)
@@ -32,7 +32,7 @@ case class GlobzInMem() extends Globz.Service {
     } yield ExitCode.apply(fail)
 
   override def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_OUT]] = IO {
-    db.values().toArray().toSet.asInstanceOf[Set[Eggz]]
+    db.values().toArray().toSet.asInstanceOf[Set[Eggz.Service]]
   }.mapError(e => e.getMessage)
 }
 

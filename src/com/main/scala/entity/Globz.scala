@@ -7,8 +7,8 @@ import zio.{ExitCode, Has, IO, ZIO}
 object Globz {
   type Globz = Has[Globz.Service]
   type GLOBZ_ERR = String
-  type GLOBZ_OUT = Eggz
-  type GLOBZ_IN = Eggz
+  type GLOBZ_OUT = Eggz.Service
+  type GLOBZ_IN = Eggz.Service
 
   //define operations without service impl
   def update(eggz: GLOBZ_IN): ZIO[Globz, GLOBZ_ERR, GLOBZ_OUT] = ZIO.accessM[Globz](_.get.update(eggz))
