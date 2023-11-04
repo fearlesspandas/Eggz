@@ -2,7 +2,8 @@ package src.com.main.scala.entity
 
 import src.com.main.scala.entity.Storage.GenericServiceError
 import src.com.main.scala.entity.Storage.REF_STORE
-import zio.Has
+import zio.ZIO
+//import zio.Has
 import zio.IO
 
 trait storage {
@@ -12,7 +13,7 @@ trait storage {
 }
 
 object Storage {
-  type Storage[I] = Has[Storage.Service[I]]
+//  type Storage[I] = Has[Storage.Service[I]]
   type REF_STORE[I] = Set[I]
 
   trait Service[I] {
@@ -37,20 +38,26 @@ object Storage {
 case class basicStorage[I](refs: REF_STORE[I] = Set()) extends Storage.Service[I] {
   // val refs:REF_STORE[I] = HashSet()
   override def add(item: I*): IO[Storage.ServiceError, Storage.Service[I]] =
-    IO {
-      basicStorage(refs ++ item)
-      //.mapError( GenericServiceError("whoopsie"))
-    }.mapError(_ => GenericServiceError("whoopsie"))
+    ZIO
+      .succeed {
+        basicStorage(refs ++ item)
+        //.mapError( GenericServiceError("whoopsie"))
+      }
+  //.mapError(_ => GenericServiceError("whoopsie"))
 
   override def remove(item: I*): IO[Storage.ServiceError, Storage.Service[I]] =
-    IO {
-      basicStorage(refs.filter(i => !item.toSet.contains(i)))
-    }.mapError(_ => GenericServiceError("whoopsie"))
+    ZIO
+      .succeed {
+        basicStorage(refs.filter(i => !item.toSet.contains(i)))
+      }
+  //.mapError(_ => GenericServiceError("whoopsie"))
 
   override def getAll(): IO[Storage.ServiceError, Set[I]] =
-    IO {
-      this.refs.toSet[I]
-    }.mapError(_ => GenericServiceError("error fetching inventory"))
+    ZIO
+      .succeed {
+        this.refs.toSet[I]
+      }
+  //.mapError(_ => GenericServiceError("error fetching inventory"))
 }
 
 object basicStorage {

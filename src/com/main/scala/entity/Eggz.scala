@@ -1,7 +1,7 @@
 package src.com.main.scala.entity
 
 import src.com.main.scala.entity.EggzOps.ID
-import zio.Has
+//import zio.Has
 import zio.IO
 
 //
@@ -20,7 +20,6 @@ import zio.IO
 //}
 
 object Eggz {
-  type Eggz = Has[Eggz.Service]
 
   trait Service extends EggzOps.Service {
     val id: ID

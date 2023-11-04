@@ -1,46 +1,53 @@
 package src.com.main.scala.entity
 
-import src.com.main.scala.entity.Globz.Globz
-import zio.console.Console
-import zio.console.getStrLn
-import zio.console.putStrLn
+//import src.com.main.scala.entity.Globz.Globz
+import zio.Console
 import zio.ExitCode
 import zio.Ref
+import zio.Scope
 import zio.URIO
 import zio.ZIO
+import zio.ZIOApp
+import zio.ZIOAppArgs
+import zio.Runtime
+import zio.ZIOAppDefault
+import zio.ZLayer
 
-object GlobzApp extends zio.App {
+object GlobzApp extends ZIOAppDefault {
 
-  type ApplicationEnvironment = Console with Globz
+  type ApplicationEnvironment = Globz.Service
+  val addSimpleLogger: ZLayer[Any, Nothing, Unit] =
+    Runtime.addLogger((_, _, _, message: () => Any, _, _, _, _) => println(message()))
+  val localApplicationEnvironment = addSimpleLogger ++ GlobzEnvironment.inMemory
 
-  val localApplicationEnvironment = Console.live ++ GlobzEnvironment.inMemory
-
-  override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] =
-    program().provideLayer(localApplicationEnvironment) *> ZIO.succeed(ExitCode.success)
+  def run =
+    program().provideLayer(localApplicationEnvironment) *> ZIO.succeed(
+      ExitCode.success
+    )
 
   def program(): ZIO[ApplicationEnvironment, Nothing, ExitCode] = (
     (for {
-      _ <- putStrLn("Welcome")
+      _ <- Console.printLine("Welcome")
       ref <- Ref.make[Int](0)
-      _ <- (getStrLn.orDie
-        .repeatWhileM {
+      _ <- (Console.readLine.orDie
+        .repeatWhileZIO {
           case "q" => ZIO.succeed(false)
           case st =>
             (for {
-              _ <- putStrLn("Enter health amount:")
+              _ <- Console.printLine("Enter health amount:")
               id <- ref.get
               e <- Globz.update(RepairEgg(id.toString, st.toInt, 10)) //.mapError(null)
               _ <- ref.update(_ + 1)
               all <- Globz.getAll()
               _ <- Globz
                 .tickAll()
-                .zipPar(putStrLn(s"all eggs current: ${all}").fold(e => (), x => x))
+                .zipPar(Console.printLine(s"all eggs current: ${all}").fold(e => (), x => x))
               t <- ZIO
                 .collectAllPar(
                   all.collect { case x: Storage.Service[String] => x.getAll() }
                 )
               //.flatMap(_)
-              _ <- putStrLn(s"Inventories: ${t.flatMap(x => x)}")
+              _ <- Console.printLine(s"Inventories: ${t.flatMap(x => x)}")
               //.mapError(_ => null.asInstanceOf[Nothing])
               //            _ <- putStrLn(s"all eggs current: ${all}").fold(e => (),x=>x)
             } yield true).fold(_ => true, x => x)
@@ -61,4 +68,5 @@ object GlobzApp extends zio.App {
     //        .mapError(err => null.asInstanceOf[Nothing])
     //    )
   )
+
 }

@@ -4,36 +4,33 @@ import java.util
 
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
-import src.com.main.scala.entity.Globz.Globz
+//import src.com.main.scala.entity.Globz.Globz
 import zio.ExitCode
-import zio.Has
+//import zio.Has
 import zio.IO
 import zio.ZIO
 import zio.ZLayer
 
-case class GlobzInMem() extends Globz.Service {
+case class GlobzInMem(val id: GLOBZ_ID) extends Globz.Service {
   private val db = new util.HashMap[String, Eggz.Service]()
 
-  override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
-    IO {
-      db.put(eggz.id, eggz)
-      eggz
-    }.mapError(e => e.getMessage)
+  override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] = {
+    db.put(eggz.id, eggz)
+    ZIO.succeed(eggz)
+  }
 
   override def get(id: ID): IO[GLOBZ_ERR, Option[GLOBZ_OUT]] =
-    IO {
-      Option(db.get(id))
-    }.mapError(e => e.getMessage)
+    ZIO.succeed(Option(db.get(id)))
 
-  override def remove(id: ID): IO[GLOBZ_ERR, Unit] =
-    IO {
-      db.remove(id)
-      ()
-    }.mapError(e => e.getMessage)
+  override def remove(id: ID): IO[GLOBZ_ERR, Unit] = {
+    db.remove(id)
+    ZIO.succeed(())
+  }
 
-  override def tickAll(): ZIO[Globz, GLOBZ_ERR, ExitCode] =
+  override def tickAll(): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] =
     for {
       all <- getAll()
       e <- ZIO.collectAllPar(all.map(_.op.fold(_ => ExitCode.failure, x => x)))
@@ -41,11 +38,16 @@ case class GlobzInMem() extends Globz.Service {
     } yield ExitCode.apply(fail)
 
   override def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_OUT]] =
-    IO {
+    ZIO.succeed {
       db.values().toArray().toSet.asInstanceOf[Set[Eggz.Service]]
-    }.mapError(e => e.getMessage)
+    }
+
+  override def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Service] =
+    ZIO.succeed {
+      GlobzInMem(id)
+    }
 }
 
 object GlobzEnvironment {
-  val inMemory: ZLayer[Any, Nothing, Has[Globz.Service]] = ZLayer.succeed(GlobzInMem())
+  val inMemory: ZLayer[Any, Nothing, Globz.Service] = ZLayer.succeed(GlobzInMem("1"))
 }

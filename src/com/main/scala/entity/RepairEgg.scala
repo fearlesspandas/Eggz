@@ -3,10 +3,12 @@ package src.com.main.scala.entity
 import src.com.main.scala.entity.Eggz.GenericEggzError
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
-import src.com.main.scala.entity.Globz.Globz
+//import src.com.main.scala.entity.Globz.Globz
 import src.com.main.scala.entity.Storage.GenericServiceError
 import zio.ExitCode
 import zio.IO
+import zio.Ref
+
 import zio.ZIO
 
 case class RepairEgg(
@@ -22,7 +24,7 @@ case class RepairEgg(
   inventory: Option[Storage.Service[String]] = Some(basicStorage[String](Set()))
 ) extends StorageEgg[String] {
 
-  override def op: ZIO[Globz, String, ExitCode] =
+  override def op: ZIO[Globz.Service, String, ExitCode] =
     if (energy <= cost) {
       ZIO.succeed(ExitCode.success)
     } else
@@ -60,14 +62,18 @@ case class RepairEgg(
       } yield ExitCode.success
 
   override def setHealth(health: Double): IO[Eggz.EggzError, Eggz.Service] =
-    IO {
-      this.copy(health = health)
-    }.mapError(_ => GenericEggzError("failed set health"))
+    ZIO
+      .succeed {
+        this.copy(health = health)
+      }
+  //.mapError(_ => GenericEggzError("failed set health"))
 
   override def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] =
-    IO {
-      this.copy(energy = value)
-    }.mapError(_ => GenericEggzError("failed set energy"))
+    ZIO
+      .succeed {
+        this.copy(energy = value)
+      }
+  //.mapError(_ => GenericEggzError("failed set energy"))
 
   override def add(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
@@ -90,7 +96,7 @@ object RepairEgg {
   def apply(id: ID, health: Double, repairValue: Double): Eggz.Service =
     RepairEgg(id, health, repairValue, 1000, 20, None, None, None, None)
 
-  def op(egg: Eggz.Service): ZIO[Globz, GLOBZ_ERR, ExitCode] = egg.op
+  def op(egg: Eggz.Service): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = egg.op
 }
 
 class processingEgg() // proocesses resource to next stage
