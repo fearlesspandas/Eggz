@@ -90,6 +90,66 @@ case class RepairEgg(
       i <- ZIO.fromOption(inventory)
       inv <- i.getAll()
     } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
+
+  override def op2(glob: Ref[Globz.Service]): ZIO[Ref[Globz.Service], GLOBZ_ERR, ExitCode] =
+    (for {
+      g <- glob.get
+      updated <- this
+        .setHealth(health + repairValue)
+        .flatMap(_.setEnergy(energy - cost))
+        .flatMap {
+          case stor: Storage.Service[String] => stor.add("added stuff")
+        }
+        .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
+
+      //fix so that None's don't affect flow
+      t <- ZIO
+        .fromOption(top)
+        .flatMap(g.get(_))
+        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
+        .mapError(_ => "")
+        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
+      b <- ZIO
+        .fromOption(top)
+        .flatMap(g.get(_))
+        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
+        .mapError(_ => "")
+        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
+      l <- ZIO
+        .fromOption(top)
+        .flatMap(g.get(_))
+        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
+        .mapError(_ => "")
+        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
+      r <- ZIO
+        .fromOption(top)
+        .flatMap(g.get(_))
+        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
+        .mapError(_ => "")
+        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
+      gup <- g
+        .update(updated)
+        .flatMap(_.update(t))
+        .flatMap(_.update(b))
+        .flatMap(_.update(r))
+        .flatMap(_.update(l))
+      _ <- glob.update(_ => gup)
+    } yield ExitCode.success)
+//
+//    ZIO.environmentWithZIO[Ref[Globz.Service]] { ref =>
+//      val r = ref.get
+//      for {
+//        orig <- r.get
+//        updated <- this
+//          .setHealth(this.health + this.repairValue)
+//          .flatMap(_.setEnergy(this.energy - this.cost))
+//          .flatMap {
+//            case stor: Storage.Service[String] => stor.add("set health")
+//          }
+//      } yield ExitCode.success
+//
+//    }
+
 }
 
 object RepairEgg {
@@ -97,6 +157,14 @@ object RepairEgg {
     RepairEgg(id, health, repairValue, 1000, 20, None, None, None, None)
 
   def op(egg: Eggz.Service): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = egg.op
+
+//  def adjacentOps(value:Option[Eggz.Service]) =
+//    ZIO
+//      .fromOption(value)
+//      .flatMap(g.get(_))
+//      .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
+//      .mapError(_ => "")
+//      .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
 }
 
 class processingEgg() // proocesses resource to next stage

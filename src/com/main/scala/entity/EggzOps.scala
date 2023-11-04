@@ -1,6 +1,7 @@
 package src.com.main.scala.entity
 
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
+import zio.Ref
 //import src.com.main.scala.entity.Globz.Globz
 import zio.ExitCode
 //import zio.Has
@@ -11,6 +12,8 @@ object EggzOps {
 
   trait Service {
     def op: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
+
+    def op2(glob: Ref[Globz.Service]): ZIO[Ref[Globz.Service], GLOBZ_ERR, ExitCode]
   }
 
 }

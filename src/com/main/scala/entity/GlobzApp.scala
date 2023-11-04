@@ -18,12 +18,13 @@ object GlobzApp extends ZIOAppDefault {
   type ApplicationEnvironment = Globz.Service
   val addSimpleLogger: ZLayer[Any, Nothing, Unit] =
     Runtime.addLogger((_, _, _, message: () => Any, _, _, _, _) => println(message()))
-  val localApplicationEnvironment = addSimpleLogger ++ GlobzEnvironment.inMemory
+  val localApplicationEnvironment = addSimpleLogger ++ GlobzEnvironment.inMemory // ++ GlobzEnvironment.anyRef
 
   def run =
-    program().provideLayer(localApplicationEnvironment) *> ZIO.succeed(
-      ExitCode.success
-    )
+    program().provideLayer(localApplicationEnvironment).provideLayer(GlobzEnvironment.anyRef) *> ZIO
+      .succeed(
+        ExitCode.success
+      )
 
   def program(): ZIO[ApplicationEnvironment, Nothing, ExitCode] = (
     (for {

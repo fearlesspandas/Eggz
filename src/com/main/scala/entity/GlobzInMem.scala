@@ -7,28 +7,32 @@ import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
+import zio.Ref
 //import src.com.main.scala.entity.Globz.Globz
 import zio.ExitCode
 //import zio.Has
 import zio.IO
 import zio.ZIO
 import zio.ZLayer
-
-case class GlobzInMem(val id: GLOBZ_ID) extends Globz.Service {
+// move to this model : https://github.com/psisoyev/release-pager/blob/master/storage/src/main/scala/io/pager/subscription/chat/ChatStorage.scala#L20
+case class GlobzInMem(val id: GLOBZ_ID, dbref: Ref[Map[GLOBZ_ID, Eggz.Service]])
+    extends Globz.Service {
   private val db = new util.HashMap[String, Eggz.Service]()
 
-  override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] = {
-    db.put(eggz.id, eggz)
-    ZIO.succeed(eggz)
-  }
+  override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
+    (for {
+      _ <- dbref.update(_.updated(eggz.id, eggz))
+      udtd <- dbref.get
+    } yield this)
+  override def get(id: ID): IO[GLOBZ_ERR, Option[GLOBZ_IN]] =
+    for {
+      r <- dbref.get
+    } yield r.get(id)
 
-  override def get(id: ID): IO[GLOBZ_ERR, Option[GLOBZ_OUT]] =
-    ZIO.succeed(Option(db.get(id)))
-
-  override def remove(id: ID): IO[GLOBZ_ERR, Unit] = {
-    db.remove(id)
-    ZIO.succeed(())
-  }
+  override def remove(id: ID): IO[GLOBZ_ERR, Unit] =
+    for {
+      _ <- dbref.update(_.removed(id))
+    } yield ()
 
   override def tickAll(): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] =
     for {
@@ -37,17 +41,22 @@ case class GlobzInMem(val id: GLOBZ_ID) extends Globz.Service {
       fail = e.filter(_ != ExitCode.success).size
     } yield ExitCode.apply(fail)
 
-  override def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_OUT]] =
-    ZIO.succeed {
-      db.values().toArray().toSet.asInstanceOf[Set[Eggz.Service]]
-    }
+  override def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]] =
+    for {
+      ref <- dbref.get
+    } yield ref.values.toSet
 
   override def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Service] =
-    ZIO.succeed {
-      GlobzInMem(id)
-    }
+    ???
 }
 
 object GlobzEnvironment {
-  val inMemory: ZLayer[Any, Nothing, Globz.Service] = ZLayer.succeed(GlobzInMem("1"))
+  val inMemory = ZLayer {
+    ZIO.service[Ref[Map[GLOBZ_ID, Eggz.Service]]].map(GlobzInMem("1", _))
+  }
+  val anyRef: ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Eggz.Service]]] = ZLayer {
+    for {
+      m <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
+    } yield m
+  }
 }
