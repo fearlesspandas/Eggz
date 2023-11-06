@@ -37,27 +37,27 @@ case class RepairEgg(
               stor.add(s"Set health and energy values: ${stor.health}:${stor.energy}")
           }
           .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
-        ud <- Globz.update(updatedSelf)
-        t <- ZIO
-          .fromOption(top)
-          .flatMap(Globz.get(_))
-          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-          .mapError(_ => "no value for top")
-        b <- ZIO
-          .fromOption(bottom)
-          .flatMap(Globz.get(_))
-          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-          .mapError(_ => "error getting right")
-        l <- ZIO
-          .fromOption(left)
-          .flatMap(Globz.get(_))
-          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-          .mapError(_ => "error")
-        r <- ZIO
-          .fromOption(right)
-          .flatMap(Globz.get(_))
-          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-          .mapError(_ => "error")
+        ud <- ZIO.service[Globz.Service].flatMap(_.update(updatedSelf))
+//        t <- ZIO
+//          .fromOption(top)
+//          .flatMap(Globz.get(_))
+//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
+//          .mapError(_ => "no value for top")
+//        b <- ZIO
+//          .fromOption(bottom)
+//          .flatMap(Globz.get(_))
+//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
+//          .mapError(_ => "error getting right")
+//        l <- ZIO
+//          .fromOption(left)
+//          .flatMap(Globz.get(_))
+//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
+//          .mapError(_ => "error")
+//        r <- ZIO
+//          .fromOption(right)
+//          .flatMap(Globz.get(_))
+//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
+//          .mapError(_ => "error")
 
       } yield ExitCode.success
 

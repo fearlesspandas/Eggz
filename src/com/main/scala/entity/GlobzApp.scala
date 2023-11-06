@@ -29,6 +29,7 @@ object GlobzApp extends ZIOAppDefault {
   def program(): ZIO[ApplicationEnvironment, Nothing, ExitCode] = (
     (for {
       _ <- Console.printLine("Welcome")
+      g <- Globz.create("1")
       ref <- Ref.make[Int](0)
       _ <- (Console.readLine.orDie
         .repeatWhileZIO {
@@ -37,10 +38,10 @@ object GlobzApp extends ZIOAppDefault {
             (for {
               _ <- Console.printLine("Enter health amount:")
               id <- ref.get
-              e <- Globz.update(RepairEgg(id.toString, st.toInt, 10)) //.mapError(null)
+              e <- g.update(RepairEgg(id.toString, st.toInt, 10)) //.mapError(null)
               _ <- ref.update(_ + 1)
-              all <- Globz.getAll()
-              _ <- Globz
+              all <- g.getAll()
+              _ <- g
                 .tickAll()
                 .zipPar(Console.printLine(s"all eggs current: ${all}").fold(e => (), x => x))
               t <- ZIO

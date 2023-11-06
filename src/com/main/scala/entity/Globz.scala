@@ -13,19 +13,19 @@ object Globz {
   type GLOBZ_IN = Eggz.Service
   type GLOBZ_ID = String
   //define operations without service impl
-  def update(eggz: GLOBZ_IN): ZIO[Globz.Service, GLOBZ_ERR, GLOBZ_OUT] =
-    ZIO.environmentWithZIO[Globz.Service](_.get.update(eggz))
-//    ZIO.environmentWithZIO[Globz](_.get.update(eggz))
-
-  def remove(id: ID): ZIO[Globz.Service, GLOBZ_ERR, Unit] = ZIO.environmentWithZIO(_.get.remove(id))
-
-  def get(id: ID): ZIO[Globz.Service, GLOBZ_ERR, Option[GLOBZ_IN]] =
-    ZIO.environmentWithZIO(_.get.get(id))
-
-  def getAll(): ZIO[Globz.Service, GLOBZ_ERR, Set[GLOBZ_IN]] =
-    ZIO.environmentWithZIO(_.get.getAll())
-
-  def tickAll(): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = ZIO.environmentWithZIO(_.get.tickAll())
+//  def update(eggz: GLOBZ_IN): ZIO[Globz.Service, GLOBZ_ERR, GLOBZ_OUT] =
+//    ZIO.environmentWithZIO[Globz.Service](_.get.update(eggz))
+////    ZIO.environmentWithZIO[Globz](_.get.update(eggz))
+//
+//  def remove(id: ID): ZIO[Globz.Service, GLOBZ_ERR, Unit] = ZIO.environmentWithZIO(_.get.remove(id))
+//
+//  def get(id: ID): ZIO[Globz.Service, GLOBZ_ERR, Option[GLOBZ_IN]] =
+//    ZIO.environmentWithZIO(_.get.get(id))
+//
+//  def getAll(): ZIO[Globz.Service, GLOBZ_ERR, Set[GLOBZ_IN]] =
+//    ZIO.environmentWithZIO(_.get.getAll())
+//
+//  def tickAll(): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = ZIO.environmentWithZIO(_.get.tickAll())
   def create(id: GLOBZ_ID): ZIO[Globz.Service, GLOBZ_ERR, Globz.Service] =
     ZIO.environmentWithZIO(_.get.create(id))
   trait Service {
@@ -38,7 +38,7 @@ object Globz {
 
     def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]]
 
-    def tickAll(): ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
+    def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode]
 
     def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Service]
   }
