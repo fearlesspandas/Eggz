@@ -14,15 +14,11 @@ import zio.ZIO
 
 case class RepairEgg(
   val id: ID,
-  health: Double,
+  health: Ref[Double],
   repairValue: Double,
-  energy: Double,
+  energy: Ref[Double],
   cost: Double,
-  top: Option[ID] = None,
-  bottom: Option[ID] = None,
-  right: Option[ID] = None,
-  left: Option[ID] = None,
-  inventory: Option[Storage.Service[String]] = Some(basicStorage[String](Set()))
+  inventory: Ref[Storage.Service[String]]
 ) extends StorageEgg[String] {
   def handleAdjacents(
     adj: Option[GLOBZ_ID],
@@ -37,96 +33,71 @@ case class RepairEgg(
       } yield e
     }
   override def op: ZIO[Globz.Service, String, ExitCode] =
-    if (energy <= cost) {
-      ZIO.succeed(ExitCode.success)
-    } else
-      for {
-        updatedSelf <- this
-          .setHealth(health + repairValue)
-          .flatMap(_.setEnergy(this.energy - cost))
-          .flatMap {
-            case stor: Storage.Service[String] =>
-              stor.add(s"Set health and energy values: ${stor.health}:${stor.energy}")
-          }
-          .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
-        ud <- ZIO.service[Globz.Service].flatMap(_.update(updatedSelf))
+    this.energy.get.flatMap(e =>
+      this.health.get.flatMap { h =>
+        if (e <= cost) {
+          ZIO.succeed(ExitCode.success)
+        } else
+          for {
+            //repairs self
+            _ <- this
+              .setHealth(h + repairValue)
+              .flatMap(_.setEnergy(e - cost))
+              .flatMap {
+                case stor: Storage.Service[String] =>
+                  stor.add(s"Set health and energy values: ${stor.health}:${stor.energy}")
+              }
+              .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
+            ud <- ZIO
+              .service[Globz.Service]
+              .flatMap(glob => glob.neighbors(this))
+              .flatMap { neighbors =>
+                ZIO.collectAllPar(
+                  neighbors.map(egg =>
+                    for {
+                      h_curr <- egg.health.get
+                      up <- egg.setHealth(h_curr + repairValue)
+                    } yield up
+                  )
+                )
+              }
+              .mapError(_ => "")
 
-      } yield ExitCode.success
+          } yield ExitCode.success
+      }
+    )
 
   override def setHealth(health: Double): IO[Eggz.EggzError, Eggz.Service] =
-    ZIO
-      .succeed {
-        this.copy(health = health)
-      }
+    for {
+      _ <- this.health.update(_ => health)
+    } yield this
   //.mapError(_ => GenericEggzError("failed set health"))
 
   override def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] =
-    ZIO
-      .succeed {
-        this.copy(energy = value)
-      }
+    for {
+      _ <- this.energy.update(_ => value)
+    } yield this
   //.mapError(_ => GenericEggzError("failed set energy"))
 
   override def add(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
-      r <- ZIO.fromOption(inventory).flatMap(_.add(item: _*))
-    } yield this.copy(inventory = Some(r))).mapError(_ => GenericServiceError(""))
+      i <- inventory.get
+      iUP <- i.add(item: _*)
+      r <- inventory.update(_ => iUP)
+    } yield this).mapError(_ => GenericServiceError(""))
 
   override def remove(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
-      r <- ZIO.fromOption(inventory).flatMap(_.remove(item: _*))
-    } yield this.copy(inventory = Some(r))).mapError(_ => GenericServiceError(""))
+      i <- inventory.get
+      iUp <- i.remove(item: _*)
+      r <- inventory.update(_ => iUp)
+    } yield this).mapError(_ => GenericServiceError(""))
 
   override def getAll(): IO[Storage.ServiceError, Set[String]] =
     (for {
-      i <- ZIO.fromOption(inventory)
+      i <- inventory.get
       inv <- i.getAll()
     } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
-
-  override def op2(glob: Ref[Globz.Service]): ZIO[Ref[Globz.Service], GLOBZ_ERR, ExitCode] =
-    (for {
-      g <- glob.get
-      updated <- this
-        .setHealth(health + repairValue)
-        .flatMap(_.setEnergy(energy - cost))
-        .flatMap {
-          case stor: Storage.Service[String] => stor.add("added stuff")
-        }
-        .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
-
-      //fix so that None's don't affect flow
-      t <- ZIO
-        .fromOption(top)
-        .flatMap(g.get(_))
-        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
-        .mapError(_ => "")
-        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
-      b <- ZIO
-        .fromOption(top)
-        .flatMap(g.get(_))
-        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
-        .mapError(_ => "")
-        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
-      l <- ZIO
-        .fromOption(top)
-        .flatMap(g.get(_))
-        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
-        .mapError(_ => "")
-        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
-      r <- ZIO
-        .fromOption(top)
-        .flatMap(g.get(_))
-        .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
-        .mapError(_ => "")
-        .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
-      gup <- g
-        .update(updated)
-        .flatMap(_.update(t))
-        .flatMap(_.update(b))
-        .flatMap(_.update(r))
-        .flatMap(_.update(l))
-      _ <- glob.update(_ => gup)
-    } yield ExitCode.success)
 //
 //    ZIO.environmentWithZIO[Ref[Globz.Service]] { ref =>
 //      val r = ref.get
@@ -145,8 +116,12 @@ case class RepairEgg(
 }
 
 object RepairEgg {
-  def apply(id: ID, health: Double, repairValue: Double): Eggz.Service =
-    RepairEgg(id, health, repairValue, 1000, 20, None, None, None, None)
+  def make(id: ID, health: Double, repairValue: Double): IO[Nothing, Eggz.Service] =
+    for {
+      h <- Ref.make(health)
+      e <- Ref.make(1000.0)
+      bs <- Ref.make(basicStorage[String](Set()))
+    } yield RepairEgg(id, h, repairValue, e, 20, bs.asInstanceOf[Ref[Storage.Service[String]]])
 
   def op(egg: Eggz.Service): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = egg.op
 

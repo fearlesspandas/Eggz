@@ -20,6 +20,7 @@ object WorldBlock {
       blob: Globz.Service,
       coords: Vector[Double]
     ): IO[WorldBlockError, ExitCode]
+    def spawnFreshBlob(coords: Vector[Double]): ZIO[Globz.Service, WorldBlockError, ExitCode]
     def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz.Service]]
     def removeBlob(blob: Globz.Service): IO[WorldBlockError, ExitCode]
     def tickAllBlobs(): ZIO[Globz.Service, WorldBlockError, ExitCode]
@@ -30,7 +31,10 @@ object WorldBlock {
     coords: Vector[Double]
   ): ZIO[WorldBlock.Service, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO(_.get.spawnBlob(blob, coords))
-
+  def spawnFreshBlob(
+    coords: Vector[Double]
+  ): ZIO[WorldBlock.Service with Globz.Service, WorldBlockError, ExitCode] =
+    ZIO.service[WorldBlock.Service].flatMap(_.spawnFreshBlob(coords))
   def getAllBlobs(): ZIO[WorldBlock.Service, WorldBlockError, Set[Globz.Service]] =
     ZIO.environmentWithZIO[WorldBlock.Service](_.get.getAllBlobs())
 
@@ -81,14 +85,30 @@ case class WorldBlockInMem(
       r <- ZIO.collectAllPar(all.map(g => g.tickAll().provide(ZLayer { ZIO.succeed(g) })))
       fail = r.filter(_ != ExitCode.success).size
     } yield ExitCode.apply(fail)).mapError(_ => GenericWorldBlockError("error tick blobs"))
+
+  override def spawnFreshBlob(
+    coords: Vector[Double]
+  ): ZIO[Globz.Service, WorldBlock.WorldBlockError, ExitCode] =
+    ZIO.service[Globz.Service].flatMap(spawnBlob(_, coords))
 }
 
 object WorldBlockEnvironment {
 
-  val worldblock = ZLayer {
-    ZIO
-      .service[Ref[Map[GLOBZ_ID, Vector[Double]]]]
-      .flatMap(s => ZIO.service[Ref[Map[GLOBZ_ID, Globz.Service]]].map(t => WorldBlockInMem(s, t)))
+  val worldblock =
+    ZLayer[Ref[Map[GLOBZ_ID, Vector[Double]]] with Ref[Map[GLOBZ_ID, Globz.Service]], Nothing, WorldBlock.Service] {
+      ZIO
+        .service[Ref[Map[GLOBZ_ID, Vector[Double]]]]
+        .flatMap(s => ZIO.service[Ref[Map[GLOBZ_ID, Globz.Service]]].map(t => WorldBlockInMem(s, t))
+        )
+    }
+  val anyref = ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Vector[Double]]]] {
+    for {
+      r <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
+    } yield r
+  } ++ ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Globz.Service]]] {
+    for {
+      r <- Ref.make(Map.empty[GLOBZ_ID, Globz.Service])
+    } yield r
   }
 
 }

@@ -66,27 +66,36 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
     } yield ()
 
   override def neighbors(egg: entity.Globz.GLOBZ_IN): IO[GLOBZ_ERR, Vector[entity.Globz.GLOBZ_IN]] =
-    for {
+    (for {
       rels <- relationRef.get
-      tasks = rels.toSeq
+      tasks = rels.toVector
         .collect {
           case ((id1, id2), related) if id1 == egg.id && related => id2
           case ((id1, id2), related) if id2 == egg.id && related => id1
         }
         .map(x => get(x))
       k <- ZIO.collectAllPar(tasks)
-    } yield ???
+    } yield k.collect({ case Some(g) => g })).mapError(_ => "whoops")
 }
 
 object GlobzEnvironment {
   type EggMap = Ref[Map[GLOBZ_ID, Eggz.Service]]
   type RelationMap = Ref[Map[(GLOBZ_ID, GLOBZ_ID), Boolean]]
   val inMemory = ZLayer {
-    ZIO.service[Ref[Map[GLOBZ_ID, Eggz.Service]]].map(GlobzInMem("1", _))
+    ZIO
+      .service[EggMap]
+      .flatMap { eggmap =>
+        ZIO.service[RelationMap].map(relationmap => GlobzInMem("1", eggmap, relationmap))
+      }
   }
-  val anyRef: ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Eggz.Service]]] = ZLayer {
+  val anyRef: ZLayer[Any, Nothing, EggMap with RelationMap] = ZLayer {
     for {
       m <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
+
     } yield m
+  } ++ ZLayer {
+    for {
+      r <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
+    } yield r
   }
 }

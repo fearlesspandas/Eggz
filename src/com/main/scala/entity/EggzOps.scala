@@ -20,7 +20,7 @@ object EggzOps {
 //    def lop: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
 //    def rop: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
 
-    def op2(glob: Ref[Globz.Service]): ZIO[Ref[Globz.Service], GLOBZ_ERR, ExitCode]
+    //def op2(glob: Ref[Globz.Service]): ZIO[Ref[Globz.Service], GLOBZ_ERR, ExitCode]
   }
 
 }

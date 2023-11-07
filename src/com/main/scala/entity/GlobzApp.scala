@@ -1,6 +1,12 @@
 package src.com.main.scala.entity
 
 //import src.com.main.scala.entity.Globz.Globz
+import controller.BasicController
+import controller.CREATE_GLOB
+import controller.GET_ALL_GLOBS
+import controller.Command.CommandError
+import entity.WorldBlock
+import entity.WorldBlockEnvironment
 import zio.Console
 import zio.ExitCode
 import zio.Ref
@@ -15,20 +21,37 @@ import zio.ZLayer
 
 object GlobzApp extends ZIOAppDefault {
 
-  type ApplicationEnvironment = Globz.Service
+  type ApplicationEnvironment = Globz.Service with WorldBlock.Service
   val addSimpleLogger: ZLayer[Any, Nothing, Unit] =
     Runtime.addLogger((_, _, _, message: () => Any, _, _, _, _) => println(message()))
-  val localApplicationEnvironment = addSimpleLogger ++ GlobzEnvironment.inMemory // ++ GlobzEnvironment.anyRef
+  val localApplicationEnvironment =
+    addSimpleLogger ++ GlobzEnvironment.inMemory ++ WorldBlockEnvironment.worldblock // ++ GlobzEnvironment.anyRef
 
   def run =
-    program().provideLayer(localApplicationEnvironment).provideLayer(GlobzEnvironment.anyRef) *> ZIO
-      .succeed(
-        ExitCode.success
-      )
+    program2()
+      .provideLayer(localApplicationEnvironment)
+      .provideLayer(GlobzEnvironment.anyRef ++ WorldBlockEnvironment.anyref)
+//      .provideLayer(WorldBlockEnvironment.anyref)
+//  program2()
+//    .provideLayer(GlobzEnvironment.anyRef)
+//    .provideLayer(WorldBlockEnvironment.anyref)
+//    .provideLayer(localApplicationEnvironment) *> ZIO
+//    .succeed(
+//      ExitCode.success
+//    )
 
+  def program2(): ZIO[ApplicationEnvironment, Nothing, ExitCode] =
+    (for {
+      controller <- BasicController.make
+      cmd = CREATE_GLOB("1", Vector(0))
+      _ <- controller.runCommand[CommandError](cmd.run)
+      res <- controller.runQuery[Set[Globz.Service], CommandError](GET_ALL_GLOBS().run)
+      _ <- Console.printLine(s"RESULTS: $res")
+    } yield ExitCode.success).mapError(_ => null.asInstanceOf[Nothing])
   def program(): ZIO[ApplicationEnvironment, Nothing, ExitCode] = (
     (for {
       _ <- Console.printLine("Welcome")
+      controller <- BasicController.make
       g <- Globz.create("1")
       ref <- Ref.make[Int](0)
       _ <- (Console.readLine.orDie
@@ -38,7 +61,8 @@ object GlobzApp extends ZIOAppDefault {
             (for {
               _ <- Console.printLine("Enter health amount:")
               id <- ref.get
-              e <- g.update(RepairEgg(id.toString, st.toInt, 10)) //.mapError(null)
+              egg <- RepairEgg.make(id.toString, st.toInt, 10)
+              e <- g.update(egg) //.mapError(null)
               _ <- ref.update(_ + 1)
               all <- g.getAll()
               _ <- g
