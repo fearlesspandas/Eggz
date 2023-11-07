@@ -24,6 +24,7 @@ object WorldBlock {
     def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz.Service]]
     def removeBlob(blob: Globz.Service): IO[WorldBlockError, ExitCode]
     def tickAllBlobs(): ZIO[Globz.Service, WorldBlockError, ExitCode]
+    def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz.Service]]
   }
 
   def spawnBlob(
@@ -45,7 +46,8 @@ object WorldBlock {
 
   def tickAllBlobs(): ZIO[WorldBlock.Service with Globz.Service, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO[WorldBlock.Service](_.get.tickAllBlobs())
-
+  def getBlob(id: GLOBZ_ID): ZIO[WorldBlock.Service, WorldBlockError, Option[Globz.Service]] =
+    ZIO.service[WorldBlock.Service].flatMap(_.getBlob(id))
   trait WorldBlockError
 
   case class GenericWorldBlockError(msg: String) extends WorldBlockError
@@ -90,6 +92,11 @@ case class WorldBlockInMem(
     coords: Vector[Double]
   ): ZIO[Globz.Service, WorldBlock.WorldBlockError, ExitCode] =
     ZIO.service[Globz.Service].flatMap(spawnBlob(_, coords))
+
+  override def getBlob(id: GLOBZ_ID): IO[WorldBlock.WorldBlockError, Option[Globz.Service]] =
+    for {
+      res <- dbRef.get.map(_.get(id))
+    } yield res
 }
 
 object WorldBlockEnvironment {

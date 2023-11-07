@@ -6,11 +6,12 @@ import entity.WorldBlock
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.GlobzInMem
 import src.com.main.scala.entity.Globz.GLOBZ_ID
+import zio.Ref
 import zio.ZIO
 import zio.ZLayer
 
 trait BasicController[Env] {
-  def runCommand[E](comm: ZIO[Env, E, Unit]): ZIO[Any, E, Unit]
+  def runCommand[E](comm: ZIO[Env, E, Unit]): ZIO[Any, E, BasicController[Env]]
   def runQuery[Q, E](query: ZIO[Env, E, Q]): ZIO[Any, E, Q]
 
 }
@@ -23,20 +24,32 @@ object BasicController {
   ]] =
     ZIO
       .service[Globz.Service]
-      .flatMap(glob => ZIO.service[WorldBlock.Service].map(Control(glob, _)))
+      .flatMap(glob =>
+        ZIO
+          .service[WorldBlock.Service]
+          .flatMap(worldblock =>
+            for {
+              r <- Ref.make(worldblock)
+            } yield Control(glob, r)
+          )
+      )
 }
 
-case class Control(glob: Globz.Service, worldBlock: WorldBlock.Service)
+case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Service])
     extends BasicController[Globz.Service with WorldBlock.Service] {
 
   override def runCommand[E](
     comm: ZIO[Globz.Service with WorldBlock.Service, E, Unit]
-  ): ZIO[Any, E, Unit] =
-    comm.provide(ZLayer { ZIO.succeed { glob } } ++ ZLayer { ZIO.succeed(worldBlock) })
+  ): ZIO[Any, E, BasicController[Globz.Service with WorldBlock.Service]] =
+    for {
+      wb <- worldBlock.get
+      _ <- comm.provide(ZLayer { ZIO.succeed { glob } } ++ ZLayer { ZIO.succeed(wb) })
+    } yield this
 
   override def runQuery[Q, E](
     query: ZIO[Globz.Service with WorldBlock.Service, E, Q]
   ): ZIO[Any, E, Q] =
-    query.provide(ZLayer { ZIO.succeed { glob } } ++ ZLayer { ZIO.succeed(worldBlock) })
-
+    worldBlock.get.flatMap(wb =>
+      query.provide(ZLayer { ZIO.succeed { glob } } ++ ZLayer { ZIO.succeed(wb) })
+    )
 }

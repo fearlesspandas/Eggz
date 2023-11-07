@@ -71,13 +71,11 @@ case class RepairEgg(
     for {
       _ <- this.health.update(_ => health)
     } yield this
-  //.mapError(_ => GenericEggzError("failed set health"))
 
   override def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] =
     for {
       _ <- this.energy.update(_ => value)
     } yield this
-  //.mapError(_ => GenericEggzError("failed set energy"))
 
   override def add(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
@@ -98,20 +96,6 @@ case class RepairEgg(
       i <- inventory.get
       inv <- i.getAll()
     } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
-//
-//    ZIO.environmentWithZIO[Ref[Globz.Service]] { ref =>
-//      val r = ref.get
-//      for {
-//        orig <- r.get
-//        updated <- this
-//          .setHealth(this.health + this.repairValue)
-//          .flatMap(_.setEnergy(this.energy - this.cost))
-//          .flatMap {
-//            case stor: Storage.Service[String] => stor.add("set health")
-//          }
-//      } yield ExitCode.success
-//
-//    }
 
 }
 
@@ -124,14 +108,6 @@ object RepairEgg {
     } yield RepairEgg(id, h, repairValue, e, 20, bs.asInstanceOf[Ref[Storage.Service[String]]])
 
   def op(egg: Eggz.Service): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = egg.op
-
-//  def adjacentOps(value:Option[Eggz.Service]) =
-//    ZIO
-//      .fromOption(value)
-//      .flatMap(g.get(_))
-//      .flatMap { case Some(egg) => egg.setHealth(egg.health + repairValue); }
-//      .mapError(_ => "")
-//      .fold(_ => updated, x => x) //this is hacky but should work if adjacents are None
 }
 
 class processingEgg() // proocesses resource to next stage

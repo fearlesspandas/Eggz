@@ -2,20 +2,24 @@ package src.com.main.scala.entity
 
 //import src.com.main.scala.entity.Globz.Globz
 import controller.BasicController
+import controller.CREATE_EGG
 import controller.CREATE_GLOB
 import controller.GET_ALL_GLOBS
+import controller.GET_BLOB
+import controller.TICK_WORLD
 import controller.Command.CommandError
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
 import zio.Console
 import zio.ExitCode
+import zio.Random
 import zio.Ref
+import zio.Runtime
 import zio.Scope
 import zio.URIO
 import zio.ZIO
 import zio.ZIOApp
 import zio.ZIOAppArgs
-import zio.Runtime
 import zio.ZIOAppDefault
 import zio.ZLayer
 
@@ -43,11 +47,16 @@ object GlobzApp extends ZIOAppDefault {
   def program2(): ZIO[ApplicationEnvironment, Nothing, ExitCode] =
     (for {
       controller <- BasicController.make
-      cmd = CREATE_GLOB("1", Vector(0))
-      _ <- controller.runCommand[CommandError](cmd.run)
-      res <- controller.runQuery[Set[Globz.Service], CommandError](GET_ALL_GLOBS().run)
-      _ <- Console.printLine(s"RESULTS: $res")
+      egg <- RepairEgg.make("1", 100, 10)
+      _ <- controller.runCommand(CREATE_GLOB("1", Vector(0)).run)
+      _ <- controller.runCommand(CREATE_GLOB("2", Vector(1)).run)
+      g <- controller.runQuery(GET_BLOB("1").run)
+      _ <- controller.runCommand(CREATE_EGG(egg, g.get).run)
+      _ <- controller.runCommand(TICK_WORLD().run)
+      res2 <- controller.runQuery[Set[Globz.Service], CommandError](GET_ALL_GLOBS().run)
+      _ <- Console.printLine(s"RESULTS: $res2")
     } yield ExitCode.success).mapError(_ => null.asInstanceOf[Nothing])
+
   def program(): ZIO[ApplicationEnvironment, Nothing, ExitCode] = (
     (for {
       _ <- Console.printLine("Welcome")
