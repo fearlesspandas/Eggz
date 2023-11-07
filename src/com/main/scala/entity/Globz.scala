@@ -30,6 +30,8 @@ object Globz {
     ZIO.environmentWithZIO(_.get.create(id))
   trait Service {
     val id: GLOBZ_ID
+    //def getId : IO[GLOBZ_ERR,GLOBZ_ID]
+    //def setId : IO[GLOBZ_ERR, UNIT]
     def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT]
 
     def get(id: ID): IO[GLOBZ_ERR, Option[GLOBZ_IN]]
@@ -41,5 +43,9 @@ object Globz {
     def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode]
 
     def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Service]
+
+    def relate(egg1: Eggz.Service, egg2: Eggz.Service): IO[GLOBZ_ERR, Unit]
+
+    def neighbors(egg: Eggz.Service): IO[GLOBZ_ERR, Vector[Eggz.Service]]
   }
 }

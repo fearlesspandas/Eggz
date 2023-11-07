@@ -25,6 +25,7 @@ object Eggz {
     val id: ID
     val health: Double
     val energy: Double
+    //remove these and move to globz
     val top: Option[ID]
     val bottom: Option[ID]
     val right: Option[ID]

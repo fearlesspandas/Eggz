@@ -3,6 +3,7 @@ package src.com.main.scala.entity
 import src.com.main.scala.entity.Eggz.GenericEggzError
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 //import src.com.main.scala.entity.Globz.Globz
 import src.com.main.scala.entity.Storage.GenericServiceError
 import zio.ExitCode
@@ -23,7 +24,18 @@ case class RepairEgg(
   left: Option[ID] = None,
   inventory: Option[Storage.Service[String]] = Some(basicStorage[String](Set()))
 ) extends StorageEgg[String] {
-
+  def handleAdjacents(
+    adj: Option[GLOBZ_ID],
+    default: Eggz.Service
+  ): ZIO[Globz.Service, Nothing, Eggz.Service] =
+    ZIO.service[Globz.Service].flatMap { glob =>
+      for {
+        e <- ZIO
+          .fromOption(adj)
+          .flatMap(glob.get(_))
+          .fold[Eggz.Service](_ => default, x => x.getOrElse(default))
+      } yield e
+    }
   override def op: ZIO[Globz.Service, String, ExitCode] =
     if (energy <= cost) {
       ZIO.succeed(ExitCode.success)
@@ -38,26 +50,6 @@ case class RepairEgg(
           }
           .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
         ud <- ZIO.service[Globz.Service].flatMap(_.update(updatedSelf))
-//        t <- ZIO
-//          .fromOption(top)
-//          .flatMap(Globz.get(_))
-//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-//          .mapError(_ => "no value for top")
-//        b <- ZIO
-//          .fromOption(bottom)
-//          .flatMap(Globz.get(_))
-//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-//          .mapError(_ => "error getting right")
-//        l <- ZIO
-//          .fromOption(left)
-//          .flatMap(Globz.get(_))
-//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-//          .mapError(_ => "error")
-//        r <- ZIO
-//          .fromOption(right)
-//          .flatMap(Globz.get(_))
-//          .flatMap(x => ZIO.fromOption(x.map(e => e.setHealth(e.health + repairValue))))
-//          .mapError(_ => "error")
 
       } yield ExitCode.success
 
