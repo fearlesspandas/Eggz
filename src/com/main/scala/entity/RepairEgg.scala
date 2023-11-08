@@ -14,27 +14,15 @@ import zio.ZIO
 
 case class RepairEgg(
   val id: ID,
-  health: Ref[Double],
+  healthRef: Ref[Double],
   repairValue: Double,
-  energy: Ref[Double],
+  energyRef: Ref[Double],
   cost: Double,
   inventory: Ref[Storage.Service[String]]
 ) extends StorageEgg[String] {
-  def handleAdjacents(
-    adj: Option[GLOBZ_ID],
-    default: Eggz.Service
-  ): ZIO[Globz.Service, Nothing, Eggz.Service] =
-    ZIO.service[Globz.Service].flatMap { glob =>
-      for {
-        e <- ZIO
-          .fromOption(adj)
-          .flatMap(glob.get(_))
-          .fold[Eggz.Service](_ => default, x => x.getOrElse(default))
-      } yield e
-    }
-  override def op: ZIO[Globz.Service, String, ExitCode] =
-    this.energy.get.flatMap(e =>
-      this.health.get.flatMap { h =>
+  override def op: ZIO[Globz.Glob, String, ExitCode] =
+    this.energyRef.get.flatMap(e =>
+      this.healthRef.get.flatMap { h =>
         if (e <= cost) {
           ZIO.succeed(ExitCode.success)
         } else
@@ -49,13 +37,13 @@ case class RepairEgg(
               }
               .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
             ud <- ZIO
-              .service[Globz.Service]
+              .service[Globz.Glob]
               .flatMap(glob => glob.neighbors(this))
               .flatMap { neighbors =>
                 ZIO.collectAllPar(
                   neighbors.map(egg =>
                     for {
-                      h_curr <- egg.health.get
+                      h_curr <- egg.health
                       up <- egg.setHealth(h_curr + repairValue)
                     } yield up
                   )
@@ -69,12 +57,12 @@ case class RepairEgg(
 
   override def setHealth(health: Double): IO[Eggz.EggzError, Eggz.Service] =
     for {
-      _ <- this.health.update(_ => health)
+      _ <- this.healthRef.update(_ => health)
     } yield this
 
   override def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] =
     for {
-      _ <- this.energy.update(_ => value)
+      _ <- this.energyRef.update(_ => value)
     } yield this
 
   override def add(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
@@ -91,12 +79,15 @@ case class RepairEgg(
       r <- inventory.update(_ => iUp)
     } yield this).mapError(_ => GenericServiceError(""))
 
-  override def getAll(): IO[Storage.ServiceError, Set[String]] =
+  override def getInventory(): IO[Storage.ServiceError, Set[String]] =
     (for {
       i <- inventory.get
-      inv <- i.getAll()
+      inv <- i.getInventory()
     } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
 
+  override def health(): IO[Eggz.EggzError, Double] = healthRef.get
+
+  override def energy(): IO[Eggz.EggzError, Double] = energyRef.get
 }
 
 object RepairEgg {
@@ -107,7 +98,7 @@ object RepairEgg {
       bs <- Ref.make(basicStorage[String](Set()))
     } yield RepairEgg(id, h, repairValue, e, 20, bs.asInstanceOf[Ref[Storage.Service[String]]])
 
-  def op(egg: Eggz.Service): ZIO[Globz.Service, GLOBZ_ERR, ExitCode] = egg.op
+  def op(egg: Eggz.Service): ZIO[Globz.Glob, GLOBZ_ERR, ExitCode] = egg.op
 }
 
 class processingEgg() // proocesses resource to next stage

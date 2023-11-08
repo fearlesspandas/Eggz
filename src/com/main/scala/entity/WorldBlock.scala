@@ -17,36 +17,36 @@ object WorldBlock {
 
   trait Service {
     def spawnBlob(
-      blob: Globz.Service,
+      blob: Globz.Glob,
       coords: Vector[Double]
     ): IO[WorldBlockError, ExitCode]
-    def spawnFreshBlob(coords: Vector[Double]): ZIO[Globz.Service, WorldBlockError, ExitCode]
-    def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz.Service]]
-    def removeBlob(blob: Globz.Service): IO[WorldBlockError, ExitCode]
-    def tickAllBlobs(): ZIO[Globz.Service, WorldBlockError, ExitCode]
-    def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz.Service]]
+    def spawnFreshBlob(coords: Vector[Double]): ZIO[Globz.Glob, WorldBlockError, ExitCode]
+    def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz.Glob]]
+    def removeBlob(blob: Globz.Glob): IO[WorldBlockError, ExitCode]
+    def tickAllBlobs(): ZIO[Any, WorldBlockError, ExitCode]
+    def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz.Glob]]
   }
 
   def spawnBlob(
-    blob: Globz.Service,
+    blob: Globz.Glob,
     coords: Vector[Double]
   ): ZIO[WorldBlock.Service, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO(_.get.spawnBlob(blob, coords))
   def spawnFreshBlob(
     coords: Vector[Double]
-  ): ZIO[WorldBlock.Service with Globz.Service, WorldBlockError, ExitCode] =
+  ): ZIO[WorldBlock.Service with Globz.Glob, WorldBlockError, ExitCode] =
     ZIO.service[WorldBlock.Service].flatMap(_.spawnFreshBlob(coords))
-  def getAllBlobs(): ZIO[WorldBlock.Service, WorldBlockError, Set[Globz.Service]] =
+  def getAllBlobs(): ZIO[WorldBlock.Service, WorldBlockError, Set[Globz.Glob]] =
     ZIO.environmentWithZIO[WorldBlock.Service](_.get.getAllBlobs())
 
   def removeBlob(
-    blob: Globz.Service
+    blob: Globz.Glob
   ): ZIO[WorldBlock.Service, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO(_.get.removeBlob(blob))
 
-  def tickAllBlobs(): ZIO[WorldBlock.Service with Globz.Service, WorldBlockError, ExitCode] =
+  def tickAllBlobs(): ZIO[WorldBlock.Service, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO[WorldBlock.Service](_.get.tickAllBlobs())
-  def getBlob(id: GLOBZ_ID): ZIO[WorldBlock.Service, WorldBlockError, Option[Globz.Service]] =
+  def getBlob(id: GLOBZ_ID): ZIO[WorldBlock.Service, WorldBlockError, Option[Globz.Glob]] =
     ZIO.service[WorldBlock.Service].flatMap(_.getBlob(id))
   trait WorldBlockError
 
@@ -56,11 +56,11 @@ object WorldBlock {
 
 case class WorldBlockInMem(
   coordsRef: Ref[Map[GLOBZ_ID, Vector[Double]]],
-  dbRef: Ref[Map[GLOBZ_ID, Globz.Service]]
+  dbRef: Ref[Map[GLOBZ_ID, Globz.Glob]]
 ) extends WorldBlock.Service {
 
   override def spawnBlob(
-    blob: Globz.Service,
+    blob: Globz.Glob,
     coords: Vector[Double]
   ): IO[WorldBlock.WorldBlockError, ExitCode] =
     (for {
@@ -69,12 +69,12 @@ case class WorldBlockInMem(
     } yield ExitCode.success) //.mapError(_ => GenericWorldBlockError("error spawning blob"))
   //.mapError(_ => GenericWorldBlockError("error spawning blob"))
 
-  override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz.Service]] =
+  override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz.Glob]] =
     for {
       db <- dbRef.get
     } yield db.values.toSet
 
-  override def removeBlob(blob: Globz.Service): IO[WorldBlock.WorldBlockError, ExitCode] =
+  override def removeBlob(blob: Globz.Glob): IO[WorldBlock.WorldBlockError, ExitCode] =
     for {
       _ <- coordsRef.update(_.removed(blob.id))
       _ <- dbRef.update(_.removed(blob.id))
@@ -84,16 +84,16 @@ case class WorldBlockInMem(
   override def tickAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, ExitCode] =
     (for {
       all <- getAllBlobs()
-      r <- ZIO.collectAllPar(all.map(g => g.tickAll().provide(ZLayer { ZIO.succeed(g) })))
+      r <- ZIO.collectAllPar(all.map(g => g.tickAll()))
       fail = r.filter(_ != ExitCode.success).size
     } yield ExitCode.apply(fail)).mapError(_ => GenericWorldBlockError("error tick blobs"))
 
   override def spawnFreshBlob(
     coords: Vector[Double]
-  ): ZIO[Globz.Service, WorldBlock.WorldBlockError, ExitCode] =
-    ZIO.service[Globz.Service].flatMap(spawnBlob(_, coords))
+  ): ZIO[Globz.Glob, WorldBlock.WorldBlockError, ExitCode] =
+    ZIO.service[Globz.Glob].flatMap(spawnBlob(_, coords))
 
-  override def getBlob(id: GLOBZ_ID): IO[WorldBlock.WorldBlockError, Option[Globz.Service]] =
+  override def getBlob(id: GLOBZ_ID): IO[WorldBlock.WorldBlockError, Option[Globz.Glob]] =
     for {
       res <- dbRef.get.map(_.get(id))
     } yield res
@@ -102,19 +102,18 @@ case class WorldBlockInMem(
 object WorldBlockEnvironment {
 
   val worldblock =
-    ZLayer[Ref[Map[GLOBZ_ID, Vector[Double]]] with Ref[Map[GLOBZ_ID, Globz.Service]], Nothing, WorldBlock.Service] {
+    ZLayer[Ref[Map[GLOBZ_ID, Vector[Double]]] with Ref[Map[GLOBZ_ID, Globz.Glob]], Nothing, WorldBlock.Service] {
       ZIO
         .service[Ref[Map[GLOBZ_ID, Vector[Double]]]]
-        .flatMap(s => ZIO.service[Ref[Map[GLOBZ_ID, Globz.Service]]].map(t => WorldBlockInMem(s, t))
-        )
+        .flatMap(s => ZIO.service[Ref[Map[GLOBZ_ID, Globz.Glob]]].map(t => WorldBlockInMem(s, t)))
     }
   val anyref = ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Vector[Double]]]] {
     for {
       r <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
     } yield r
-  } ++ ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Globz.Service]]] {
+  } ++ ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Globz.Glob]]] {
     for {
-      r <- Ref.make(Map.empty[GLOBZ_ID, Globz.Service])
+      r <- Ref.make(Map.empty[GLOBZ_ID, Globz.Glob])
     } yield r
   }
 

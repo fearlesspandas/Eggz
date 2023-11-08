@@ -2,6 +2,7 @@ package src.com.main.scala.entity
 
 import java.util
 
+import src.com.main.scala
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
@@ -11,6 +12,8 @@ import src.com.main.scala.entity.Globz.GLOBZ_OUT
 import src.com.main.scala.entity.GlobzEnvironment.EggMap
 import src.com.main.scala.entity.GlobzEnvironment.RelationMap
 import zio.Ref
+import zio.Schedule
+import zio.Duration._
 //import src.com.main.scala.entity.Globz.Globz
 import zio.ExitCode
 //import zio.Has
@@ -19,7 +22,7 @@ import zio.ZIO
 import zio.ZLayer
 // move to this model : https://github.com/psisoyev/release-pager/blob/master/storage/src/main/scala/io/pager/subscription/chat/ChatStorage.scala#L20
 case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
-    extends Globz.Service {
+    extends Globz.Glob {
   private val db = new util.HashMap[String, Eggz.Service]()
 
   override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
@@ -51,12 +54,6 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
       ref <- dbref.get
     } yield ref.values.toSet
 
-  override def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Service] =
-    for {
-      r <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
-      k <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
-    } yield GlobzInMem(id, r, k)
-
   override def relate(
     egg1: entity.Globz.GLOBZ_IN,
     egg2: entity.Globz.GLOBZ_IN
@@ -76,26 +73,38 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
         .map(x => get(x))
       k <- ZIO.collectAllPar(tasks)
     } yield k.collect({ case Some(g) => g })).mapError(_ => "whoops")
-}
 
+  override def scheduleEgg(
+    id: scala.entity.Globz.GLOBZ_IN
+  ): IO[GLOBZ_ERR, Unit] =
+    get(id.id)
+      .flatMap(_.map(eg => eg.op).getOrElse(ZIO.succeed(ExitCode.failure)))
+      .repeat( Schedule.spaced(fromMillis(100)))
+      .provide(ZLayer.succeed(this)).fork.map(_ => ())
+
+}
+object GlobzInMem extends Globz.Service {
+  override def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Glob] =
+    for {
+      r <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
+      k <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
+    } yield GlobzInMem(id, r, k)
+}
 object GlobzEnvironment {
   type EggMap = Ref[Map[GLOBZ_ID, Eggz.Service]]
   type RelationMap = Ref[Map[(GLOBZ_ID, GLOBZ_ID), Boolean]]
   val inMemory = ZLayer {
     ZIO
-      .service[EggMap]
-      .flatMap { eggmap =>
-        ZIO.service[RelationMap].map(relationmap => GlobzInMem("1", eggmap, relationmap))
-      }
+      .succeed(GlobzInMem)
   }
-  val anyRef: ZLayer[Any, Nothing, EggMap with RelationMap] = ZLayer {
-    for {
-      m <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
-
-    } yield m
-  } ++ ZLayer {
-    for {
-      r <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
-    } yield r
-  }
+//  val anyRef: ZLayer[Any, Nothing, EggMap with RelationMap] = ZLayer {
+//    for {
+//      m <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
+//
+//    } yield m
+//  } ++ ZLayer {
+//    for {
+//      r <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
+//    } yield r
+//  }
 }

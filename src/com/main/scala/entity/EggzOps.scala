@@ -13,7 +13,7 @@ object EggzOps {
   trait Service {
 
     //def withGlob(globz: Ref[Globz.Service])
-    def op: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
+    def op: ZIO[Globz.Glob, GLOBZ_ERR, ExitCode]
 //
 //    def top: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
 //    def bop: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]

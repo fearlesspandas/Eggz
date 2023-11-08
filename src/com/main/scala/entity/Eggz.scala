@@ -24,14 +24,15 @@ object Eggz {
 
   trait Service extends EggzOps.Service {
     val id: ID
-    val health: Ref[Double]
-    val energy: Ref[Double]
+
     //remove these and move to globz
 
     //def op:ZIO[Globz,String,ExitCode]
     // replace with no default
     def setHealth(health: Double): IO[EggzError, Eggz.Service]
     def setEnergy(value: Double): IO[EggzError, Eggz.Service]
+    def health(): IO[EggzError, Double]
+    def energy(): IO[EggzError, Double]
   }
 
   trait EggzError

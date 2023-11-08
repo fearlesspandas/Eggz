@@ -2,6 +2,7 @@ package src.com.main.scala.entity
 
 import src.com.main.scala.entity.Storage.GenericServiceError
 import src.com.main.scala.entity.Storage.REF_STORE
+import zio.Ref
 import zio.ZIO
 //import zio.Has
 import zio.IO
@@ -23,9 +24,13 @@ object Storage {
 
     def remove(item: I*): IO[ServiceError, Storage.Service[I]]
 
-    def getAll(): IO[ServiceError, Set[I]]
+    def getInventory(): IO[ServiceError, Set[I]]
   }
 
+  def make[A](f: () => Service[A]): ZIO[Any, Nothing, Ref[Service[A]]] =
+    for {
+      res <- Ref.make(f())
+    } yield res
 //    def add[I](item:I*):ZIO[Storage[I],ServiceError,Storage.Service[I]] = ZIO.accessM(_.get.add(item:_*))
 //    def remove[I](item:I*):ZIO[Storage[I],ServiceError,Storage.Service[I]] = ZIO.accessM(_.get.remove(item:_*))
 
@@ -52,7 +57,7 @@ case class basicStorage[I](refs: REF_STORE[I] = Set()) extends Storage.Service[I
       }
   //.mapError(_ => GenericServiceError("whoopsie"))
 
-  override def getAll(): IO[Storage.ServiceError, Set[I]] =
+  override def getInventory(): IO[Storage.ServiceError, Set[I]] =
     ZIO
       .succeed {
         this.refs.toSet[I]

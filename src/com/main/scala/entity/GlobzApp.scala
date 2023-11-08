@@ -1,27 +1,11 @@
 package src.com.main.scala.entity
 
 //import src.com.main.scala.entity.Globz.Globz
-import controller.BasicController
-import controller.CREATE_EGG
-import controller.CREATE_GLOB
-import controller.GET_ALL_GLOBS
-import controller.GET_BLOB
-import controller.TICK_WORLD
+import controller.{BasicController, CREATE_EGG, CREATE_GLOB, GET_ALL_GLOBS, GET_BLOB, START_EGG, TICK_WORLD}
 import controller.Command.CommandError
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
-import zio.Console
-import zio.ExitCode
-import zio.Random
-import zio.Ref
-import zio.Runtime
-import zio.Scope
-import zio.URIO
-import zio.ZIO
-import zio.ZIOApp
-import zio.ZIOAppArgs
-import zio.ZIOAppDefault
-import zio.ZLayer
+import zio.{Console, Duration, ExitCode, Random, Ref, Runtime, Schedule, Scope, URIO, ZIO, ZIOApp, ZIOAppArgs, ZIOAppDefault, ZLayer}
 
 object GlobzApp extends ZIOAppDefault {
 
@@ -33,8 +17,9 @@ object GlobzApp extends ZIOAppDefault {
 
   def run =
     program2()
+    //      .repeat(Schedule.recurs(1))
       .provideLayer(localApplicationEnvironment)
-      .provideLayer(GlobzEnvironment.anyRef ++ WorldBlockEnvironment.anyref)
+      .provideLayer(WorldBlockEnvironment.anyref)
 //      .provideLayer(WorldBlockEnvironment.anyref)
 //  program2()
 //    .provideLayer(GlobzEnvironment.anyRef)
@@ -44,17 +29,22 @@ object GlobzApp extends ZIOAppDefault {
 //      ExitCode.success
 //    )
 
-  def program2(): ZIO[ApplicationEnvironment, Nothing, ExitCode] =
+  def program2(): ZIO[Globz.Service with WorldBlock.Service, Nothing, ExitCode] =
     (for {
       controller <- BasicController.make
       egg <- RepairEgg.make("1", 100, 10)
-      _ <- controller.runCommand(CREATE_GLOB("1", Vector(0)).run)
-      _ <- controller.runCommand(CREATE_GLOB("2", Vector(1)).run)
+      _ <- controller
+        .runCommand(CREATE_GLOB("1", Vector(0)).run)
+        .flatMap(_.runCommand(CREATE_GLOB("2", Vector(1)).run))
+//      _ <- controller.runCommand(CREATE_GLOB("2", Vector(1)).run)
       g <- controller.runQuery(GET_BLOB("1").run)
       _ <- controller.runCommand(CREATE_EGG(egg, g.get).run)
       _ <- controller.runCommand(TICK_WORLD().run)
-      res2 <- controller.runQuery[Set[Globz.Service], CommandError](GET_ALL_GLOBS().run)
-      _ <- Console.printLine(s"RESULTS: $res2")
+      _ <- controller.runCommand(START_EGG("1","1").run)
+      res2 <- controller
+        .runQuery[Set[Globz.Glob], CommandError](GET_ALL_GLOBS().run)
+        .flatMap(s => Console.printLine(s"RESULTS;$s")).repeat(Schedule.spaced(Duration.fromMillis(1000)))
+      //_ <- Console.printLine(s"RESULTS: $res2")
     } yield ExitCode.success).mapError(_ => null.asInstanceOf[Nothing])
 
   def program(): ZIO[ApplicationEnvironment, Nothing, ExitCode] = (
@@ -79,7 +69,7 @@ object GlobzApp extends ZIOAppDefault {
                 .zipPar(Console.printLine(s"all eggs current: ${all}").fold(e => (), x => x))
               t <- ZIO
                 .collectAllPar(
-                  all.collect { case x: Storage.Service[String] => x.getAll() }
+                  all.collect { case x: Storage.Service[String] => x.getInventory() }
                 )
               //.flatMap(_)
               _ <- Console.printLine(s"Inventories: ${t.flatMap(x => x)}")
