@@ -79,12 +79,14 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
   ): IO[GLOBZ_ERR, Unit] =
     get(id.id)
       .flatMap(_.map(eg => eg.op).getOrElse(ZIO.succeed(ExitCode.failure)))
-      .repeat( Schedule.spaced(fromMillis(100)))
-      .provide(ZLayer.succeed(this)).fork.map(_ => ())
+      .repeat(Schedule.spaced(fromMillis(100)))
+      .provide(ZLayer.succeed(this))
+      .fork
+      .map(_ => ())
 
 }
 object GlobzInMem extends Globz.Service {
-  override def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Glob] =
+  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Glob] =
     for {
       r <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
       k <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])

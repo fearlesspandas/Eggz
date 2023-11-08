@@ -1,14 +1,8 @@
 package controller
 
-import controller.BasicController.COMMAND
-import controller.BasicController.QUERY
 import entity.WorldBlock
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.GlobzInMem
-import src.com.main.scala.entity.Globz.GLOBZ_ID
-import zio.Ref
-import zio.ZIO
-import zio.ZLayer
+import zio.{Ref, ZIO, ZLayer}
 
 trait BasicController[Env] {
   def runCommand[E](comm: ZIO[Env, E, Unit]): ZIO[Any, E, BasicController[Env]]

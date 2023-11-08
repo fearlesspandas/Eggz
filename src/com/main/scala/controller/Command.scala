@@ -3,15 +3,12 @@ package controller
 import controller.Command.CommandError
 import controller.Command.GenericCommandError
 import entity.WorldBlock
-import src.com.main.scala.entity.Eggz
-import src.com.main.scala.entity.EggzOps
 import src.com.main.scala.entity.EggzOps.ID
+import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz.GLOBZ_ID
-import zio.ExitCode
 import zio.IO
 import zio.ZIO
-import zio.ZLayer
 
 trait Command[Env, Out] {
   def run: ZIO[Env, CommandError, Out]
@@ -20,13 +17,17 @@ trait Command[Env, Out] {
 object Command {
   type CommandKey = String
 
+  def make[Env, Out](key: CommandKey): ZIO[Command.Service, CommandError, Command[Env, Out]] =
+    ZIO.service[Command.Service].flatMap(_.make(key))
+
   trait Service {
     def make[Env, Out](key: CommandKey): IO[CommandError, Command[Env, Out]]
   }
-  def make[Env, Out](key: CommandKey): ZIO[Command.Service, CommandError, Command[Env, Out]] =
-    ZIO.service[Command.Service].flatMap(_.make(key))
+
   trait CommandError
+
   case class GenericCommandError(msg: String) extends CommandError
+
 }
 
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
@@ -58,11 +59,24 @@ case class ADD_EGG(egg: Eggz.Service, glob: Globz.Glob) extends Command[Any, Uni
       _ <- glob.update(egg)
     } yield ()).mapError(_ => GenericCommandError("error addng egg to glob"))
 }
+
 case class GET_BLOB(id: GLOBZ_ID) extends Command[WorldBlock.Service, Option[Globz.Glob]] {
   override def run: ZIO[WorldBlock.Service, CommandError, Option[Globz.Glob]] =
     (for {
       g <- WorldBlock.getBlob(id)
     } yield g).mapError(_ => GenericCommandError(s"Error finding blob with $id"))
+}
+
+case class RELATE_EGGS(egg1: ID, egg2: ID)(globId: GLOBZ_ID)
+    extends Command[WorldBlock.Service, Unit] {
+  override def run: ZIO[WorldBlock.Service, CommandError, Unit] =
+    (for {
+      globOp <- WorldBlock.getBlob(globId)
+      glob <- ZIO.fromOption(globOp)
+      e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
+      e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
+      _ <- glob.relate(e1,e2)
+    } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
 }
 
 case class TICK_WORLD() extends Command[WorldBlock.Service, Unit] {

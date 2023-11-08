@@ -31,10 +31,26 @@ trait SkillSet {
   def getSkill(id: SkillId): IO[SkillError, Skill]
   def getTotalExperience: IO[SkillError, Experience]
   def update(skill: Skill): IO[SkillError, ExitCode]
+
+}
+case class BasicSkillset() extends SkillSet {
+  override def getSkills: IO[SkillError, Set[Skill]] = ???
+
+  override def getSkill(id: SkillId): IO[SkillError, Skill] = ???
+
+  override def getTotalExperience: IO[SkillError, Experience] = ???
+
+  override def update(skill: Skill): IO[SkillError, ExitCode] = ???
+}
+object BasicSkillset extends SkillSet.Service {
+  override def make: IO[Nothing, SkillSet] = ZIO.succeed(BasicSkillset())
 }
 object SkillSet {
   type SkillId = String
-  def make: IO[Nothing, SkillSet] = ???
+  trait Service {
+    def make: IO[Nothing, SkillSet]
+  }
+  def make: ZIO[SkillSet.Service, Nothing, SkillSet] = ZIO.service[SkillSet.Service].flatMap(_.make)
   trait SkillsetError
 }
 trait Skill {
@@ -127,12 +143,12 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 }
 
 object BasicPlayer extends Globz.Service {
-  override def create(id: GLOBZ_ID): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz.Glob] =
+  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz.Glob] =
     for {
-      ss <- SkillSet.make
+      ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
       stor <- Storage.make[Item](() => basicStorage[Item](Set()))
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
-      g <- GlobzInMem.create(id)
+      g <- GlobzInMem.make(id)
     } yield BasicPlayer(id, ss, stor)(href, eref, g)
 }

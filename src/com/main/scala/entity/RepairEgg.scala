@@ -94,7 +94,7 @@ object RepairEgg {
   def make(id: ID, health: Double, repairValue: Double): IO[Nothing, Eggz.Service] =
     for {
       h <- Ref.make(health)
-      e <- Ref.make(1000.0)
+      e <- Ref.make(10000.0)
       bs <- Ref.make(basicStorage[String](Set()))
     } yield RepairEgg(id, h, repairValue, e, 20, bs.asInstanceOf[Ref[Storage.Service[String]]])
 

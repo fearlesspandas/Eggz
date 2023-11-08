@@ -14,7 +14,7 @@ object Globz {
   type GLOBZ_IN = Eggz.Service
   type GLOBZ_ID = String
   def create(id: GLOBZ_ID): ZIO[Globz.Service, GLOBZ_ERR, Globz.Glob] =
-    ZIO.environmentWithZIO(_.get.create(id))
+    ZIO.environmentWithZIO(_.get.make(id))
 
   trait Glob {
     val id: GLOBZ_ID
@@ -40,6 +40,6 @@ object Globz {
   }
 
   trait Service {
-    def create(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Glob]
+    def make(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Glob]
   }
 }
