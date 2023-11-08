@@ -6,7 +6,7 @@ libraryDependencies += "dev.zio" %% "zio" % "2.0.18"
 //libraryDependencies += "io.d11" %% "zhttp" % "2.0.0-RC1"
 
 // https://mvnrepository.com/artifact/io.d11/zhttp
-libraryDependencies += "io.d11" %% "zhttp" % "1.0.0.0-RC23"
+libraryDependencies += "dev.zio" %% "zio-http" % "3.0.0-RC3"
 //libraryDependencies += "com.github.jpbetz" % "subspace" % "0.1.0"
 // https://mvnrepository.com/artifact/javax.vecmath/vecmath
 libraryDependencies += "javax.vecmath" % "vecmath" % "1.5.2"

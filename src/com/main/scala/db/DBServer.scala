@@ -7,18 +7,13 @@ import java.util.Base64
 
 import javax.crypto.Cipher
 import org.bouncycastle.jce.provider.BouncyCastleProvider
-import zhttp.http.Http
-import zhttp.http.Request
-import zhttp.http.Response
-import zhttp.http._
-import zhttp.service.Server
-import zio.App
 import zio.ExitCode
 import zio.URIO
 import zio._
+import zio.http.Server
+import zio.http.endpoint.openapi.OpenAPI.SecurityScheme.Http
 import zio.json._
-import zio.console._
-object DBServer extends App {
+object DBServer {
 
   type PubKey = String
   type SessionToken = String
@@ -27,67 +22,69 @@ object DBServer extends App {
   type PlayerMap = Map[PubKey, Player]
   val session_map: SessionMap = scala.collection.concurrent.TrieMap()
   val player_map: PlayerMap = Map()
-
-  val app2: Http[Console, Throwable, Request, Response] = for{
-    ref <- Http.collectZIO[Request]{case _ => Ref.make(session_map)}
-    s <- Http.collectHttp[Request]{case _ =>addNewSessionToken(ref)}
-  }yield s
-  implicit def chunktobytearr(c: Chunk[Byte]): Array[Byte] = c.toArray
-
-  def addNewSessionToken(
-    m: Ref[SessionMap]
-  ): Http[Console, Throwable, Request, Response] = Http.collectZIO[Request] {
-    case req =>
-      req match {
-        case Method.POST -> !! / "create_session" =>
-          for {
-            smap <- m.get
-
-            _ <- putStrLn(smap.toString())
-            pubkey <- req.getBodyAsString
-            strippedpubkey = stripPublicKeyText(pubkey)
-            //get session token as well as its cyphertext
-            existingToken = smap.get(strippedpubkey)
-            token = create_session_token(pubkey,existingToken)
-            curr_tokens = smap.getOrElse(strippedpubkey, token._1)
-            //persist session token secret server side
-            //updatedsmap = smap.updated(pubkey, curr_tokens)
-            _ = smap.update(strippedpubkey,curr_tokens)
-            _ <- m.set(smap)
-            _ <- putStrLn( smap.toString())
-          } yield {
-            //return the token cyphertext
-            //in order to verify client calls
-            //we must only ever return the cyphertext
-            //so that we can ensure only the user who
-            //has the private key will know the session id
-            Response.text(token._2)
-          }
-        case Method.POST -> !! / "verify_session" =>
-          for {
-            body <- req.getBodyAsString
-            json = body.fromJson[VerifySession]
-//            _ <- putStrLn(body)
-//            _ <- putStrLn(json.toString)
-
-            smap <- m.get
-
-            if json.isRight
-            vses = json.right.get
-            t = smap.get(stripPublicKeyText(vses.publickey))
-            _ <- putStrLn(s"vsestoken ${vses.token}")
-            resp = ValidSession(stripPublicKeyText(vses.publickey),t.exists(_ == vses.token))
-            _ <- putStrLn(t.toString)
-            _<- putStrLn(resp.toString)
-          }yield {
-              Response.text(resp.toJson)
-          }
-      }
-
-  }
+//
+//  val app2: Http[Console, Throwable, Request, Response] = for {
+//    ref <- Http.collectZIO[Request] { case _ => Ref.make(session_map) }
+//    s <- Http.collectHttp[Request] { case _  => addNewSessionToken(ref) }
+//  } yield s
+//  implicit def chunktobytearr(c: Chunk[Byte]): Array[Byte] = c.toArray
+//
+//  def addNewSessionToken(
+//    m: Ref[SessionMap]
+//  ): Http[Console, Throwable, Request, Response] = Http.collectZIO[Request] {
+//    case req =>
+//      req match {
+//        case Method.POST -> !! / "create_session" =>
+//          for {
+//            smap <- m.get
+//
+//            _ <- Console.printLine(smap.toString())
+//            pubkey <- req.getBodyAsString
+//            strippedpubkey = stripPublicKeyText(pubkey)
+//            //get session token as well as its cyphertext
+//            existingToken = smap.get(strippedpubkey)
+//            token = create_session_token(pubkey, existingToken)
+//            curr_tokens = smap.getOrElse(strippedpubkey, token._1)
+//            //persist session token secret server side
+//            //updatedsmap = smap.updated(pubkey, curr_tokens)
+//            _ = smap.update(strippedpubkey, curr_tokens)
+//            _ <- m.set(smap)
+//            _ <- Console.printLine(smap.toString())
+//          } yield {
+//            //return the token cyphertext
+//            //in order to verify client calls
+//            //we must only ever return the cyphertext
+//            //so that we can ensure only the user who
+//            //has the private key will know the session id
+//            Response.text(token._2)
+//          }
+//        case Method.POST -> !! / "verify_session" =>
+//          for {
+//            body <- req.getBodyAsString
+//            json = body.fromJson[VerifySession]
+////            _ <- putStrLn(body)
+////            _ <- putStrLn(json.toString)
+//
+//            smap <- m.get
+//            //if json.isRight
+//            vses <- ZIO.fromEither(json).mapError(_ => new Throwable("whoops"))
+//            t = smap.get(stripPublicKeyText(vses.publickey))
+//            _ <- Console.printLine(s"vsestoken ${vses.token}")
+//            resp = ValidSession(stripPublicKeyText(vses.publickey), t.exists(_ == vses.token))
+//            _ <- Console.printLine(t.toString)
+//            _ <- Console.printLine(resp.toString)
+//          } yield {
+//            Response.text(resp.toJson)
+//          }
+//      }
+//
+//  }
   //We create a session token that we keep secret on the server side, as well as that token
   //encrypted with the users pubkey
-  def create_session_token(pubKey: PubKey,existingToken:Option[SessionToken] = None): (SessionToken, EncryptedSessionToken) = {
+  def create_session_token(
+    pubKey: PubKey,
+    existingToken: Option[SessionToken] = None
+  ): (SessionToken, EncryptedSessionToken) = {
     //beware this code is a bit brittle due to having to tightly
     //align formatting over serialized data.
     val rsaKeyFactory = KeyFactory.getInstance("RSA")
@@ -131,9 +128,9 @@ object DBServer extends App {
       .replace("\n", "")
       .replace("-----BEGIN PRIVATE KEY-----", "")
       .replace("-----END PRIVATE KEY-----", "")
-
-  override def run(args: List[String]): URIO[zio.ZEnv, ExitCode] =
-    Server.start(8090, app2).exitCode
+//
+//  def run =
+//    Server.start(8090, _).exitCode
 
   case class Player(pubKey: PubKey)
 
