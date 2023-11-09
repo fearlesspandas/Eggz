@@ -9,8 +9,8 @@ trait Sync[E] {
   def sync: IO[E, ExitCode]
 }
 
-object Sync {
-
-  def commit[E]: ZIO[Sync[E], E, ExitCode] = ZIO.service[Sync[E]].flatMap(_.commit)
-  def sync[E]: ZIO[Sync[E], E, ExitCode] = ZIO.service[Sync[E]].flatMap(_.sync)
-}
+//object Sync {
+//
+//  def commit[E]: ZIO[Sync[E], E, ExitCode] = ZIO.service[Sync[E]].flatMap(_.commit)
+//  def sync[E]: ZIO[Sync[E], E, ExitCode] = ZIO.service[Sync[E]].flatMap(_.sync)
+//}
