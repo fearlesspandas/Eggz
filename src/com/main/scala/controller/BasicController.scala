@@ -1,49 +1,59 @@
 package controller
 
 import entity.WorldBlock
+import entity.WorldBlockInMem
 import src.com.main.scala.entity.Globz
-import zio.{Ref, ZIO, ZLayer}
+import src.com.main.scala.entity.GlobzInMem
+import zio.IO
+import zio.Ref
+import zio.Tag
+import zio.ZIO
+import zio.ZLayer
 
+import scala.reflect.runtime.universe.TypeTag
 trait BasicController[Env] {
   def runCommand[E](comm: ZIO[Env, E, Unit]): ZIO[Any, E, BasicController[Env]]
   def runQuery[Q, E](query: ZIO[Env, E, Q]): ZIO[Any, E, Q]
 
 }
 
+trait ControllerError
+
 object BasicController {
   type COMMAND = String
   type QUERY = String
-  def make: ZIO[Globz.Service with WorldBlock.Service, Nothing, BasicController[
-    Globz.Service with WorldBlock.Service
-  ]] =
-    ZIO
-      .service[Globz.Service]
-      .flatMap(glob =>
-        ZIO
-          .service[WorldBlock.Service]
-          .flatMap(worldblock =>
-            for {
-              r <- Ref.make(worldblock)
-            } yield Control(glob, r)
-          )
-      )
+
+  trait Service[Env] {
+    def make: IO[ControllerError, BasicController[Env]]
+  }
+  type DEFINED = Globz.Service with WorldBlock.Block
+  def make: ZIO[Service[DEFINED], ControllerError, BasicController[DEFINED]] =
+    ZIO.service[Service[DEFINED]].flatMap(_.make)
+
 }
 
-case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Service])
-    extends BasicController[Globz.Service with WorldBlock.Service] {
+case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Block])
+    extends BasicController[Globz.Service with WorldBlock.Block] {
 
   override def runCommand[E](
-    comm: ZIO[Globz.Service with WorldBlock.Service, E, Unit]
-  ): ZIO[Any, E, BasicController[Globz.Service with WorldBlock.Service]] =
+    comm: ZIO[Globz.Service with WorldBlock.Block, E, Unit]
+  ): ZIO[Any, E, BasicController[Globz.Service with WorldBlock.Block]] =
     for {
       wb <- worldBlock.get
       _ <- comm.provide(ZLayer { ZIO.succeed { glob } } ++ ZLayer { ZIO.succeed(wb) })
     } yield this
 
   override def runQuery[Q, E](
-    query: ZIO[Globz.Service with WorldBlock.Service, E, Q]
+    query: ZIO[Globz.Service with WorldBlock.Block, E, Q]
   ): ZIO[Any, E, Q] =
     worldBlock.get.flatMap(wb =>
       query.provide(ZLayer { ZIO.succeed { glob } } ++ ZLayer { ZIO.succeed(wb) })
     )
+}
+object Control extends BasicController.Service[Globz.Service with WorldBlock.Block] {
+  override def make: IO[ControllerError, BasicController[Globz.Service with WorldBlock.Block]] =
+    for {
+      w <- WorldBlock.make.provide(ZLayer.succeed(WorldBlockInMem)).mapError(_ => ???)
+      r <- Ref.make(w)
+    } yield Control(GlobzInMem, r)
 }

@@ -11,7 +11,7 @@ import zio.http._
 
 object WebSocketSimpleClient extends ZIOAppDefault {
 
-  val url = "ws://localhost:8080/subscriptions"
+  val url = "ws://192.168.50.27:8080/subscriptions"
 
   val socketApp: WebSocketApp[Any] =
     Handler
@@ -21,12 +21,22 @@ object WebSocketSimpleClient extends ZIOAppDefault {
 
           // Send a "foo" message to the server once the connection is established
           case UserEventTriggered(UserEvent.HandshakeComplete) =>
-            channel.send(Read(WebSocketFrame.text("foo")))
+            channel.send(
+              Read(WebSocketFrame.text("{\"CREATE_GLOB\":{\"globId\":\"1\",\"location\":[0.0]}}"))
+            ) *> channel.send(
+              Read(
+                WebSocketFrame.text("{\"CREATE_REPAIR_EGG\":{\"eggId\":\"1\",\"globId\":\"1\"}}")
+              )
+            ) *> channel.send(
+              Read(
+                WebSocketFrame.text("{\"GET_BLOB\":{\"id\":\"1\"}}")
+              )
+            )
 
           // Send a "bar" if the server sends a "foo"
-          case Read(WebSocketFrame.Text("foo")) =>
-            channel.send(Read(WebSocketFrame.text("bar")))
-
+          case Read(WebSocketFrame.Text(text)) =>
+//            channel.send(Read(WebSocketFrame.text("bar")))
+            Console.printLine("Server:" + text)
           // Close the connection if the server sends a "bar"
           case Read(WebSocketFrame.Text("bar")) =>
             ZIO.succeed(println("Goodbye!")) *> channel.send(Read(WebSocketFrame.close(1000)))

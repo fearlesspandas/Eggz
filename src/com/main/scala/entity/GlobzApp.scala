@@ -17,31 +17,31 @@ import zio.ZLayer
 
 object GlobzApp extends ZIOAppDefault {
 
-  type ApplicationEnvironment = Globz.Service with WorldBlock.Service
+  type ApplicationEnvironment = Globz.Service with WorldBlock.Block
   val addSimpleLogger: ZLayer[Any, Nothing, Unit] =
     Runtime.addLogger((_, _, _, message: () => Any, _, _, _, _) => println(message()))
   val localApplicationEnvironment =
-    addSimpleLogger ++ WorldBlockEnvironment.worldblock ++ ZLayer.succeed(BasicPlayer)
+    addSimpleLogger ++ WorldBlockEnvironment.worldblock ++ ZLayer.succeed(BasicPlayer) ++ ZLayer
+      .succeed(Control)
 
   def run =
     program()
       .provideLayer(localApplicationEnvironment)
       .provideLayer(WorldBlockEnvironment.anyref)
 
-  def program(): ZIO[Globz.Service with WorldBlock.Service, Nothing, ExitCode] =
+  def program(): ZIO[Globz.Service with WorldBlock.Block with BasicController.Service[
+    Globz.Service with WorldBlock.Block
+  ], Nothing, ExitCode] =
     (for {
       controller <- BasicController.make
-      egg1 <- RepairEgg.make("1", 100, 10)
-      egg2 <- RepairEgg.make("2", 100, 5)
       _ <- controller
         .runCommand(CREATE_GLOB("1", Vector(0)).run)
         .flatMap(_.runCommand(CREATE_GLOB("2", Vector(1)).run))
       //      _ <- controller.runCommand(CREATE_GLOB("2", Vector(1)).run)
-      g <- controller.runQuery(GET_BLOB("1").run)
-      _ <- controller.runCommand(CREATE_EGG(egg1, g.get).run)
-      _ <- controller.runCommand(CREATE_EGG(egg2, g.get).run)
+      _ <- controller.runCommand(CREATE_REPAIR_EGG("1", "1").run)
+      _ <- controller.runCommand(CREATE_REPAIR_EGG("2", "1").run)
 
-      _ <- controller.runCommand(RELATE_EGGS("1", "2")("1").run)
+      _ <- controller.runCommand(RELATE_EGGS("1", "2", "1").run)
 //      _ <- controller.runCommand(TICK_WORLD().run)
       _ <- controller.runCommand(START_EGG("1", "1").run)
       _ <- controller.runCommand(START_EGG("2", "1").run)

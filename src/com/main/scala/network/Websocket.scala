@@ -1,5 +1,14 @@
 package network
 
+import controller.BasicController
+import controller.CREATE_GLOB
+import controller.Command
+import controller.Control
+import controller.GET_ALL_GLOBS
+import controller.Query
+import controller.SimpleCommand
+import entity.WorldBlock
+import src.com.main.scala.entity.Globz
 import zio._
 import zio.http.ChannelEvent.ExceptionCaught
 import zio.http.ChannelEvent.Read
@@ -7,35 +16,95 @@ import zio.http.ChannelEvent.UserEvent
 import zio.http.ChannelEvent.UserEventTriggered
 import zio.http._
 import zio.http.codec.PathCodec.string
+import zio.json.DecoderOps
+import zio.json.EncoderOps
 
 object WebSocketAdvanced extends ZIOAppDefault {
 
-  val socketApp: WebSocketApp[Any] =
+  def app(socketApp: WebSocketClientController[Any]) =
+    Routes(
+      Method.GET / "greet" / string("name") -> handler { (name: String, req: Request) =>
+        Response.text(s"Greetings ${name}!")
+      },
+      Method.GET / "subscriptions" -> handler(socketApp.socket.toResponse)
+    ).toHttpApp
+
+  val config =
+    Server.defaultWith(_.webSocketConfig(WebSocketConfig.default.copy(subprotocols = Some("json"))))
+  override val run = program().provide(ZLayer.succeed(BasicWebSocket))
+  def program(): ZIO[WebSocketClientController.Service[Any], Nothing, Unit] =
+    (for {
+      _ <- Console.printLine(GET_ALL_GLOBS().toJson)
+      ws <- ZIO.service[WebSocketClientController.Service[Any]].flatMap(_.make)
+      _ <- Server.serve(app(ws)).provide(Server.default)
+    } yield ()).mapError(_ => ???) //.fold(e => Console.printLine(e),x => x)
+}
+
+trait WebSocketClientController[Env] {
+  def socket: WebSocketApp[Env]
+}
+
+trait WebsocketError
+object WebSocketClientController {
+  trait Service[Env] {
+    def make: IO[WebsocketError, WebSocketClientController[Env]]
+  }
+//
+//  def make[Env]
+//    : ZIO[WebSocketClientController.Service[Env], Nothing, WebSocketClientController[Env]] =
+//    ZIO.service[WebSocketClientController.Service[Env]].flatMap(_.make)
+}
+
+case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBlock.Block])
+    extends WebSocketClientController[Any] {
+
+  def handleCommand(
+    command: Command[Globz.Service with WorldBlock.Block, Unit]
+  ): ZIO[Any, Nothing, Unit] =
+    (for {
+      _ <- controller.runCommand(command.run.mapError(_ => null.asInstanceOf[Nothing]))
+    } yield ())
+
+  def handleQuery(
+    query: Command[Globz.Service with WorldBlock.Block, Any]
+  ): ZIO[Any, Nothing, String] =
+    (for {
+      res <- controller.runQuery(query.run.mapError(_ => null.asInstanceOf[Nothing]))
+    } yield res.toString)
+
+  override def socket: WebSocketApp[Any] =
     Handler.webSocket { channel =>
       channel.receiveAll {
         case Read(WebSocketFrame.Text("end")) =>
           channel.shutdown
 
-        // Send a "bar" if the server sends a "foo"
-        case Read(WebSocketFrame.Text("foo")) =>
-          ZIO.succeed(println("got some foo")) *> channel.send(
-            Read(WebSocketFrame.text("bar"))
-          )
-
-        // Send a "foo" if the server sends a "bar"
-        case Read(WebSocketFrame.Text("bar")) =>
-          channel.send(Read(WebSocketFrame.text("foo")))
-
-        // Echo the same message 10 times if it's not "foo" or "bar"
         case Read(WebSocketFrame.Text(text)) =>
-          channel.send(Read(WebSocketFrame.text(text))).repeatN(10)
+          (for {
+            _ <- Console.printLine("received text:" + text)
+//            parsed <- ZIO
+//              .fromEither(text.fromJson[Query[_]])
+//              .flatMapError(Console.printLine(_).mapError(_ => ???))
+//              .fold(_.toString, x => x)
+//            _ <- Console.printLine("parsed text:" + parsed)
+            _ <- ZIO
+              .fromEither(text.fromJson[Command[_, _]])
+              .flatMap {
+                case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
+                  handleCommand(c).flatMap(_ =>
+                    channel.send(Read(WebSocketFrame.text("did command")))
+                  )
+                case c: Query[Globz.Service with WorldBlock.Block, _] =>
+                  handleQuery(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
+              }
+            // _ <- controller.runCommand(parsed.run)
+            _ <- channel.send(Read(WebSocketFrame.text(text)))
+          } yield ()).mapError(_ => null)
 
         // Send a "greeting" message to the server once the connection is established
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>
-          ZIO.succeed(println("attemtping thing")) *>
-            channel.send(Read(WebSocketFrame.text("Greetings!")))
+          channel.send(Read(WebSocketFrame.text("Greetings!")))
 
         // Log when the channel is getting closed
         case Read(WebSocketFrame.Close(status, reason)) =>
@@ -49,14 +118,13 @@ object WebSocketAdvanced extends ZIOAppDefault {
           ZIO.unit
       }
     }
+}
 
-  val app: HttpApp[Any] =
-    Routes(
-      Method.GET / "greet" / string("name") -> handler { (name: String, req: Request) =>
-        Response.text(s"Greetings ${name}!")
-      },
-      Method.GET / "subscriptions" -> handler(socketApp.toResponse)
-    ).toHttpApp
-
-  override val run = Server.serve(app).provide(Server.default)
+object BasicWebSocket extends WebSocketClientController.Service[Any] {
+  override def make: IO[WebsocketError, WebSocketClientController[Any]] =
+    for {
+      controller <- BasicController.make
+        .provide(ZLayer.succeed(Control))
+        .mapError(_ => ???)
+    } yield BasicWebSocket(controller)
 }
