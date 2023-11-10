@@ -20,6 +20,8 @@ sealed trait Command[-Env, +Out] extends Product with Serializable {
 }
 
 object Command {
+  //we could implement type specific serialization to map onto what commands have been concretely defined
+  //however, there is a natural serialization available regardless of type param
 //  implicit val encoder: JsonEncoder[Command[Globz.Service with WorldBlock.Block, Any]] =
 //    DeriveJsonEncoder.gen[Command[Globz.Service with WorldBlock.Block, Any]]
 //  implicit val decoder: JsonDecoder[Command[Globz.Service with WorldBlock.Block, Any]] =
@@ -112,7 +114,7 @@ object GET_BLOB {
   implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
 }
 case class RELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID)
-    extends Command[WorldBlock.Block, Unit] {
+    extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       globOp <- WorldBlock.getBlob(globId)
@@ -126,7 +128,7 @@ object RELATE_EGGS {
   implicit val encoder: JsonEncoder[RELATE_EGGS] = DeriveJsonEncoder.gen[RELATE_EGGS]
   implicit val decoder: JsonDecoder[RELATE_EGGS] = DeriveJsonDecoder.gen[RELATE_EGGS]
 }
-case class TICK_WORLD() extends Command[WorldBlock.Block, Unit] {
+case class TICK_WORLD() extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     WorldBlock.tickAllBlobs().mapError(_ => GenericCommandError("Error ticking world")).map(_ => ())
 }
@@ -134,7 +136,7 @@ object TICK_WORLD {
   implicit val encoder: JsonEncoder[TICK_WORLD] = DeriveJsonEncoder.gen[TICK_WORLD]
   implicit val decoder: JsonDecoder[TICK_WORLD] = DeriveJsonDecoder.gen[TICK_WORLD]
 }
-case class START_EGG(eggid: ID, globId: GLOBZ_ID) extends Command[WorldBlock.Block, Unit] {
+case class START_EGG(eggid: ID, globId: GLOBZ_ID) extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       g <- WorldBlock.getBlob(globId)

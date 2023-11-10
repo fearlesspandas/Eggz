@@ -49,10 +49,6 @@ object WebSocketClientController {
   trait Service[Env] {
     def make: IO[WebsocketError, WebSocketClientController[Env]]
   }
-//
-//  def make[Env]
-//    : ZIO[WebSocketClientController.Service[Env], Nothing, WebSocketClientController[Env]] =
-//    ZIO.service[WebSocketClientController.Service[Env]].flatMap(_.make)
 }
 
 case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBlock.Block])
@@ -81,26 +77,23 @@ case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBl
         case Read(WebSocketFrame.Text(text)) =>
           (for {
             _ <- Console.printLine("received text:" + text)
-//            parsed <- ZIO
-//              .fromEither(text.fromJson[Query[_]])
-//              .flatMapError(Console.printLine(_).mapError(_ => ???))
-//              .fold(_.toString, x => x)
-//            _ <- Console.printLine("parsed text:" + parsed)
             _ <- ZIO
               .fromEither(text.fromJson[Command[_, _]])
               .flatMap {
                 case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
                   handleCommand(c).flatMap(_ =>
-                    channel.send(Read(WebSocketFrame.text("did command")))
+                    channel.send(Read(WebSocketFrame.text(s"FINISHED COMMAND: $text")))
                   )
                 case c: Query[Globz.Service with WorldBlock.Block, _] =>
                   handleQuery(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
               }
-            // _ <- controller.runCommand(parsed.run)
-            _ <- channel.send(Read(WebSocketFrame.text(text)))
+              .flatMapError(err =>
+                channel
+                  .send(Read(WebSocketFrame.text(s"ERROR PERFORMING COMMAND : $text  ERROR: $err")))
+                  .mapError(_ => ???)
+              )
           } yield ()).mapError(_ => null)
 
-        // Send a "greeting" message to the server once the connection is established
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>

@@ -1,6 +1,8 @@
 package entity
 
 import entity.WorldBlock.GenericWorldBlockError
+import src.com.main.scala.entity.EggzOps.ID
+import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.Ref
@@ -25,6 +27,9 @@ object WorldBlock {
     def removeBlob(blob: Globz.Glob): IO[WorldBlockError, ExitCode]
     def tickAllBlobs(): ZIO[Any, WorldBlockError, ExitCode]
     def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz.Glob]]
+
+    def updateBlob(blob: Globz.Glob): IO[WorldBlockError, ExitCode]
+
   }
 
   trait Service {

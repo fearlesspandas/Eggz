@@ -1,5 +1,6 @@
 package controller
 
+import entity.BasicPlayer
 import entity.WorldBlock
 import entity.WorldBlockInMem
 import src.com.main.scala.entity.Globz
@@ -55,5 +56,5 @@ object Control extends BasicController.Service[Globz.Service with WorldBlock.Blo
     for {
       w <- WorldBlock.make.provide(ZLayer.succeed(WorldBlockInMem)).mapError(_ => ???)
       r <- Ref.make(w)
-    } yield Control(GlobzInMem, r)
+    } yield Control(BasicPlayer, r)
 }

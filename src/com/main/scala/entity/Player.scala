@@ -84,7 +84,8 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   energyRef: Ref[Double],
   glob: Globz.Glob
 ) extends Player
-    with Globz.Glob {
+    with Globz.Glob
+    with PhysicalEntity {
   override def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B] = ???
 
   override def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
@@ -140,6 +141,20 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 
   override def scheduleEgg(id: entity.Globz.GLOBZ_IN): IO[GLOBZ_ERR, Unit] =
     glob.scheduleEgg(id)
+
+  override def getLocation: IO[PhysicsError, Vector[Experience]] = ???
+
+  override def getDestination: IO[PhysicsError, Vector[Experience]] = ???
+
+  override def setDestination(dest: Vector[Experience]): IO[PhysicsError, Unit] = ???
+
+  override def getVelocity: IO[PhysicsError, Vector[Experience]] = ???
+
+  override def setVelocity(velocity: Vector[Experience]): IO[PhysicsError, Vector[Experience]] = ???
+
+  override def move(location: Vector[Experience]): IO[PhysicsError, Unit] = ???
+
+  override def teleport(location: Vector[Experience]): IO[PhysicsError, Unit] = ???
 }
 
 object BasicPlayer extends Globz.Service {
