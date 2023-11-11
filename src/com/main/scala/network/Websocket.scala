@@ -21,7 +21,7 @@ import zio.json.EncoderOps
 
 object WebSocketAdvanced extends ZIOAppDefault {
 
-  def app(socketApp: WebSocketClientController[Any]) =
+  def app(socketApp: WebSocketControlServer[Any]) =
     Routes(
       Method.GET / "greet" / string("name") -> handler { (name: String, req: Request) =>
         Response.text(s"Greetings ${name}!")
@@ -32,27 +32,27 @@ object WebSocketAdvanced extends ZIOAppDefault {
   val config =
     Server.defaultWith(_.webSocketConfig(WebSocketConfig.default.copy(subprotocols = Some("json"))))
   override val run = program().provide(ZLayer.succeed(BasicWebSocket))
-  def program(): ZIO[WebSocketClientController.Service[Any], Nothing, Unit] =
+  def program(): ZIO[WebSocketControlServer.Service[Any], Nothing, Unit] =
     (for {
       _ <- Console.printLine(GET_ALL_GLOBS().toJson)
-      ws <- ZIO.service[WebSocketClientController.Service[Any]].flatMap(_.make)
+      ws <- ZIO.service[WebSocketControlServer.Service[Any]].flatMap(_.make)
       _ <- Server.serve(app(ws)).provide(Server.default)
     } yield ()).mapError(_ => ???) //.fold(e => Console.printLine(e),x => x)
 }
 
-trait WebSocketClientController[Env] {
+trait WebSocketControlServer[Env] {
   def socket: WebSocketApp[Env]
 }
 
 trait WebsocketError
-object WebSocketClientController {
+object WebSocketControlServer {
   trait Service[Env] {
-    def make: IO[WebsocketError, WebSocketClientController[Env]]
+    def make: IO[WebsocketError, WebSocketControlServer[Env]]
   }
 }
 
 case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBlock.Block])
-    extends WebSocketClientController[Any] {
+    extends WebSocketControlServer[Any] {
 
   def handleCommand(
     command: Command[Globz.Service with WorldBlock.Block, Unit]
@@ -113,8 +113,8 @@ case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBl
     }
 }
 
-object BasicWebSocket extends WebSocketClientController.Service[Any] {
-  override def make: IO[WebsocketError, WebSocketClientController[Any]] =
+object BasicWebSocket extends WebSocketControlServer.Service[Any] {
+  override def make: IO[WebsocketError, WebSocketControlServer[Any]] =
     for {
       controller <- BasicController.make
         .provide(ZLayer.succeed(Control))

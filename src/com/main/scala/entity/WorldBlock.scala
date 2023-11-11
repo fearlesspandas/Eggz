@@ -108,6 +108,8 @@ case class WorldBlockInMem(
     for {
       res <- dbRef.get.map(_.get(id))
     } yield res
+
+  override def updateBlob(blob: Globz.Glob): IO[WorldBlock.WorldBlockError, ExitCode] = ???
 }
 object WorldBlockInMem extends WorldBlock.Service {
   override def make: IO[WorldBlock.WorldBlockError, WorldBlock.Block] =

@@ -82,6 +82,7 @@ object Player {
 case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Service[Item]])(
   healthRef: Ref[Double],
   energyRef: Ref[Double],
+  physics: PhysicalEntity,
   glob: Globz.Glob
 ) extends Player
     with Globz.Glob
@@ -142,19 +143,22 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def scheduleEgg(id: entity.Globz.GLOBZ_IN): IO[GLOBZ_ERR, Unit] =
     glob.scheduleEgg(id)
 
-  override def getLocation: IO[PhysicsError, Vector[Experience]] = ???
+  override def getLocation: IO[PhysicsError, Vector[Experience]] = physics.getLocation
 
-  override def getDestination: IO[PhysicsError, Vector[Experience]] = ???
+  override def getDestination: IO[PhysicsError, Option[Vector[Experience]]] = physics.getDestination
 
-  override def setDestination(dest: Vector[Experience]): IO[PhysicsError, Unit] = ???
+  override def setDestination(dest: Vector[Experience]): IO[PhysicsError, Unit] =
+    physics.setDestination(dest)
 
-  override def getVelocity: IO[PhysicsError, Vector[Experience]] = ???
+  override def getVelocity: IO[PhysicsError, Vector[Experience]] = physics.getVelocity
 
-  override def setVelocity(velocity: Vector[Experience]): IO[PhysicsError, Vector[Experience]] = ???
+  override def move(location: Vector[Experience]): IO[PhysicsError, Unit] = physics.move(location)
 
-  override def move(location: Vector[Experience]): IO[PhysicsError, Unit] = ???
+  override def teleport(location: Vector[Experience]): IO[PhysicsError, Unit] =
+    physics.teleport(location)
 
-  override def teleport(location: Vector[Experience]): IO[PhysicsError, Unit] = ???
+  override def setVelocity(velocity: Vector[Experience]): IO[PhysicsError, Unit] =
+    physics.setVelocity(velocity)
 }
 
 object BasicPlayer extends Globz.Service {
@@ -164,6 +168,7 @@ object BasicPlayer extends Globz.Service {
       stor <- Storage.make[Item](() => basicStorage[Item](Set()))
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
+      pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
-    } yield BasicPlayer(id, ss, stor)(href, eref, g)
+    } yield BasicPlayer(id, ss, stor)(href, eref, pe, g)
 }

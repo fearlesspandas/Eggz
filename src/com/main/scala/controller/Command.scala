@@ -2,6 +2,7 @@ package controller
 
 import controller.Command.CommandError
 import controller.Command.GenericCommandError
+import entity.PhysicalEntity
 import entity.WorldBlock
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
@@ -81,6 +82,37 @@ object GET_ALL_GLOBS {
   implicit val encoder: JsonEncoder[GET_ALL_GLOBS] = DeriveJsonEncoder.gen[GET_ALL_GLOBS]
   implicit val decoder: JsonDecoder[GET_ALL_GLOBS] = DeriveJsonDecoder.gen[GET_ALL_GLOBS]
 }
+
+case class GET_ALL_EGGZ() extends Query[WorldBlock.Block, Set[Eggz.Service]] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Set[Eggz.Service]] =
+    (for {
+      res <- WorldBlock.getAllBlobs()
+      nested <- ZIO.collectAllPar(res.map(_.getAll())).map(d => d.flatMap(x => x))
+    } yield nested).mapError(_ => GenericCommandError("Error retrieving blobs"))
+}
+object GET_ALL_EGGZ {
+  implicit val encoder: JsonEncoder[GET_ALL_EGGZ] = DeriveJsonEncoder.gen[GET_ALL_EGGZ]
+  implicit val decoder: JsonDecoder[GET_ALL_EGGZ] = DeriveJsonDecoder.gen[GET_ALL_EGGZ]
+}
+case class GET_ALL_STATS() extends Query[WorldBlock.Block, Set[(Double, Double)]] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Set[(Double, Double)]] =
+    (for {
+      res <- WorldBlock.getAllBlobs()
+      nested <- ZIO.collectAllPar(res.map(_.getAll())).map(d => d.flatMap(x => x))
+      s <- ZIO.collectAllPar(
+        nested.map(x =>
+          for {
+            health <- x.health()
+            energy <- x.energy()
+          } yield (health, energy)
+        )
+      )
+    } yield s).mapError(_ => GenericCommandError("Error retrieving blobs"))
+}
+object GET_ALL_STATS {
+  implicit val encoder: JsonEncoder[GET_ALL_STATS] = DeriveJsonEncoder.gen[GET_ALL_STATS]
+  implicit val decoder: JsonDecoder[GET_ALL_STATS] = DeriveJsonDecoder.gen[GET_ALL_STATS]
+}
 case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID) extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
@@ -113,6 +145,32 @@ object GET_BLOB {
   implicit val encoder: JsonEncoder[GET_BLOB] = DeriveJsonEncoder.gen[GET_BLOB]
   implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
 }
+
+case class GET_GLOB_LOCATION(id: GLOBZ_ID) extends Query[WorldBlock.Block, Vector[Double]] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Vector[Double]] =
+    GET_BLOB(id).run
+      .flatMap {
+        case Some(entity: PhysicalEntity) => entity.getLocation
+      }
+      .mapError(_ => GenericCommandError("Error occured in physics"))
+}
+object GET_GLOB_LOCATION {
+  implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] = DeriveJsonEncoder.gen[GET_GLOB_LOCATION]
+  implicit val decoder: JsonDecoder[GET_GLOB_LOCATION] = DeriveJsonDecoder.gen[GET_GLOB_LOCATION]
+}
+
+case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
+    extends SimpleCommand[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      glob <- WorldBlock.getBlob(id)
+      _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity => pe.teleport(location) }
+    } yield ()).mapError(_ => GenericCommandError("Error setting glob location"))
+}
+object SET_GLOB_LOCATION {
+  implicit val encoder: JsonEncoder[SET_GLOB_LOCATION] = DeriveJsonEncoder.gen[SET_GLOB_LOCATION]
+  implicit val decoder: JsonDecoder[SET_GLOB_LOCATION] = DeriveJsonDecoder.gen[SET_GLOB_LOCATION]
+}
 case class RELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID)
     extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -136,7 +194,7 @@ object TICK_WORLD {
   implicit val encoder: JsonEncoder[TICK_WORLD] = DeriveJsonEncoder.gen[TICK_WORLD]
   implicit val decoder: JsonDecoder[TICK_WORLD] = DeriveJsonDecoder.gen[TICK_WORLD]
 }
-case class START_EGG(eggid: ID, globId: GLOBZ_ID) extends SimpleCommand[WorldBlock.Block] {
+case class START_EGG(eggId: ID, globId: GLOBZ_ID) extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       g <- WorldBlock.getBlob(globId)
@@ -144,7 +202,7 @@ case class START_EGG(eggid: ID, globId: GLOBZ_ID) extends SimpleCommand[WorldBlo
         .fromOption(g)
         .flatMap(glob =>
           for {
-            egg <- glob.get(eggid)
+            egg <- glob.get(eggId)
             _ <- ZIO.fromOption(egg).flatMap(glob.scheduleEgg(_))
           } yield ()
         )
