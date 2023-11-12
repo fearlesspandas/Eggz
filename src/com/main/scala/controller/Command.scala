@@ -82,7 +82,16 @@ object GET_ALL_GLOBS {
   implicit val encoder: JsonEncoder[GET_ALL_GLOBS] = DeriveJsonEncoder.gen[GET_ALL_GLOBS]
   implicit val decoder: JsonDecoder[GET_ALL_GLOBS] = DeriveJsonDecoder.gen[GET_ALL_GLOBS]
 }
-
+case class GET_ALL_ENTITY_IDS() extends Query[WorldBlock.Block, Set[GLOBZ_ID]] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Set[GLOBZ_ID]] =
+    (for {
+      res <- WorldBlock.getAllBlobs()
+    } yield res.map(_.id)).mapError(_ => GenericCommandError("Error retrieving blobs"))
+}
+object GET_ALL_ENTITY_IDS {
+  implicit val encoder: JsonEncoder[GET_ALL_ENTITY_IDS] = DeriveJsonEncoder.gen[GET_ALL_ENTITY_IDS]
+  implicit val decoder: JsonDecoder[GET_ALL_ENTITY_IDS] = DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
+}
 case class GET_ALL_EGGZ() extends Query[WorldBlock.Block, Set[Eggz.Service]] {
   override def run: ZIO[WorldBlock.Block, CommandError, Set[Eggz.Service]] =
     (for {
