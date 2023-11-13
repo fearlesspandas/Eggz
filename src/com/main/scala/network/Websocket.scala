@@ -6,6 +6,8 @@ import controller.Command
 import controller.Control
 import controller.GET_ALL_GLOBS
 import controller.Query
+import controller.QueryResponse
+import controller.ResponseQuery
 import controller.SimpleCommand
 import entity.WorldBlock
 import src.com.main.scala.entity.Globz
@@ -66,6 +68,13 @@ case class BasicWebSocket(
     } yield ())
 
   def handleQuery(
+    query: ResponseQuery[Globz.Service with WorldBlock.Block]
+  ): ZIO[Any, Nothing, String] =
+    (for {
+      res <- controller.runQuery(query.run.mapError(_ => null.asInstanceOf[Nothing]))
+    } yield res.toJson)
+
+  def handleQueryAsString(
     query: Command[Globz.Service with WorldBlock.Block, Any]
   ): ZIO[Any, Nothing, String] =
     (for {
@@ -96,8 +105,11 @@ case class BasicWebSocket(
                   handleCommand(c)
                     .flatMap(_ => channel.send(Read(WebSocketFrame.text(s"FinishedCommand:$text"))))
                     .flatMap(_ => channel.send(Read(WebSocketFrame.text(text))))
+                case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
+                  handleQuery(rq).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
                 case c: Query[Globz.Service with WorldBlock.Block, _] =>
-                  handleQuery(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
+                  handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res)))
+                  )
               }
               .flatMapError(err =>
                 channel

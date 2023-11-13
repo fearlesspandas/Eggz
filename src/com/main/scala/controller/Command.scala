@@ -56,12 +56,25 @@ object SimpleCommand {
   implicit val decoder: JsonDecoder[SimpleCommand[_]] =
     DeriveJsonDecoder.gen[SimpleCommand[Nothing]].map(x => x)
 }
-sealed trait Query[-Env, +A] extends Command[Env, A]
+//todo potentially i should rework this to only output a specific QUERY_RESPONSE type
+// that way serialization is handled separately from the query completely
+// without contaminating the type heirarchy logic
+// Ideally queries as a type can be kept general in output
+// but we can defer our implementation to something with an assumed output standard
+sealed trait Query[-Env, +A] extends Command[Env, A] {}
 object Query {
   implicit val encoder: JsonEncoder[Query[_, _]] =
     DeriveJsonEncoder.gen[Query[Nothing, Any]].contramap(x => x)
   implicit val decoder: JsonDecoder[Query[_, _]] =
     DeriveJsonDecoder.gen[Query[Nothing, Any]].map(x => x)
+}
+
+sealed trait ResponseQuery[-Env] extends Query[Env, QueryResponse]
+object ResponseQuery {
+  implicit val encoder: JsonEncoder[ResponseQuery[_]] =
+    DeriveJsonEncoder.gen[ResponseQuery[Nothing]].contramap(x => x)
+  implicit val decoder: JsonDecoder[ResponseQuery[_]] =
+    DeriveJsonDecoder.gen[ResponseQuery[Nothing]].map(x => x)
 }
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommand[Globz.Service with WorldBlock.Block] {
@@ -75,39 +88,40 @@ object CREATE_GLOB {
   implicit val encoder: JsonEncoder[CREATE_GLOB] = DeriveJsonEncoder.gen[CREATE_GLOB]
   implicit val decoder: JsonDecoder[CREATE_GLOB] = DeriveJsonDecoder.gen[CREATE_GLOB]
 }
-case class GET_ALL_GLOBS() extends Query[WorldBlock.Block, Set[Globz.Glob]] {
-  override def run: ZIO[WorldBlock.Block, CommandError, Set[Globz.Glob]] =
+case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
-    } yield res).mapError(_ => GenericCommandError("Error retrieving blobs"))
+    } yield GlobSet(res)).mapError(_ => GenericCommandError("Error retrieving blobs"))
+
 }
 object GET_ALL_GLOBS {
   implicit val encoder: JsonEncoder[GET_ALL_GLOBS] = DeriveJsonEncoder.gen[GET_ALL_GLOBS]
   implicit val decoder: JsonDecoder[GET_ALL_GLOBS] = DeriveJsonDecoder.gen[GET_ALL_GLOBS]
 }
-case class GET_ALL_ENTITY_IDS() extends Query[WorldBlock.Block, Set[GLOBZ_ID]] {
-  override def run: ZIO[WorldBlock.Block, CommandError, Set[GLOBZ_ID]] =
+case class GET_ALL_ENTITY_IDS() extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
-    } yield res.map(_.id)).mapError(_ => GenericCommandError("Error retrieving blobs"))
+    } yield EntityIDSet(res.map(_.id))).mapError(_ => GenericCommandError("Error retrieving blobs"))
 }
 object GET_ALL_ENTITY_IDS {
   implicit val encoder: JsonEncoder[GET_ALL_ENTITY_IDS] = DeriveJsonEncoder.gen[GET_ALL_ENTITY_IDS]
   implicit val decoder: JsonDecoder[GET_ALL_ENTITY_IDS] = DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
 }
-case class GET_ALL_EGGZ() extends Query[WorldBlock.Block, Set[Eggz.Service]] {
-  override def run: ZIO[WorldBlock.Block, CommandError, Set[Eggz.Service]] =
+case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
       nested <- ZIO.collectAllPar(res.map(_.getAll())).map(d => d.flatMap(x => x))
-    } yield nested).mapError(_ => GenericCommandError("Error retrieving blobs"))
+    } yield EggSet(nested)).mapError(_ => GenericCommandError("Error retrieving blobs"))
 }
 object GET_ALL_EGGZ {
   implicit val encoder: JsonEncoder[GET_ALL_EGGZ] = DeriveJsonEncoder.gen[GET_ALL_EGGZ]
   implicit val decoder: JsonDecoder[GET_ALL_EGGZ] = DeriveJsonDecoder.gen[GET_ALL_EGGZ]
 }
-case class GET_ALL_STATS() extends Query[WorldBlock.Block, Set[(Double, Double)]] {
-  override def run: ZIO[WorldBlock.Block, CommandError, Set[(Double, Double)]] =
+case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
       nested <- ZIO.collectAllPar(res.map(_.getAll())).map(d => d.flatMap(x => x))
@@ -116,10 +130,10 @@ case class GET_ALL_STATS() extends Query[WorldBlock.Block, Set[(Double, Double)]
           for {
             health <- x.health()
             energy <- x.energy()
-          } yield (health, energy)
+          } yield Stats(x.id, health, energy)
         )
       )
-    } yield s).mapError(_ => GenericCommandError("Error retrieving blobs"))
+    } yield AllStats(s)).mapError(_ => GenericCommandError("Error retrieving blobs"))
 }
 object GET_ALL_STATS {
   implicit val encoder: JsonEncoder[GET_ALL_STATS] = DeriveJsonEncoder.gen[GET_ALL_STATS]
@@ -147,22 +161,27 @@ object CREATE_REPAIR_EGG {
 //  implicit val encoder: JsonEncoder[ADD_EGG] = DeriveJsonEncoder.gen[ADD_EGG]
 //  implicit val decoder: JsonDecoder[ADD_EGG] = DeriveJsonDecoder.gen[ADD_EGG]
 //}
-case class GET_BLOB(id: GLOBZ_ID) extends Query[WorldBlock.Block, Option[Globz.Glob]] {
-  override def run: ZIO[WorldBlock.Block, CommandError, Option[Globz.Glob]] =
+case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       g <- WorldBlock.getBlob(id)
-    } yield g).mapError(_ => GenericCommandError(s"Error finding blob with $id"))
+    } yield Blob(g)).mapError(_ => GenericCommandError(s"Error finding blob with $id"))
 }
 object GET_BLOB {
   implicit val encoder: JsonEncoder[GET_BLOB] = DeriveJsonEncoder.gen[GET_BLOB]
   implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
 }
 
-case class GET_GLOB_LOCATION(id: GLOBZ_ID) extends Query[WorldBlock.Block, Vector[Double]] {
-  override def run: ZIO[WorldBlock.Block, CommandError, Vector[Double]] =
+case class GET_GLOB_LOCATION(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     GET_BLOB(id).run
       .flatMap {
-        case Some(entity: PhysicalEntity) => entity.getLocation
+        case Blob(blob) =>
+          for {
+            b <- ZIO.fromOption(blob).map { case pe: PhysicalEntity => pe }
+            l <- b.getLocation.map(vec => (vec(0), vec(1), vec(2)))
+          } yield Location(id, l)
+
       }
       .mapError(_ => GenericCommandError("Error occured in physics"))
 }
@@ -248,8 +267,8 @@ object ADD_DESTINATION {
 
 }
 
-case class GET_NEXT_DESTINATION(id: ID) extends Query[WorldBlock.Block, ADDED_DESTINATION] {
-  override def run: ZIO[WorldBlock.Block, CommandError, ADDED_DESTINATION] =
+case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
       location <- ZIO
@@ -258,8 +277,9 @@ case class GET_NEXT_DESTINATION(id: ID) extends Query[WorldBlock.Block, ADDED_DE
         .mapError(_ => ???)
       loc <- ZIO
         .fromOption(location)
+        //.map(vec => s"[${vec(0)},${vec(1)},${vec(2)}]")
         .flatMap(vec => ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2))))
-    } yield ADDED_DESTINATION(id, loc)).mapError(_ =>
+    } yield NextDestination(id, loc)).mapError(_ =>
       GenericCommandError(s"Error retrieving destination for id $id")
     )
 }
@@ -270,5 +290,5 @@ object GET_NEXT_DESTINATION {
   implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION] =
     DeriveJsonDecoder.gen[GET_NEXT_DESTINATION]
 
-  case class ADDED_DESTINATION(id: ID, location: (Double, Double, Double))
+  case class ADDED_DESTINATION(id: ID, location: String)
 }
