@@ -2,8 +2,11 @@ package controller
 
 import controller.Command.CommandError
 import controller.Command.GenericCommandError
+import controller.GET_NEXT_DESTINATION.ADDED_DESTINATION
 import entity.PhysicalEntity
 import entity.WorldBlock
+import physics.Destinations
+import physics.Vector3
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
@@ -221,4 +224,51 @@ case class START_EGG(eggId: ID, globId: GLOBZ_ID) extends SimpleCommand[WorldBlo
 object START_EGG {
   implicit val encoder: JsonEncoder[START_EGG] = DeriveJsonEncoder.gen[START_EGG]
   implicit val decoder: JsonDecoder[START_EGG] = DeriveJsonDecoder.gen[START_EGG]
+}
+
+case class ADD_DESTINATION(id: ID, location: Vector[Double])
+    extends SimpleCommand[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      blob <- WorldBlock.getBlob(id)
+      _ <- ZIO
+        .fromOption(blob)
+        .flatMap({
+          case entity: Destinations =>
+            entity.addDestination(location)
+        })
+    } yield ()).mapError(_ => GenericCommandError(s"Error adding destination to entity $id"))
+}
+object ADD_DESTINATION {
+  implicit val encoder: JsonEncoder[ADD_DESTINATION] = DeriveJsonEncoder
+    .gen[ADD_DESTINATION]
+
+  implicit val decoder: JsonDecoder[ADD_DESTINATION] =
+    DeriveJsonDecoder.gen[ADD_DESTINATION]
+
+}
+
+case class GET_NEXT_DESTINATION(id: ID) extends Query[WorldBlock.Block, ADDED_DESTINATION] {
+  override def run: ZIO[WorldBlock.Block, CommandError, ADDED_DESTINATION] =
+    (for {
+      blob <- WorldBlock.getBlob(id)
+      location <- ZIO
+        .fromOption(blob)
+        .flatMap { case entity: Destinations => entity.getNextDestination() }
+        .mapError(_ => ???)
+      loc <- ZIO
+        .fromOption(location)
+        .flatMap(vec => ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2))))
+    } yield ADDED_DESTINATION(id, loc)).mapError(_ =>
+      GenericCommandError(s"Error retrieving destination for id $id")
+    )
+}
+
+object GET_NEXT_DESTINATION {
+  implicit val encoder: JsonEncoder[GET_NEXT_DESTINATION] =
+    DeriveJsonEncoder.gen[GET_NEXT_DESTINATION]
+  implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION] =
+    DeriveJsonDecoder.gen[GET_NEXT_DESTINATION]
+
+  case class ADDED_DESTINATION(id: ID, location: (Double, Double, Double))
 }

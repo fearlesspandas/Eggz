@@ -8,6 +8,9 @@ import entity.Skill.Level
 import entity.Skill.SkillError
 import entity.SkillSet.SkillId
 import entity.SkillSet.SkillsetError
+import physics.BasicDestinations
+import physics.DestinationError
+import physics.Destinations
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
@@ -83,10 +86,12 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   healthRef: Ref[Double],
   energyRef: Ref[Double],
   physics: PhysicalEntity,
-  glob: Globz.Glob
+  glob: Globz.Glob,
+  destinations: Destinations
 ) extends Player
     with Globz.Glob
-    with PhysicalEntity {
+    with PhysicalEntity
+    with Destinations {
   override def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B] = ???
 
   override def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
@@ -159,6 +164,18 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 
   override def setVelocity(velocity: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.setVelocity(velocity)
+
+  override def addDestination(location: Vector[Experience]): IO[DestinationError, Unit] =
+    destinations.addDestination(location)
+
+  override def getNextDestination(): IO[DestinationError, Vector[Experience]] =
+    destinations.getNextDestination()
+
+  override def getAllDestinations(): IO[DestinationError, Seq[Vector[Experience]]] =
+    destinations.getAllDestinations()
+
+  override def popNextDestination(): IO[DestinationError, Vector[Experience]] =
+    destinations.popNextDestination()
 }
 
 object BasicPlayer extends Globz.Service {
@@ -170,5 +187,6 @@ object BasicPlayer extends Globz.Service {
       eref <- Ref.make(1000.0)
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
-    } yield BasicPlayer(id, ss, stor)(href, eref, pe, g)
+      dests <- BasicDestinations.make()
+    } yield BasicPlayer(id, ss, stor)(href, eref, pe, g, dests)
 }

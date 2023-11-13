@@ -21,12 +21,14 @@ import zio.json.EncoderOps
 
 object WebSocketAdvanced extends ZIOAppDefault {
 
-  def app(socketApp: WebSocketControlServer[Any]) =
+  def app(socketApp: String => WebSocketControlServer[Any]) =
     Routes(
       Method.GET / "greet" / string("name") -> handler { (name: String, req: Request) =>
         Response.text(s"Greetings ${name}!")
       },
-      Method.GET / "subscriptions" -> handler(socketApp.socket.toResponse)
+      Method.GET / "connect" / string("id") -> handler { (id: String, req: Request) =>
+        socketApp(id).socket.toResponse
+      }
     ).toHttpApp
 
   val config =
@@ -36,7 +38,7 @@ object WebSocketAdvanced extends ZIOAppDefault {
     (for {
       _ <- Console.printLine(GET_ALL_GLOBS().toJson)
       ws <- ZIO.service[WebSocketControlServer.Service[Any]].flatMap(_.make)
-      _ <- Server.serve(app(ws)).provide(Server.default)
+      _ <- Server.serve(app(ws)).provide(config)
     } yield ()).mapError(_ => ???) //.fold(e => Console.printLine(e),x => x)
 }
 
@@ -47,12 +49,14 @@ trait WebSocketControlServer[Env] {
 trait WebsocketError
 object WebSocketControlServer {
   trait Service[Env] {
-    def make: IO[WebsocketError, WebSocketControlServer[Env]]
+    def make: IO[WebsocketError, String => WebSocketControlServer[Env]]
   }
 }
 
-case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBlock.Block])
-    extends WebSocketControlServer[Any] {
+case class BasicWebSocket(
+  id: String,
+  controller: BasicController[Globz.Service with WorldBlock.Block]
+) extends WebSocketControlServer[Any] {
 
   def handleCommand(
     command: Command[Globz.Service with WorldBlock.Block, Unit]
@@ -79,11 +83,19 @@ case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBl
             _ <- Console.printLine("received text:" + text)
             _ <- ZIO
               .fromEither(text.fromJson[Command[_, _]])
+              .fold(
+                err => println(s"we fucked up:$text:" + err)
+//                  channel.send(
+//                    Read(WebSocketFrame.text(s"ERROR PERFORMING COMMAND : $text  ERROR: $err"))
+//                  )
+                ,
+                x => x
+              )
               .flatMap {
                 case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
-                  handleCommand(c).flatMap(_ =>
-                    channel.send(Read(WebSocketFrame.text(s"FINISHED COMMAND: $text")))
-                  )
+                  handleCommand(c)
+                    .flatMap(_ => channel.send(Read(WebSocketFrame.text(s"FinishedCommand:$text"))))
+                    .flatMap(_ => channel.send(Read(WebSocketFrame.text(text))))
                 case c: Query[Globz.Service with WorldBlock.Block, _] =>
                   handleQuery(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
               }
@@ -92,8 +104,11 @@ case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBl
                   .send(Read(WebSocketFrame.text(s"ERROR PERFORMING COMMAND : $text  ERROR: $err")))
                   .mapError(_ => ???)
               )
-          } yield ()).mapError(_ => null)
-
+          } yield ())
+            .fold(
+              err => println(s"we fucked up:$text:" + err),
+              x => x
+            )
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>
@@ -114,10 +129,10 @@ case class BasicWebSocket(controller: BasicController[Globz.Service with WorldBl
 }
 
 object BasicWebSocket extends WebSocketControlServer.Service[Any] {
-  override def make: IO[WebsocketError, WebSocketControlServer[Any]] =
+  override def make: IO[WebsocketError, String => WebSocketControlServer[Any]] =
     for {
       controller <- BasicController.make
         .provide(ZLayer.succeed(Control))
         .mapError(_ => ???)
-    } yield BasicWebSocket(controller)
+    } yield BasicWebSocket(_, controller)
 }
