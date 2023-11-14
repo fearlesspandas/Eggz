@@ -1,28 +1,28 @@
-package src.com.main.scala.entity
+package entity
+
+import controller.Stats
+import entity.GlobzInMem.EggMap
+import entity.GlobzInMem.RelationMap
 
 import java.util
-
-import src.com.main.scala
-import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
+import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
-import src.com.main.scala.entity.GlobzEnvironment.EggMap
-import src.com.main.scala.entity.GlobzEnvironment.RelationMap
 import zio.Ref
 import zio.Schedule
 import zio.Duration._
-//import src.com.main.scala.entity.Globz.Globz
+//import src.com.main.scala.entity.Globz
 import zio.ExitCode
 //import zio.Has
 import zio.IO
 import zio.ZIO
 import zio.ZLayer
 // move to this model : https://github.com/psisoyev/release-pager/blob/master/storage/src/main/scala/io/pager/subscription/chat/ChatStorage.scala#L20
-case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
-    extends Globz.Glob {
+case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap) extends Globz {
   private val db = new util.HashMap[String, Eggz.Service]()
 
   override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
@@ -55,14 +55,14 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
     } yield ref.values.toSet
 
   override def relate(
-    egg1: entity.Globz.GLOBZ_IN,
-    egg2: entity.Globz.GLOBZ_IN
+    egg1: GLOBZ_IN,
+    egg2: GLOBZ_IN
   ): IO[GLOBZ_ERR, Unit] =
     for {
       _ <- relationRef.update(_.updated((egg1.id, egg2.id), true))
     } yield ()
 
-  override def neighbors(egg: entity.Globz.GLOBZ_IN): IO[GLOBZ_ERR, Vector[entity.Globz.GLOBZ_IN]] =
+  override def neighbors(egg: Eggz.Service): IO[GLOBZ_ERR, Vector[GLOBZ_IN]] =
     (for {
       rels <- relationRef.get
       tasks = rels.toVector
@@ -75,7 +75,7 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
     } yield k.collect({ case Some(g) => g })).mapError(_ => "whoops")
 
   override def scheduleEgg(
-    id: scala.entity.Globz.GLOBZ_IN
+    id: GLOBZ_IN
   ): IO[GLOBZ_ERR, Unit] =
     get(id.id)
       .flatMap(_.map(eg => eg.op).getOrElse(ZIO.succeed(ExitCode.failure)))
@@ -84,29 +84,29 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
       .fork
       .map(_ => ())
 
+  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
+    for {
+      eggs <- this.dbref.get
+      mapped <- ZIO
+        .collectAllPar(eggs.map {
+          case (id, egg) => egg.serializeEgg
+        })
+        .mapError(_ => s"Error while trying to serialize glob ${this.id}")
+      rels <- this.relationRef.get
+    } yield GlobInMemory(
+      this.id,
+      mapped.toSet,
+      rels.toSet.collect[(ID, ID)] { case (ids: (ID, ID), related: Boolean) if related => ids }
+    )
+
 }
 object GlobzInMem extends Globz.Service {
-  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz.Glob] =
+  type EggMap = Ref[Map[GLOBZ_ID, Eggz.Service]]
+  type RelationMap = Ref[Map[(GLOBZ_ID, GLOBZ_ID), Boolean]]
+  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz] =
     for {
       r <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
       k <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
     } yield GlobzInMem(id, r, k)
-}
-object GlobzEnvironment {
-  type EggMap = Ref[Map[GLOBZ_ID, Eggz.Service]]
-  type RelationMap = Ref[Map[(GLOBZ_ID, GLOBZ_ID), Boolean]]
-  val inMemory = ZLayer {
-    ZIO
-      .succeed(GlobzInMem)
-  }
-//  val anyRef: ZLayer[Any, Nothing, EggMap with RelationMap] = ZLayer {
-//    for {
-//      m <- Ref.make(Map.empty[GLOBZ_ID, Eggz.Service])
-//
-//    } yield m
-//  } ++ ZLayer {
-//    for {
-//      r <- Ref.make(Map.empty[(GLOBZ_ID, GLOBZ_ID), Boolean])
-//    } yield r
-//  }
+
 }

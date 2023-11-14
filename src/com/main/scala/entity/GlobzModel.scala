@@ -18,7 +18,7 @@ object PlayerGlob {
   implicit val encoder: JsonEncoder[PlayerGlob] = DeriveJsonEncoder.gen[PlayerGlob]
   implicit val decoder: JsonDecoder[PlayerGlob] = DeriveJsonDecoder.gen[PlayerGlob]
 }
-case class GlobInMemory(eggs: Map[ID, Eggz.Service], relations: Map[(ID, ID), Boolean])
+case class GlobInMemory(id: String, eggs: Set[EggzModel], relations: Set[(ID, ID)])
     extends GlobzModel
 object GlobInMemory {
   implicit val encoder: JsonEncoder[GlobInMemory] = DeriveJsonEncoder.gen[GlobInMemory]

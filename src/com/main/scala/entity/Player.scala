@@ -1,5 +1,6 @@
 package entity
 
+import controller.Stats
 import entity.Player.Item
 import entity.Player.PlayerEnv
 import entity.Player.PlayerError
@@ -15,7 +16,7 @@ import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.GlobzInMem
+import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
 import src.com.main.scala.entity.StorageEgg
 import src.com.main.scala.entity.basicStorage
@@ -78,7 +79,7 @@ trait Player extends StorageEgg[Item] {
 
 object Player {
   type Item = String
-  type PlayerEnv = Globz.Glob
+  type PlayerEnv = Globz
   trait PlayerError
 }
 
@@ -86,10 +87,10 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   healthRef: Ref[Double],
   energyRef: Ref[Double],
   physics: PhysicalEntity,
-  glob: Globz.Glob,
+  glob: Globz,
   destinations: Destinations
 ) extends Player
-    with Globz.Glob
+    with Globz
     with PhysicalEntity
     with Destinations {
   override def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B] = ???
@@ -121,7 +122,7 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 
   override def energy(): IO[Eggz.EggzError, Double] = energyRef.get
 
-  override def op: ZIO[_root_.src.com.main.scala.entity.Globz.Glob, GLOBZ_ERR, ExitCode] =
+  override def op: ZIO[_root_.src.com.main.scala.entity.Globz, GLOBZ_ERR, ExitCode] =
     ZIO.succeed(ExitCode.success)
 
   override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
@@ -145,7 +146,7 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def neighbors(egg: Eggz.Service): IO[GLOBZ_ERR, Vector[Eggz.Service]] =
     glob.neighbors(egg)
 
-  override def scheduleEgg(id: entity.Globz.GLOBZ_IN): IO[GLOBZ_ERR, Unit] =
+  override def scheduleEgg(id: GLOBZ_IN): IO[GLOBZ_ERR, Unit] =
     glob.scheduleEgg(id)
 
   override def getLocation: IO[PhysicsError, Vector[Experience]] = physics.getLocation
@@ -168,7 +169,7 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def addDestination(location: Vector[Experience]): IO[DestinationError, Unit] =
     destinations.addDestination(location)
 
-  override def getNextDestination(): IO[DestinationError, Vector[Experience]] =
+  override def getNextDestination(): IO[DestinationError, Option[Vector[Experience]]] =
     destinations.getNextDestination()
 
   override def getAllDestinations(): IO[DestinationError, Seq[Vector[Experience]]] =
@@ -176,10 +177,26 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 
   override def popNextDestination(): IO[DestinationError, Vector[Experience]] =
     destinations.popNextDestination()
+
+  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
+    (for {
+      health <- this.health()
+      energy <- this.energy()
+      stats = Stats(this.id, health, energy)
+    } yield PlayerGlob(this.id, stats)).mapError(_ =>
+      s"Error while trying to Serialize glob ${glob.id}"
+    )
+
+  override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
+    for {
+      health <- health()
+      energy <- energy()
+      stats = Stats(id, health, energy)
+    } yield PLAYER_EGG(id, stats)
 }
 
 object BasicPlayer extends Globz.Service {
-  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz.Glob] =
+  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
       stor <- Storage.make[Item](() => basicStorage[Item](Set()))
@@ -189,4 +206,5 @@ object BasicPlayer extends Globz.Service {
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
     } yield BasicPlayer(id, ss, stor)(href, eref, pe, g, dests)
+
 }

@@ -1,10 +1,12 @@
 package src.com.main.scala.entity
 
+import controller.Stats
+import entity.EggzModel
+import entity.REPAIR_EGG
 import src.com.main.scala.entity.Eggz.GenericEggzError
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
-import src.com.main.scala.entity.Globz.GLOBZ_ID
-//import src.com.main.scala.entity.Globz.Globz
+//import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage.GenericServiceError
 import zio.ExitCode
 import zio.IO
@@ -20,7 +22,7 @@ case class RepairEgg(
   cost: Double,
   inventory: Ref[Storage.Service[String]]
 ) extends StorageEgg[String] {
-  override def op: ZIO[Globz.Glob, String, ExitCode] =
+  override def op: ZIO[Globz, String, ExitCode] =
     this.energyRef.get.flatMap(e =>
       this.healthRef.get.flatMap { h =>
         if (e <= cost) {
@@ -37,7 +39,7 @@ case class RepairEgg(
               }
               .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
             ud <- ZIO
-              .service[Globz.Glob]
+              .service[Globz]
               .flatMap(glob => glob.neighbors(this))
               .flatMap { neighbors =>
                 ZIO.collectAllPar(
@@ -88,6 +90,13 @@ case class RepairEgg(
   override def health(): IO[Eggz.EggzError, Double] = healthRef.get
 
   override def energy(): IO[Eggz.EggzError, Double] = energyRef.get
+
+  override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
+    for {
+      health <- health()
+      energy <- energy()
+      stats = Stats(id, health, energy)
+    } yield REPAIR_EGG(id, stats, cost, repairValue)
 }
 
 object RepairEgg {
@@ -98,7 +107,7 @@ object RepairEgg {
       bs <- Ref.make(basicStorage[String](Set()))
     } yield RepairEgg(id, h, repairValue, e, 20, bs.asInstanceOf[Ref[Storage.Service[String]]])
 
-  def op(egg: Eggz.Service): ZIO[Globz.Glob, GLOBZ_ERR, ExitCode] = egg.op
+  def op(egg: Eggz.Service): ZIO[Globz, GLOBZ_ERR, ExitCode] = egg.op
 }
 
 class processingEgg() // proocesses resource to next stage

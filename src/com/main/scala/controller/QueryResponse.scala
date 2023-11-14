@@ -1,9 +1,11 @@
 package controller
 
+import entity.GlobzModel
 import src.com.main.scala.entity.EggzOps.ID
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.Globz.GLOBZ_ID
+import src.com.main.scala.entity.Globz
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
 import zio.json.JsonDecoder
@@ -16,12 +18,12 @@ object QueryResponse {
   implicit val decoder: JsonDecoder[QueryResponse] = DeriveJsonDecoder.gen[QueryResponse]
 }
 
-case class GlobSet(globs: Set[Globz.Glob]) extends QueryResponse
+case class GlobSet(globs: Set[GlobzModel]) extends QueryResponse
 object GlobSet {
-  implicit val encoder: JsonEncoder[GlobSet] = DeriveJsonEncoder.gen[Set[Globz.Glob]]
+  implicit val encoder: JsonEncoder[GlobSet] = DeriveJsonEncoder.gen[GlobSet]
   implicit val decoder: JsonDecoder[GlobSet] = DeriveJsonDecoder.gen[GlobSet]
 }
-case class EggSet(eggs: Set[Eggz.Service]) extends QueryResponse
+case class EggSet(eggs: Set[Stats]) extends QueryResponse
 object EggSet {
   implicit val encoder: JsonEncoder[EggSet] = DeriveJsonEncoder.gen[EggSet]
   implicit val decoder: JsonDecoder[EggSet] = DeriveJsonDecoder.gen[EggSet]
@@ -52,7 +54,12 @@ object Location {
   implicit val encoder: JsonEncoder[Location] = DeriveJsonEncoder.gen[Location]
   implicit val decoder: JsonDecoder[Location] = DeriveJsonDecoder.gen[Location]
 }
-case class Blob(blob: Option[Globz.Glob]) extends QueryResponse
+case class NoLocation(id:GLOBZ_ID) extends QueryResponse
+object NoLocation {
+  implicit val encoder: JsonEncoder[NoLocation] = DeriveJsonEncoder.gen[NoLocation]
+  implicit val decoder: JsonDecoder[NoLocation] = DeriveJsonDecoder.gen[NoLocation]
+}
+case class Blob(blob: Option[GlobzModel]) extends QueryResponse
 object Blob {
   implicit val encoder: JsonEncoder[Blob] = DeriveJsonEncoder.gen[Blob]
   implicit val decoder: JsonDecoder[Blob] = DeriveJsonDecoder.gen[Blob]

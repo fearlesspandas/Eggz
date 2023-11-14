@@ -2,7 +2,7 @@ package src.com.main.scala.entity
 
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import zio.Ref
-//import src.com.main.scala.entity.Globz.Globz
+//import src.com.main.scala.entity.Globz
 import zio.ExitCode
 //import zio.Has
 import zio.ZIO
@@ -13,7 +13,7 @@ object EggzOps {
   trait Service {
 
     //def withGlob(globz: Ref[Globz.Service])
-    def op: ZIO[Globz.Glob, GLOBZ_ERR, ExitCode]
+    def op: ZIO[Globz, GLOBZ_ERR, ExitCode]
 //
 //    def top: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]
 //    def bop: ZIO[Globz.Service, GLOBZ_ERR, ExitCode]

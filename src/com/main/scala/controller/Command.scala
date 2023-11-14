@@ -3,7 +3,12 @@ package controller
 import controller.Command.CommandError
 import controller.Command.GenericCommandError
 import controller.GET_NEXT_DESTINATION.ADDED_DESTINATION
+import entity.BasicPlayer
+import entity.GlobInMemory
+import entity.GlobzInMem
+import entity.GlobzModel
 import entity.PhysicalEntity
+import entity.PlayerGlob
 import entity.WorldBlock
 import physics.Destinations
 import physics.Vector3
@@ -92,7 +97,10 @@ case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
-    } yield GlobSet(res)).mapError(_ => GenericCommandError("Error retrieving blobs"))
+      models <- ZIO.collectAllPar(res.map(_.serializeGlob))
+    } yield GlobSet(models.collect { case g: GlobzModel => g })).mapError(_ =>
+      GenericCommandError("Error retrieving blobs")
+    )
 
 }
 object GET_ALL_GLOBS {
@@ -114,7 +122,15 @@ case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
     (for {
       res <- WorldBlock.getAllBlobs()
       nested <- ZIO.collectAllPar(res.map(_.getAll())).map(d => d.flatMap(x => x))
-    } yield EggSet(nested)).mapError(_ => GenericCommandError("Error retrieving blobs"))
+      stats <- ZIO.collectAllPar(
+        nested.map(egg =>
+          for {
+            health <- egg.health()
+            energy <- egg.energy()
+          } yield Stats(egg.id, health, energy)
+        )
+      )
+    } yield EggSet(stats)).mapError(_ => GenericCommandError("Error retrieving blobs"))
 }
 object GET_ALL_EGGZ {
   implicit val encoder: JsonEncoder[GET_ALL_EGGZ] = DeriveJsonEncoder.gen[GET_ALL_EGGZ]
@@ -165,7 +181,10 @@ case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       g <- WorldBlock.getBlob(id)
-    } yield Blob(g)).mapError(_ => GenericCommandError(s"Error finding blob with $id"))
+      x <- ZIO.fromOption(g).flatMap(glob => glob.serializeGlob)
+    } yield Blob(Some(x)))
+      .mapError(_ => GenericCommandError(s"Error finding blob with $id"))
+      .fold(err => Blob(None), x => x)
 }
 object GET_BLOB {
   implicit val encoder: JsonEncoder[GET_BLOB] = DeriveJsonEncoder.gen[GET_BLOB]
@@ -174,16 +193,10 @@ object GET_BLOB {
 
 case class GET_GLOB_LOCATION(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    GET_BLOB(id).run
-      .flatMap {
-        case Blob(blob) =>
-          for {
-            b <- ZIO.fromOption(blob).map { case pe: PhysicalEntity => pe }
-            l <- b.getLocation.map(vec => (vec(0), vec(1), vec(2)))
-          } yield Location(id, l)
-
-      }
-      .mapError(_ => GenericCommandError("Error occured in physics"))
+    (for {
+      glob <- WorldBlock.getBlob(id)
+      location <- ZIO.fromOption(glob).flatMap { case g: PhysicalEntity => g.getLocation }
+    } yield Location(id, (location(0), location(1), location(2)))).fold(_ => NoLocation(id), x => x)
 }
 object GET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] = DeriveJsonEncoder.gen[GET_GLOB_LOCATION]

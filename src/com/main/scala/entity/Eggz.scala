@@ -1,5 +1,6 @@
 package src.com.main.scala.entity
 
+import entity.EggzModel
 import src.com.main.scala.entity.EggzOps.ID
 import zio.Ref
 //import zio.Has
@@ -33,6 +34,8 @@ object Eggz {
     def setEnergy(value: Double): IO[EggzError, Eggz.Service]
     def health(): IO[EggzError, Double]
     def energy(): IO[EggzError, Double]
+
+    def serializeEgg: IO[EggzError, EggzModel]
   }
 
   trait EggzError

@@ -4,7 +4,6 @@ import entity.BasicPlayer
 import entity.WorldBlock
 import entity.WorldBlockInMem
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.GlobzInMem
 import zio.IO
 import zio.Ref
 import zio.Tag

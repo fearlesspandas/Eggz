@@ -5,6 +5,7 @@ import controller.CREATE_GLOB
 import controller.Command
 import controller.Control
 import controller.GET_ALL_GLOBS
+import controller.GET_GLOB_LOCATION
 import controller.Query
 import controller.QueryResponse
 import controller.ResponseQuery
@@ -104,7 +105,7 @@ case class BasicWebSocket(
                 case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
                   handleCommand(c)
                     .flatMap(_ => channel.send(Read(WebSocketFrame.text(s"FinishedCommand:$text"))))
-                    .flatMap(_ => channel.send(Read(WebSocketFrame.text(text))))
+                //.flatMap(_ => channel.send(Read(WebSocketFrame.text(text)))) //we could optionally choose to send the comand back in full
                 case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
                   handleQuery(rq).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
                 case c: Query[Globz.Service with WorldBlock.Block, _] =>
@@ -134,8 +135,14 @@ case class BasicWebSocket(
         case ExceptionCaught(cause) =>
           Console.printLine(s"Channel error!: ${cause.getMessage}")
 
-        case _ =>
-          ZIO.unit
+        case _ => ZIO.unit
+//          handleQuery(GET_GLOB_LOCATION(id))
+//            .flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
+//            .flatMap(_ => Console.printLine("Sending location by default"))
+//            .fold(
+//              err => print(s"Error while defaulting: ${err.getMessage}"),
+//              x => x
+//            )
       }
     }
 }

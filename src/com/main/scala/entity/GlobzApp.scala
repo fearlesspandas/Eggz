@@ -1,6 +1,6 @@
 package src.com.main.scala.entity
 
-//import src.com.main.scala.entity.Globz.Globz
+//import src.com.main.scala.entity.Globz
 import controller.Command.CommandError
 import controller._
 import entity.BasicPlayer
@@ -44,21 +44,22 @@ object GlobzApp extends ZIOAppDefault {
       _ <- controller.runCommand(RELATE_EGGS("1", "2", "1").run)
 //      _ <- controller.runCommand(TICK_WORLD().run)
       _ <- controller.runCommand(START_EGG("1", "1").run)
-      _ <- controller.runCommand(START_EGG("2", "1").run)
-      res2 <- controller
-        .runQuery[Set[Globz.Glob], CommandError](GET_ALL_GLOBS().run)
-        .flatMap(s => { ZIO.collectAllPar(s.map(_.getAll())) })
-        .map(_.flatMap(x => x).toSeq)
-        .flatMap(s =>
-          ZIO.collectAllPar(
-            s.map(gl =>
-              for {
-                h <- gl.health()
-                e <- gl.energy()
-              } yield s"health: $h  energy: $e"
-            )
-          )
-        )
+      _ <- controller
+        .runCommand(START_EGG("2", "1").run)
+        //      res2 <- controller
+        //        .runQuery[Set[Globz], CommandError](GET_ALL_GLOBS().run)
+        //        .flatMap(s => { ZIO.collectAllPar(s.map(_.getAll())) })
+        //        .map(_.flatMap(x => x).toSeq)
+        //        .flatMap(s =>
+        //          ZIO.collectAllPar(
+        //            s.map(gl =>
+        //              for {
+        //                h <- gl.health()
+        //                e <- gl.energy()
+        //              } yield s"health: $h  energy: $e"
+        //            )
+        //          )
+        //        )
         .flatMap(s => Console.printLine(s"${s}"))
         .repeat(Schedule.spaced(Duration.fromMillis(1000)))
       //_ <- Console.printLine(s"RESULTS: $res2")
