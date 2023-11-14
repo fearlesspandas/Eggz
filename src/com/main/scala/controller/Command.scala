@@ -208,8 +208,11 @@ case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id)
-      _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity => pe.teleport(location) }
-    } yield ()).mapError(_ => GenericCommandError("Error setting glob location"))
+      _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity   => pe.teleport(location) }
+      loc <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity => pe.getLocation }
+    } yield ())
+      .mapError(_ => GenericCommandError("Error setting glob location"))
+
 }
 object SET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[SET_GLOB_LOCATION] = DeriveJsonEncoder.gen[SET_GLOB_LOCATION]

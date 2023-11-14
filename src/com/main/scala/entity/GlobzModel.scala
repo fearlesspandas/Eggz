@@ -13,7 +13,8 @@ object GlobzModel {
   implicit val encoder: JsonEncoder[GlobzModel] = DeriveJsonEncoder.gen[GlobzModel]
   implicit val decoder: JsonDecoder[GlobzModel] = DeriveJsonDecoder.gen[GlobzModel]
 }
-case class PlayerGlob(id: String, stats: Stats) extends GlobzModel
+case class PlayerGlob(id: String, stats: Stats, location: (Double, Double, Double))
+    extends GlobzModel
 object PlayerGlob {
   implicit val encoder: JsonEncoder[PlayerGlob] = DeriveJsonEncoder.gen[PlayerGlob]
   implicit val decoder: JsonDecoder[PlayerGlob] = DeriveJsonDecoder.gen[PlayerGlob]

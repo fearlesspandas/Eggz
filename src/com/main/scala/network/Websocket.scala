@@ -104,10 +104,20 @@ case class BasicWebSocket(
               .flatMap {
                 case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
                   handleCommand(c)
-                    .flatMap(_ => channel.send(Read(WebSocketFrame.text(s"FinishedCommand:$text"))))
+//                    .flatMap(_ =>
+//                      handleQuery(GET_ALL_GLOBS())
+//                        .flatMap(res =>
+//                          channel.send(Read(WebSocketFrame.text(res))) *> ZIO
+//                            .succeed(println(s"results $res"))
+//                        )
+//                    )
+                //.flatMap(_ => channel.send(Read(WebSocketFrame.text(s"FinishedCommand:$text"))))
                 //.flatMap(_ => channel.send(Read(WebSocketFrame.text(text)))) //we could optionally choose to send the comand back in full
                 case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
-                  handleQuery(rq).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
+                  handleQuery(rq).flatMap(res =>
+                    channel.send(Read(WebSocketFrame.text(res))) *> ZIO
+                      .succeed(println(s"Query results: $res"))
+                  )
                 case c: Query[Globz.Service with WorldBlock.Block, _] =>
                   handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res)))
                   )
