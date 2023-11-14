@@ -308,3 +308,26 @@ object GET_NEXT_DESTINATION {
 
   case class ADDED_DESTINATION(id: ID, location: String)
 }
+
+case class GET_ALL_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      blob <- WorldBlock.getBlob(id)
+      location <- ZIO
+        .fromOption(blob)
+        .flatMap { case entity: Destinations => entity.getAllDestinations() }
+        .mapError(_ => ???)
+      loc = location.map(vec => (vec(0), vec(1), vec(2)))
+    } yield AllDestinations(id, loc)).mapError(_ =>
+      GenericCommandError(s"Error retrieving destination for id $id")
+    )
+}
+
+object GET_ALL_DESTINATIONS {
+  implicit val encoder: JsonEncoder[GET_ALL_DESTINATIONS] =
+    DeriveJsonEncoder.gen[GET_ALL_DESTINATIONS]
+  implicit val decoder: JsonDecoder[GET_ALL_DESTINATIONS] =
+    DeriveJsonDecoder.gen[GET_ALL_DESTINATIONS]
+
+  case class ADDED_DESTINATION(id: ID, location: String)
+}

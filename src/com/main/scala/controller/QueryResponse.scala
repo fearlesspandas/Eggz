@@ -49,12 +49,18 @@ object NextDestination {
   implicit val encoder: JsonEncoder[NextDestination] = DeriveJsonEncoder.gen[NextDestination]
   implicit val decoder: JsonDecoder[NextDestination] = DeriveJsonDecoder.gen[NextDestination]
 }
+case class AllDestinations(id: ID, destinations: Seq[(Double, Double, Double)])
+    extends QueryResponse
+object AllDestinations {
+  implicit val encoder: JsonEncoder[AllDestinations] = DeriveJsonEncoder.gen[AllDestinations]
+  implicit val decoder: JsonDecoder[AllDestinations] = DeriveJsonDecoder.gen[AllDestinations]
+}
 case class Location(id: GLOBZ_ID, location: (Double, Double, Double)) extends QueryResponse
 object Location {
   implicit val encoder: JsonEncoder[Location] = DeriveJsonEncoder.gen[Location]
   implicit val decoder: JsonDecoder[Location] = DeriveJsonDecoder.gen[Location]
 }
-case class NoLocation(id:GLOBZ_ID) extends QueryResponse
+case class NoLocation(id: GLOBZ_ID) extends QueryResponse
 object NoLocation {
   implicit val encoder: JsonEncoder[NoLocation] = DeriveJsonEncoder.gen[NoLocation]
   implicit val decoder: JsonDecoder[NoLocation] = DeriveJsonDecoder.gen[NoLocation]
