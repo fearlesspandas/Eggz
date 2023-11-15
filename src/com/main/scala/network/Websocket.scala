@@ -62,10 +62,13 @@ case class WebSocketServerBasic(
   def app() =
     Routes(
       Method.GET / "authenticate" / string("id") -> handler { (id: String, request: Request) =>
-        authMap
-          .update(_.updated(id, BasicSession(id, "SECRET")))
-          .flatMap(_ => ZIO.succeed(Response.text(s"updated map:$authMap")))
-//        ZIO.succeed(Response.text(id))
+        (for {
+          _ <- Console.printLine("Attempting to update map")
+          _ <- authMap.update(_.updated(id, BasicSession(id, "SECRET")))
+          res <- authMap.get.map(_.get(id)).flatMap(ZIO.fromOption(_))
+          _ <- Console.printLine("map updated successfully")
+        } yield Response.text(res.toJson)).fold(_ => Response.badRequest, x => x)
+
       },
       Method.GET / "connect" / string("id") -> handler { (id: String, request: Request) =>
         BasicWebSocket
@@ -152,9 +155,8 @@ case class BasicWebSocket(
           _ <- Console.printLine("received text:" + text)
           _ <- ZIO
             .fromEither(text.fromJson[Command[_, _]])
-            .fold(
-              err => println(s"we fucked up:$text:" + err),
-              x => x
+            .flatMapError(_ =>
+              Console.printLine(s"Error processing command $text").mapError(_ => ???)
             )
             .flatMap {
               case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
@@ -168,8 +170,11 @@ case class BasicWebSocket(
                 handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
             }
             .flatMapError(err =>
-              channel
-                .send(Read(WebSocketFrame.text(s"ERROR PERFORMING COMMAND : $text  ERROR: $err")))
+              (Console.printLine(s"ERROR PERFORMING COMMAND : $text  ERROR: $err") *>
+                channel
+                  .send(
+                    Read(WebSocketFrame.text(s"ERROR PERFORMING COMMAND : $text  ERROR: $err"))
+                  ))
                 .mapError(_ => ???)
             )
         } yield ())
@@ -186,19 +191,23 @@ case class BasicWebSocket(
       if (authd) {
         recieveAllText(text, channel)
       } else
-        for {
+        (for {
           sentSecret <- ZIO
             .fromEither(text.fromJson[Session])
             .flatMapError(_ => Console.printLine(s"error decoding text: $text").mapError(_ => ???))
           secretOp <- authMap.get.map(_.get(id))
-          secret <- ZIO.fromOption(secretOp).fold(_ => BasicSession(id, "SECRET"), x => x)
+          secret <- ZIO
+            .fromOption(secretOp)
+            .flatMapError(err =>
+              Console.printLine(s"Error retrieving secret for $id, cause: $err").mapError(_ => ???)
+            ) //.fold(_ => BasicSession(id, "SECRET"), x => x)
           _ <- authenticated.update(_ => secret == sentSecret)
           verified <- authenticated.get
         } yield
           if (verified) recieveAllText(text, channel)
           else {
             println(s"Could not authenticate: $secret,$sentSecret, $id"); channel.shutdown
-          }
+          }).flatMapError(_ => channel.shutdown)
     )
 
   override def socket(authenticated: Boolean): WebSocketApp[Any] =
@@ -206,20 +215,14 @@ case class BasicWebSocket(
       channel.receiveAll {
         case Read(WebSocketFrame.Text(text)) if !authenticated =>
           recieveAll(channel, text).mapError(_ => ???)
-        //          for {
-//            res <- authMap.get.map(_.get(id).map(_ == text))
-//          } yield receivAll(true, channel)
         case Read(WebSocketFrame.Text(text)) if authenticated =>
           recieveAll(channel, text).mapError(_ => ???)
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>
           channel.send(Read(WebSocketFrame.text("Greetings!")))
-        // Log when the channel is getting closed
         case Read(WebSocketFrame.Close(status, reason)) =>
           Console.printLine("Closing channel with status: " + status + " and reason: " + reason)
-
-        // Print the exception if it's not a normal close
         case ExceptionCaught(cause) =>
           Console.printLine(s"Channel error!: ${cause.getMessage}")
 
