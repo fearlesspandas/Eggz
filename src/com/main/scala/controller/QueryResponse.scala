@@ -1,5 +1,6 @@
 package controller
 
+import entity.EggzModel
 import entity.GlobzModel
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -23,7 +24,7 @@ object GlobSet {
   implicit val encoder: JsonEncoder[GlobSet] = DeriveJsonEncoder.gen[GlobSet]
   implicit val decoder: JsonDecoder[GlobSet] = DeriveJsonDecoder.gen[GlobSet]
 }
-case class EggSet(eggs: Set[Stats]) extends QueryResponse
+case class EggSet(eggs: Set[EggzModel]) extends QueryResponse
 object EggSet {
   implicit val encoder: JsonEncoder[EggSet] = DeriveJsonEncoder.gen[EggSet]
   implicit val decoder: JsonDecoder[EggSet] = DeriveJsonDecoder.gen[EggSet]

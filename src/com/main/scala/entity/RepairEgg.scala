@@ -39,17 +39,14 @@ case class RepairEgg(
               }
               .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
             ud <- ZIO
-              .service[Globz]
-              .flatMap(glob => glob.neighbors(this))
+              .serviceWithZIO[Globz](glob => glob.neighbors(this, 0))
               .flatMap { neighbors =>
-                ZIO.collectAllPar(
-                  neighbors.map(egg =>
-                    for {
-                      h_curr <- egg.health
-                      up <- egg.setHealth(h_curr + repairValue)
-                    } yield up
-                  )
-                )
+                ZIO.foreachPar(neighbors) { egg =>
+                  for {
+                    h_curr <- egg.health
+                    up <- egg.setHealth(h_curr + repairValue)
+                  } yield up
+                }
               }
               .mapError(_ => "")
 

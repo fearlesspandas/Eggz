@@ -1,5 +1,6 @@
 package entity
 
+import controller.Location
 import controller.Stats
 import src.com.main.scala.entity.EggzOps.ID
 import zio.json.DeriveJsonDecoder
@@ -13,4 +14,4 @@ object EggzModel {
   implicit val decoder: JsonDecoder[EggzModel] = DeriveJsonDecoder.gen[EggzModel]
 }
 case class REPAIR_EGG(id: ID, stats: Stats, cost: Double, repairValue: Double) extends EggzModel
-case class PLAYER_EGG(ID: ID, stats: Stats) extends EggzModel
+case class PLAYER_EGG(ID: ID, stats: Stats, location: (Double, Double, Double)) extends EggzModel

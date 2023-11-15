@@ -44,20 +44,6 @@ case class WebSocketServerBasic(
   controller: BasicController[Globz.Service with WorldBlock.Block],
   authMap: Ref[SESSION_MAP] // maps id to secret that's expected on first connection
 ) extends WebSocketServer {
-  //def app() = ???
-//    HttpApp.collectZIO[Request] {
-//
-//    case Method.GET -> !! / "authenticate" / id =>
-//      for {
-//        _ <- authMap.update(_.updated(id, "SECRET"))
-//        a <- authMap.get
-//      } yield Response.text(s"set secret: $a")
-//    case Method.GET -> !! / "connect" / id =>
-//      BasicWebSocket
-//        .make(id)
-//        .flatMap(socketApp => socketApp.socket.toResponse)
-//        .provide(ZLayer.succeed(controller) ++ ZLayer.succeed(authMap))
-//  }
 
   def app() =
     Routes(

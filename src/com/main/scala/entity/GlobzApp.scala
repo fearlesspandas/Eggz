@@ -41,7 +41,7 @@ object GlobzApp extends ZIOAppDefault {
       _ <- controller.runCommand(CREATE_REPAIR_EGG("1", "1").run)
       _ <- controller.runCommand(CREATE_REPAIR_EGG("2", "1").run)
 
-      _ <- controller.runCommand(RELATE_EGGS("1", "2", "1").run)
+      _ <- controller.runCommand(RELATE_EGGS("1", "2", "1", true).run)
 //      _ <- controller.runCommand(TICK_WORLD().run)
       _ <- controller.runCommand(START_EGG("1", "1").run)
       _ <- controller

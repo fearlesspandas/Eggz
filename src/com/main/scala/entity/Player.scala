@@ -12,6 +12,7 @@ import entity.SkillSet.SkillsetError
 import physics.BasicDestinations
 import physics.DestinationError
 import physics.Destinations
+import src.com.main.scala
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
@@ -68,7 +69,7 @@ object Skill {
   trait SkillError
 }
 
-trait Player extends StorageEgg[Item] {
+trait Player extends StorageEgg[Item] with Globz with PhysicalEntity {
 
   def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B]
 
@@ -90,8 +91,6 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   glob: Globz,
   destinations: Destinations
 ) extends Player
-    with Globz
-    with PhysicalEntity
     with Destinations {
   override def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B] = ???
 
@@ -140,11 +139,15 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
     glob.tickAll()
 
-  override def relate(egg1: Eggz.Service, egg2: Eggz.Service): IO[GLOBZ_ERR, Unit] =
-    glob.relate(egg1, egg2)
+  override def relate(
+    egg1: Eggz.Service,
+    egg2: Eggz.Service,
+    bidirectional: Boolean
+  ): IO[GLOBZ_ERR, Unit] =
+    glob.relate(egg1, egg2, bidirectional)
 
-  override def neighbors(egg: Eggz.Service): IO[GLOBZ_ERR, Vector[Eggz.Service]] =
-    glob.neighbors(egg)
+  override def neighbors(egg: Eggz.Service, direction: Int): IO[GLOBZ_ERR, Vector[Eggz.Service]] =
+    glob.neighbors(egg, direction)
 
   override def scheduleEgg(id: GLOBZ_IN): IO[GLOBZ_ERR, Unit] =
     glob.scheduleEgg(id)
@@ -183,8 +186,7 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
       health <- this.health()
       energy <- this.energy()
       stats = Stats(this.id, health, energy)
-      location <- getLocation
-    } yield PlayerGlob(this.id, stats, (location(0), location(1), location(2)))).mapError(_ =>
+    } yield PlayerGlob(this.id, stats)).mapError(_ =>
       s"Error while trying to Serialize glob ${glob.id}"
     )
 
@@ -193,7 +195,20 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
       health <- health()
       energy <- energy()
       stats = Stats(id, health, energy)
-    } yield PLAYER_EGG(id, stats)
+      loc <- getLocation.mapError(_ => ???)
+      location <- ZIO.succeed(loc(0)).zip(ZIO.succeed(loc(1))).zip(ZIO.succeed(loc(2)))
+    } yield PLAYER_EGG(id, stats, location)
+
+  override def unrelate(
+    egg1: scala.entity.Globz.GLOBZ_IN,
+    egg2: scala.entity.Globz.GLOBZ_IN,
+    bidirectional: Boolean
+  ): IO[GLOBZ_ERR, Unit] = glob.unrelate(egg1, egg2, bidirectional)
+
+  override def unrelateAll(
+    egg: scala.entity.Globz.GLOBZ_IN,
+    direction: Level
+  ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction)
 }
 
 object BasicPlayer extends Globz.Service {

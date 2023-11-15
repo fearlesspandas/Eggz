@@ -4,10 +4,13 @@ import controller.Command.CommandError
 import controller.Command.GenericCommandError
 import controller.GET_NEXT_DESTINATION.ADDED_DESTINATION
 import entity.BasicPlayer
+import entity.EggzModel
 import entity.GlobInMemory
 import entity.GlobzInMem
 import entity.GlobzModel
+import entity.PLAYER_EGG
 import entity.PhysicalEntity
+import entity.Player
 import entity.PlayerGlob
 import entity.WorldBlock
 import physics.Destinations
@@ -123,12 +126,7 @@ case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
       res <- WorldBlock.getAllBlobs()
       nested <- ZIO.collectAllPar(res.map(_.getAll())).map(d => d.flatMap(x => x))
       stats <- ZIO.collectAllPar(
-        nested.map(egg =>
-          for {
-            health <- egg.health()
-            energy <- egg.energy()
-          } yield Stats(egg.id, health, energy)
-        )
+        nested.map(egg => egg.serializeEgg)
       )
     } yield EggSet(stats)).mapError(_ => GenericCommandError("Error retrieving blobs"))
 }
@@ -167,16 +165,6 @@ object CREATE_REPAIR_EGG {
   implicit val encoder: JsonEncoder[CREATE_REPAIR_EGG] = DeriveJsonEncoder.gen[CREATE_REPAIR_EGG]
   implicit val decoder: JsonDecoder[CREATE_REPAIR_EGG] = DeriveJsonDecoder.gen[CREATE_REPAIR_EGG]
 }
-//case class ADD_EGG(egg: Eggz.Service, glob: Globz.Glob) extends Command[Any, Unit] {
-//  override def run: ZIO[Any, CommandError, Unit] =
-//    (for {
-//      _ <- glob.update(egg)
-//    } yield ()).mapError(_ => GenericCommandError("error addng egg to glob"))
-//}
-//object ADD_EGG{
-//  implicit val encoder: JsonEncoder[ADD_EGG] = DeriveJsonEncoder.gen[ADD_EGG]
-//  implicit val decoder: JsonDecoder[ADD_EGG] = DeriveJsonDecoder.gen[ADD_EGG]
-//}
 case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
@@ -218,7 +206,7 @@ object SET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[SET_GLOB_LOCATION] = DeriveJsonEncoder.gen[SET_GLOB_LOCATION]
   implicit val decoder: JsonDecoder[SET_GLOB_LOCATION] = DeriveJsonDecoder.gen[SET_GLOB_LOCATION]
 }
-case class RELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID)
+case class RELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID, bidirectional: Boolean)
     extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
@@ -226,12 +214,42 @@ case class RELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID)
       glob <- ZIO.fromOption(globOp)
       e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
       e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
-      _ <- glob.relate(e1, e2)
+      _ <- glob.relate(e1, e2, bidirectional)
     } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
 }
 object RELATE_EGGS {
   implicit val encoder: JsonEncoder[RELATE_EGGS] = DeriveJsonEncoder.gen[RELATE_EGGS]
   implicit val decoder: JsonDecoder[RELATE_EGGS] = DeriveJsonDecoder.gen[RELATE_EGGS]
+}
+case class UNRELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID, bidirectional: Boolean)
+    extends SimpleCommand[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      globOp <- WorldBlock.getBlob(globId)
+      glob <- ZIO.fromOption(globOp)
+      e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
+      e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
+      _ <- glob.unrelate(e1, e2, bidirectional)
+    } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
+}
+object UNRELATE_EGGS {
+  implicit val encoder: JsonEncoder[UNRELATE_EGGS] = DeriveJsonEncoder.gen[UNRELATE_EGGS]
+  implicit val decoder: JsonDecoder[UNRELATE_EGGS] = DeriveJsonDecoder.gen[UNRELATE_EGGS]
+}
+
+case class UNRELATE_ALL(egg1: ID, globId: GLOBZ_ID, direction: Int)
+    extends SimpleCommand[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      globOp <- WorldBlock.getBlob(globId)
+      glob <- ZIO.fromOption(globOp)
+      e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
+      _ <- glob.unrelateAll(e1, direction)
+    } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
+}
+object UNRELATE_ALL {
+  implicit val encoder: JsonEncoder[UNRELATE_ALL] = DeriveJsonEncoder.gen[UNRELATE_ALL]
+  implicit val decoder: JsonDecoder[UNRELATE_ALL] = DeriveJsonDecoder.gen[UNRELATE_ALL]
 }
 case class TICK_WORLD() extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =

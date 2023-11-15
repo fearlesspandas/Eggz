@@ -27,9 +27,11 @@ trait Globz {
 
   def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode]
 
-  def relate(egg1: Eggz.Service, egg2: Eggz.Service): IO[GLOBZ_ERR, Unit]
-
-  def neighbors(egg: Eggz.Service): IO[GLOBZ_ERR, Vector[Eggz.Service]]
+  def relate(egg1: Eggz.Service, egg2: Eggz.Service, bidirectional: Boolean): IO[GLOBZ_ERR, Unit]
+  def unrelate(egg1: Eggz.Service, egg2: Eggz.Service, bidirectional: Boolean): IO[GLOBZ_ERR, Unit]
+  def unrelateAll(egg: Eggz.Service, direction: Int): IO[GLOBZ_ERR, Unit]
+  //direction indicates whether we want nodes pointing to, from or either relative to our glob
+  def neighbors(egg: Eggz.Service, direction: Int): IO[GLOBZ_ERR, Vector[Eggz.Service]]
   def serializeGlob: IO[GLOBZ_ERR, GlobzModel]
   def scheduleEgg(
     id: Eggz.Service
