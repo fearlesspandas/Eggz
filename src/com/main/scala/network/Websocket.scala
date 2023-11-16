@@ -1,10 +1,12 @@
 package network
 
 import controller.BasicController
+import controller.Blob
 import controller.CREATE_GLOB
 import controller.Command
 import controller.Control
 import controller.GET_ALL_GLOBS
+import controller.GET_BLOB
 import controller.GET_GLOB_LOCATION
 import controller.Query
 import controller.QueryResponse
@@ -132,8 +134,22 @@ case class BasicWebSocket(
       res <- controller.runQuery(query.run.mapError(_ => null.asInstanceOf[Nothing]))
     } yield res.toString)
 
-  def recieveAllText(text: String, channel: WebSocketChannel) =
+  def recieveAllText(text: String, channel: WebSocketChannel, initializing: Boolean = false) =
     text match {
+      case _ if initializing =>
+        (for {
+          glob <- controller
+            .runQuery(GET_BLOB(id).run)
+            .map {
+              case Blob(blob) => blob
+            }
+          _ <- if (glob.isEmpty) for {
+            _ <- Console.printLine(s"No blob found for $id creating new one")
+            _ <- controller.runCommand(CREATE_GLOB(id, Vector(0, 5, 0)).run)
+            _ <- Console.printLine(s"blob successfully created for $id")
+          } yield ()
+          else ZIO.unit
+        } yield ())
       case "end" =>
         channel.shutdown
       case text =>
@@ -190,8 +206,16 @@ case class BasicWebSocket(
           _ <- authenticated.update(_ => secret == sentSecret)
           verified <- authenticated.get
           _ <- Console.printLine("success post verify")
-          _ <- if (verified) recieveAllText(text, channel)
-          else
+          _ <- if (verified) {
+            Console.printLine("Verified succeeded") *>
+              authenticated.update(_ => true) *>
+              channel
+                .send(Read(WebSocketFrame.text("Welcome! connected"))) *> recieveAllText(
+              text,
+              channel,
+              true
+            )
+          } else
             Console
               .printLine(s"Could not authenticate: $secret,$sentSecret, $id, $authMap") *> channel.shutdown
         } yield ()).flatMapError(_ => channel.shutdown)
