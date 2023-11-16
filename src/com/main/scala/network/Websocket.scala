@@ -189,11 +189,12 @@ case class BasicWebSocket(
             ) //.fold(_ => BasicSession(id, "SECRET"), x => x)
           _ <- authenticated.update(_ => secret == sentSecret)
           verified <- authenticated.get
-        } yield
-          if (verified) recieveAllText(text, channel)
-          else {
-            println(s"Could not authenticate: $secret,$sentSecret, $id"); channel.shutdown
-          }).flatMapError(_ => channel.shutdown)
+          _ <- Console.printLine("success post verify")
+          _ <- if (verified) recieveAllText(text, channel)
+          else
+            Console
+              .printLine(s"Could not authenticate: $secret,$sentSecret, $id, $authMap") *> channel.shutdown
+        } yield ()).flatMapError(_ => channel.shutdown)
     )
 
   override def socket(authenticated: Boolean): WebSocketApp[Any] =

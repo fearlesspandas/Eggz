@@ -39,7 +39,7 @@ case class BasicPhysicalEntity(
     velocity.update(_ => vel)
 
   override def move(location: Vector[Double]): IO[PhysicsError, Unit] = ???
-
+  //todo make this also remove destination based on internal dest epsilon
   override def teleport(loc: Vector[Double]): IO[PhysicsError, Unit] =
     location.update(_ => loc)
 }
