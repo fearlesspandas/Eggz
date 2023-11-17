@@ -47,7 +47,7 @@ case class BasicPhysicalEntity(
 object BasicPhysicalEntity extends PhysicalEntity.Service {
   override def make: IO[Nothing, PhysicalEntity] =
     for {
-      loc <- Ref.make(Vector(0.0, 0, 0))
+      loc <- Ref.make(Vector(0.0, 10, 0))
       dest <- Ref.make(Option.empty[Vector[Double]])
       vel <- Ref.make(Vector(0.0, 0, 0))
     } yield BasicPhysicalEntity(loc, dest, vel)

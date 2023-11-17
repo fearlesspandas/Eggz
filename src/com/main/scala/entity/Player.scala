@@ -186,7 +186,10 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
       health <- this.health()
       energy <- this.energy()
       stats = Stats(this.id, health, energy)
-    } yield PlayerGlob(this.id, stats)).mapError(_ =>
+      location <- getLocation.flatMap(vec =>
+        ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
+      )
+    } yield PlayerGlob(this.id, stats, location)).mapError(_ =>
       s"Error while trying to Serialize glob ${glob.id}"
     )
 

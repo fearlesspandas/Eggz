@@ -110,7 +110,8 @@ case class BasicWebSocket(
   id: String,
   authMap: Ref[SESSION_MAP],
   controller: BasicController[Globz.Service with WorldBlock.Block],
-  authenticated: Ref[Boolean]
+  authenticated: Ref[Boolean],
+  server_keys: Set[String]
 ) extends WebSocketControlServer[Any] {
 
   def handleCommand(
@@ -138,12 +139,13 @@ case class BasicWebSocket(
     text match {
       case _ if initializing =>
         (for {
+          _ <- Console.printLine(s"authenticating session for $id")
           glob <- controller
             .runQuery(GET_BLOB(id).run)
             .map {
               case Blob(blob) => blob
             }
-          _ <- if (glob.isEmpty) for {
+          _ <- if (glob.isEmpty && !server_keys.contains(id)) for {
             _ <- Console.printLine(s"No blob found for $id creating new one")
             _ <- controller.runCommand(CREATE_GLOB(id, Vector(0, 5, 0)).run)
             _ <- Console.printLine(s"blob successfully created for $id")
@@ -172,18 +174,11 @@ case class BasicWebSocket(
                 handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
             }
             .flatMapError(err =>
-              (Console.printLine(s"ERROR PERFORMING COMMAND : $text  ERROR: $err") *>
-                channel
-                  .send(
-                    Read(WebSocketFrame.text(s"ERROR PERFORMING COMMAND : $text  ERROR: $err"))
-                  ))
+              (Console
+                .printLine(s"ERROR PERFORMING COMMAND : $text  ERROR: $err"))
                 .mapError(_ => ???)
             )
-        } yield ())
-          .fold(
-            err => println(s"we fucked up:$text:" + err),
-            x => x
-          )
+        } yield ()).fold(_ => (), x => x)
 
       case _ => ZIO.unit
     }
@@ -209,15 +204,18 @@ case class BasicWebSocket(
           _ <- if (verified) {
             Console.printLine("Verified succeeded") *>
               authenticated.update(_ => true) *>
-              channel
-                .send(Read(WebSocketFrame.text("Welcome! connected"))) *> recieveAllText(
+              handleQuery(GET_ALL_GLOBS()).flatMap(res =>
+                channel.send(Read(WebSocketFrame.text(res)))
+              ) *> recieveAllText(
               text,
               channel,
               true
             )
           } else
             Console
-              .printLine(s"Could not authenticate: $secret,$sentSecret, $id, $authMap") *> channel.shutdown
+              .printLine(
+                s"Could not authenticate: $secret,$sentSecret, $id, $authMap"
+              ) *> channel.shutdown
         } yield ()).flatMapError(_ => channel.shutdown)
     )
 
@@ -252,7 +250,9 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
         ZIO
           .service[Ref[SESSION_MAP]]
           .flatMap(sessions =>
-            Ref.make(false).map(authd => BasicWebSocket(authID, sessions, controller, authd))
+            Ref
+              .make(false)
+              .map(authd => BasicWebSocket(authID, sessions, controller, authd, Set("1")))
           )
       )
 //      .map(controller => )
