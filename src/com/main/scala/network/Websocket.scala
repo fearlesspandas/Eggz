@@ -147,7 +147,9 @@ case class BasicWebSocket(
             }
           _ <- if (glob.isEmpty && !server_keys.contains(id)) for {
             _ <- Console.printLine(s"No blob found for $id creating new one")
-            _ <- controller.runCommand(CREATE_GLOB(id, Vector(0, 5, 0)).run)
+            randx <- Random.nextIntBetween(-10, 10)
+            randz <- Random.nextIntBetween(-10, 10)
+            _ <- controller.runCommand(CREATE_GLOB(id, Vector(0 + randx, 5, 0 + randz)).run)
             _ <- Console.printLine(s"blob successfully created for $id")
           } yield ()
           else ZIO.unit
@@ -166,10 +168,11 @@ case class BasicWebSocket(
               case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
                 handleCommand(c)
               case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
-                handleQuery(rq).flatMap(res =>
-                  channel.send(Read(WebSocketFrame.text(res))) *> ZIO
-                    .succeed(println(s"Query results: $res"))
-                )
+                for {
+                  res <- handleQuery(rq)
+                  _ <- channel.send(Read(WebSocketFrame.text(res)))
+                  _ <- Console.printLine(s"Query results: $res")
+                } yield ()
               case c: Query[Globz.Service with WorldBlock.Block, _] =>
                 handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
             }
@@ -201,17 +204,18 @@ case class BasicWebSocket(
           _ <- authenticated.update(_ => secret == sentSecret)
           verified <- authenticated.get
           _ <- Console.printLine("success post verify")
-          _ <- if (verified) {
-            Console.printLine("Verified succeeded") *>
-              authenticated.update(_ => true) *>
-              handleQuery(GET_ALL_GLOBS()).flatMap(res =>
-                channel.send(Read(WebSocketFrame.text(res)))
-              ) *> recieveAllText(
+          _ <- if (verified) for {
+            _ <- Console.printLine("Verified succeeded")
+            _ <- authenticated.update(_ => true)
+            //res <- handleQuery(GET_ALL_GLOBS())
+            //_ <- channel.send(Read(WebSocketFrame.text(res)))
+            _ <- recieveAllText(
               text,
               channel,
               true
             )
-          } else
+          } yield ()
+          else
             Console
               .printLine(
                 s"Could not authenticate: $secret,$sentSecret, $id, $authMap"
