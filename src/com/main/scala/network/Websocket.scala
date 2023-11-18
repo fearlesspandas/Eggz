@@ -12,6 +12,7 @@ import controller.Query
 import controller.QueryResponse
 import controller.ResponseQuery
 import controller.SimpleCommand
+import controller.Subscription
 import entity.WorldBlock
 import network.WebSocketServer.AUTH_ID
 import network.WebSocketServer.SECRET
@@ -165,6 +166,11 @@ case class BasicWebSocket(
               Console.printLine(s"Error processing command $text").mapError(_ => ???)
             )
             .flatMap {
+              case op: Subscription[Globz.Service with WorldBlock.Block] =>
+                for {
+                  s <- op.run
+                  _ <- controller.runCommand(s.run)
+                } yield ()
               case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
                 handleCommand(c)
               case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
@@ -226,10 +232,10 @@ case class BasicWebSocket(
   override def socket(authenticated: Boolean): WebSocketApp[Any] =
     Handler.webSocket { channel =>
       channel.receiveAll {
-        case Read(WebSocketFrame.Text(text)) if !authenticated =>
-          recieveAll(channel, text).mapError(_ => ???)
-        case Read(WebSocketFrame.Text(text)) if authenticated =>
-          recieveAll(channel, text).mapError(_ => ???)
+        case Read(WebSocketFrame.Text(text)) =>
+          recieveAll(channel, text).mapError(_ => ???) *> Console.printLine(
+            s"Entering socket for $id"
+          )
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>

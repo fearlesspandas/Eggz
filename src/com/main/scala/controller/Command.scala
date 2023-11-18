@@ -20,12 +20,20 @@ import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.RepairEgg
 import src.com.main.scala.entity.Globz.GLOBZ_ID
+import zio.Duration.fromMillis
 import zio.IO
+import zio.Schedule
 import zio.ZIO
+import zio.http.ChannelEvent.Read
+import zio.http.WebSocketChannel
+import zio.http.WebSocketFrame
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
+import zio.json.EncoderOps
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
+
+import java.time.Duration
 
 sealed trait Command[-Env, +Out] extends Product with Serializable {
   def run: ZIO[Env, CommandError, Out]
@@ -83,6 +91,47 @@ object ResponseQuery {
     DeriveJsonEncoder.gen[ResponseQuery[Nothing]].contramap(x => x)
   implicit val decoder: JsonDecoder[ResponseQuery[_]] =
     DeriveJsonDecoder.gen[ResponseQuery[Nothing]].map(x => x)
+}
+case class RUN_COMMAND_ASYNC[-Env, +Out](cmd: ZIO[Env, CommandError, Out], duration: Long)
+    extends SimpleCommand[Env] {
+  override def run: ZIO[Env, CommandError, Unit] =
+    cmd.repeat(Schedule.spaced(Duration.ofMillis(duration))).fork.map(_ => ())
+}
+object RUN_COMMAND_ASYNC {
+  implicit val encoder: JsonEncoder[RUN_COMMAND_ASYNC[_, _]] =
+    DeriveJsonEncoder.gen[RUN_COMMAND_ASYNC[Nothing, Any]] //.contramap(x => x)
+  implicit val decoder: JsonDecoder[RUN_COMMAND_ASYNC[_, _]] =
+    DeriveJsonDecoder.gen[RUN_COMMAND_ASYNC[Nothing, Any]] //.map(x => x)
+}
+
+sealed trait Subscription[Env]
+    extends Command[Env with ResponseQuery[Env] with WebSocketChannel, SimpleCommand[
+      Env
+    ]]
+object Subscription {
+  implicit val encoder: JsonEncoder[Subscription[Globz.Service with WorldBlock.Block]] =
+    DeriveJsonEncoder.gen[Subscription[Globz.Service with WorldBlock.Block]]
+  implicit val decoder: JsonDecoder[Subscription[_]] =
+    DeriveJsonDecoder.gen[Subscription[Nothing]].map(x => x)
+}
+case class Subscribe(query: ResponseQuery[Globz.Service with WorldBlock.Service])
+    extends Subscription[Globz.Service with WorldBlock.Block] {
+  override def run: ZIO[Globz.Service with WorldBlock.Block with ResponseQuery[
+    Globz.Service with WorldBlock.Block
+  ] with WebSocketChannel, CommandError, SimpleCommand[
+    Globz.Service with WorldBlock.Block
+  ]] =
+    for {
+      query <- ZIO.service[ResponseQuery[Globz.Service with WorldBlock.Block]]
+      socket <- ZIO.service[WebSocketChannel]
+      op = query.run
+        .flatMap(response => socket.send(Read(WebSocketFrame.text(response.toJson))))
+        .mapError(_ => GenericCommandError("Error while starting subscribe"))
+    } yield RUN_COMMAND_ASYNC[Globz.Service with WorldBlock.Block, Unit](op, 10)
+}
+object Subscribe {
+  implicit val encoder: JsonEncoder[Subscribe] = DeriveJsonEncoder.gen[Subscribe]
+  implicit val decoder: JsonDecoder[Subscribe] = DeriveJsonDecoder.gen[Subscribe]
 }
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommand[Globz.Service with WorldBlock.Block] {
@@ -190,7 +239,19 @@ object GET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] = DeriveJsonEncoder.gen[GET_GLOB_LOCATION]
   implicit val decoder: JsonDecoder[GET_GLOB_LOCATION] = DeriveJsonDecoder.gen[GET_GLOB_LOCATION]
 }
-
+case class GET_GLOB_LOCATION_PROCESS(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      glob <- WorldBlock.getBlob(id)
+      location <- ZIO.fromOption(glob).flatMap { case g: PhysicalEntity => g.getLocation }
+    } yield Location(id, (location(0), location(1), location(2)))).fold(_ => NoLocation(id), x => x)
+}
+object GET_GLOB_LOCATION_PROCESS {
+  implicit val encoder: JsonEncoder[GET_GLOB_LOCATION_PROCESS] =
+    DeriveJsonEncoder.gen[GET_GLOB_LOCATION_PROCESS]
+  implicit val decoder: JsonDecoder[GET_GLOB_LOCATION_PROCESS] =
+    DeriveJsonDecoder.gen[GET_GLOB_LOCATION_PROCESS]
+}
 case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommand[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
