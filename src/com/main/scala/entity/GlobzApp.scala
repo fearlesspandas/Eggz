@@ -1,7 +1,7 @@
 package src.com.main.scala.entity
 
 //import src.com.main.scala.entity.Globz
-import controller.Command.CommandError
+import controller.SerializableCommand.CommandError
 import controller._
 import entity.BasicPlayer
 import entity.WorldBlock

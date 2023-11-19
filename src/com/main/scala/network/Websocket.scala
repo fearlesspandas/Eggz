@@ -1,9 +1,9 @@
 package network
 
+import controller.SerializableCommand.CommandError
 import controller.BasicController
 import controller.Blob
 import controller.CREATE_GLOB
-import controller.Command
 import controller.Control
 import controller.GET_ALL_GLOBS
 import controller.GET_BLOB
@@ -11,7 +11,11 @@ import controller.GET_GLOB_LOCATION
 import controller.Query
 import controller.QueryResponse
 import controller.ResponseQuery
+import controller.SerializableCommand
 import controller.SimpleCommand
+import controller.SimpleCommandSerializable
+import controller.SocketSubscribe
+import controller.SUBSCRIBE
 import controller.Subscription
 import entity.WorldBlock
 import network.WebSocketServer.AUTH_ID
@@ -116,27 +120,31 @@ case class BasicWebSocket(
 ) extends WebSocketControlServer[Any] {
 
   def handleCommand(
-    command: Command[Globz.Service with WorldBlock.Block, Unit]
+    command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
   ): ZIO[Any, Nothing, Unit] =
     (for {
-      _ <- controller.runCommand(command.run.mapError(_ => null.asInstanceOf[Nothing]))
+      _ <- controller.runCommand(command.run.mapError(_ => ???))
     } yield ())
 
   def handleQuery(
     query: ResponseQuery[Globz.Service with WorldBlock.Block]
   ): ZIO[Any, Nothing, String] =
     (for {
-      res <- controller.runQuery(query.run.mapError(_ => null.asInstanceOf[Nothing]))
+      res <- controller.runQuery(query.run.mapError(_ => ???))
     } yield res.toJson)
 
   def handleQueryAsString(
-    query: Command[Globz.Service with WorldBlock.Block, Any]
+    query: SerializableCommand[Globz.Service with WorldBlock.Block, Any]
   ): ZIO[Any, Nothing, String] =
     (for {
-      res <- controller.runQuery(query.run.mapError(_ => null.asInstanceOf[Nothing]))
+      res <- controller.runQuery(query.run.mapError(_ => ???))
     } yield res.toString)
 
-  def recieveAllText(text: String, channel: WebSocketChannel, initializing: Boolean = false) =
+  def recieveAllText(
+    text: String,
+    channel: WebSocketChannel,
+    initializing: Boolean = false
+  ): ZIO[Any, Object, Unit] =
     text match {
       case _ if initializing =>
         (for {
@@ -161,17 +169,16 @@ case class BasicWebSocket(
         (for {
           _ <- Console.printLine("received text:" + text)
           _ <- ZIO
-            .fromEither(text.fromJson[Command[_, _]])
-            .flatMapError(_ =>
-              Console.printLine(s"Error processing command $text").mapError(_ => ???)
+            .fromEither(text.fromJson[SerializableCommand[_, _]])
+            .flatMapError(err =>
+              Console.printLine(s"Error processing command $text, error: $err").mapError(_ => ???)
             )
             .flatMap {
-              case op: Subscription[Globz.Service with WorldBlock.Block] =>
+              case op: SUBSCRIBE =>
                 for {
-                  s <- op.run
-                  _ <- controller.runCommand(s.run)
+                  _ <- controller.runCommand(SocketSubscribe(channel, op).run)
                 } yield ()
-              case c: SimpleCommand[Globz.Service with WorldBlock.Block] =>
+              case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
                 handleCommand(c)
               case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
                 for {
