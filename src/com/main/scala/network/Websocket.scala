@@ -184,7 +184,7 @@ case class BasicWebSocket(
                 for {
                   res <- handleQuery(rq)
                   _ <- channel.send(Read(WebSocketFrame.text(res)))
-                  _ <- Console.printLine(s"Query results: $res")
+                  //_ <- Console.printLine(s"Query results: $res")
                 } yield ()
               case c: Query[Globz.Service with WorldBlock.Block, _] =>
                 handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
@@ -240,9 +240,7 @@ case class BasicWebSocket(
     Handler.webSocket { channel =>
       channel.receiveAll {
         case Read(WebSocketFrame.Text(text)) =>
-          recieveAll(channel, text).mapError(_ => ???) *> Console.printLine(
-            s"Entering socket for $id"
-          )
+          recieveAll(channel, text).mapError(_ => ???)
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>

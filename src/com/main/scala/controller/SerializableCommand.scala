@@ -113,8 +113,27 @@ object Subscription {
   implicit val decoder: JsonDecoder[Subscription[SubscriptionEnv]] =
     DeriveJsonDecoder.gen[Subscription[SubscriptionEnv]].map(x => x)
 }
-case class SUBSCRIBE(query: ResponseQuery[SubscriptionEnv]) extends Subscription[SubscriptionEnv]
 
+case class SUBSCRIBE(query: ResponseQuery[SubscriptionEnv]) extends Subscription[SubscriptionEnv]
+object SUBSCRIBE {
+  type SubscriptionEnv = Globz.Service with WorldBlock.Block
+  implicit val en: JsonEncoder[ResponseQuery[SubscriptionEnv]] =
+    DeriveJsonEncoder.gen[ResponseQuery[_]].contramap(x => x)
+  implicit val de: JsonDecoder[ResponseQuery[SubscriptionEnv]] =
+    DeriveJsonDecoder.gen[ResponseQuery[SubscriptionEnv]] //.map(x => x)
+  implicit val encoder: JsonEncoder[SUBSCRIBE] = DeriveJsonEncoder.gen[SUBSCRIBE]
+  implicit val decoder: JsonDecoder[SUBSCRIBE] = DeriveJsonDecoder.gen[SUBSCRIBE]
+}
+case class UNSUBSCRIBE_ALL()
+object UNSUBSCRIBE_ALL {
+  type SubscriptionEnv = Globz.Service with WorldBlock.Block
+  implicit val en: JsonEncoder[ResponseQuery[SubscriptionEnv]] =
+    DeriveJsonEncoder.gen[ResponseQuery[_]].contramap(x => x)
+  implicit val de: JsonDecoder[ResponseQuery[SubscriptionEnv]] =
+    DeriveJsonDecoder.gen[ResponseQuery[SubscriptionEnv]] //.map(x => x)
+  implicit val encoder: JsonEncoder[UNSUBSCRIBE_ALL] = DeriveJsonEncoder.gen[UNSUBSCRIBE_ALL]
+  implicit val decoder: JsonDecoder[UNSUBSCRIBE_ALL] = DeriveJsonDecoder.gen[UNSUBSCRIBE_ALL]
+}
 case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
     extends Command[SubscriptionEnv, Unit] {
   override def run: ZIO[SubscriptionEnv, CommandError, Unit] =
@@ -124,15 +143,6 @@ case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
       ),
       10
     ).run
-}
-object SUBSCRIBE {
-  type SubscriptionEnv = Globz.Service with WorldBlock.Block
-  implicit val en: JsonEncoder[ResponseQuery[SubscriptionEnv]] =
-    DeriveJsonEncoder.gen[ResponseQuery[_]].contramap(x => x)
-  implicit val de: JsonDecoder[ResponseQuery[SubscriptionEnv]] =
-    DeriveJsonDecoder.gen[ResponseQuery[SubscriptionEnv]] //.map(x => x)
-  implicit val encoder: JsonEncoder[SUBSCRIBE] = DeriveJsonEncoder.gen[SUBSCRIBE]
-  implicit val decoder: JsonDecoder[SUBSCRIBE] = DeriveJsonDecoder.gen[SUBSCRIBE]
 }
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
