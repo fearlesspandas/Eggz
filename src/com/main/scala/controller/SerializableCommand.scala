@@ -255,12 +255,11 @@ object GET_GLOB_LOCATION_PROCESS {
     DeriveJsonDecoder.gen[GET_GLOB_LOCATION_PROCESS]
 }
 case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
-    extends SimpleCommandSerializable[WorldBlock.Block] {
+    extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id)
-      _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity   => pe.teleport(location) }
-      loc <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity => pe.getLocation }
+      _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity => pe.teleport(location) }
     } yield ())
       .mapError(_ => GenericCommandError("Error setting glob location"))
 
@@ -365,7 +364,7 @@ object ADD_DESTINATION {
 
 }
 
-case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[WorldBlock.Block] {
+case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
@@ -375,11 +374,10 @@ case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[WorldBlock.Block] 
         .mapError(_ => ???)
       loc <- ZIO
         .fromOption(location)
-        //.map(vec => s"[${vec(0)},${vec(1)},${vec(2)}]")
         .flatMap(vec => ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2))))
-    } yield NextDestination(id, loc)).mapError(_ =>
-      GenericCommandError(s"Error retrieving destination for id $id")
-    )
+    } yield NextDestination(id, loc))
+      .mapError(_ => GenericCommandError(s"Error retrieving destination for id $id"))
+      .fold(err => NoLocation(id), x => x)
 }
 
 object GET_NEXT_DESTINATION {

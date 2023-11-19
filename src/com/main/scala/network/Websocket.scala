@@ -174,10 +174,10 @@ case class BasicWebSocket(
               Console.printLine(s"Error processing command $text, error: $err").mapError(_ => ???)
             )
             .flatMap {
-              case op: SUBSCRIBE =>
-                for {
-                  _ <- controller.runCommand(SocketSubscribe(channel, op).run)
-                } yield ()
+//              case op: SUBSCRIBE =>
+//                for {
+//                  _ <- controller.runCommand(SocketSubscribe(channel, op).run)
+//                } yield ()
               case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
                 handleCommand(c)
               case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
