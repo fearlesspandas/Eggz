@@ -167,17 +167,17 @@ case class BasicWebSocket(
         channel.shutdown
       case text =>
         (for {
-          _ <- Console.printLine("received text:" + text)
+          //_ <- Console.printLine("received text:" + text)
           _ <- ZIO
             .fromEither(text.fromJson[SerializableCommand[_, _]])
             .flatMapError(err =>
               Console.printLine(s"Error processing command $text, error: $err").mapError(_ => ???)
             )
             .flatMap {
-//              case op: SUBSCRIBE =>
-//                for {
-//                  _ <- controller.runCommand(SocketSubscribe(channel, op).run)
-//                } yield ()
+              case op: SUBSCRIBE =>
+                for {
+                  _ <- controller.runCommand(SocketSubscribe(channel, op).run)
+                } yield ()
               case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
                 handleCommand(c)
               case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
