@@ -419,5 +419,4 @@ object GET_ALL_DESTINATIONS {
   implicit val decoder: JsonDecoder[GET_ALL_DESTINATIONS] =
     DeriveJsonDecoder.gen[GET_ALL_DESTINATIONS]
 
-  case class ADDED_DESTINATION(id: ID, location: String)
 }
