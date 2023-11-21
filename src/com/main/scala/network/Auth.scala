@@ -4,41 +4,38 @@ import network.Auth.Authorized
 import zio._
 import zio.prelude.Validation
 
-trait Auth[+OP] { self =>
+trait Auth[+OP, +E, -SENDER, +OUT] { self =>
 
-  def validation[R1 >: OP]: PartialFunction[R1, Validation[Boolean, Boolean]]
+  def validation[O >: OP]: O => ZIO[SENDER, E, OUT]
 
-  def flatMap[R1 >: OP](f: Boolean => Auth[R1]): Auth[R1] =
+  def flatMap[R1 >: OP, E1 >: E, S <: SENDER, B](f: OUT => Auth[R1, E1, S, B]): Auth[R1, E1, S, B] =
     Authorized(self, f)
 
-  def map[R1 >: OP](f: Boolean => Boolean): Auth[R1] =
-    flatMap[R1](out => Auth.succeed(f(out)))
+  def map[R1 >: OP, E1 >: E, S <: SENDER, B](f: OUT => B): Auth[R1, E1, S, B] =
+    flatMap(out => Auth.succeed(f(out)))
 }
 
 object Auth {
-  case class Root(eval: () => Boolean) extends Auth[Nothing] {
 
-    override def validation[R1 >: Nothing]: PartialFunction[R1, Validation[Boolean, Boolean]] = {
-      case _ => Validation.succeed(eval())
+  def fromFunction[A: Tag, B, S, E](
+    f: ZIO[S, E, B],
+    default: B
+  ): Auth[A, E, S, B] =
+    new Auth[A, E, S, B] { self =>
+      override def validation[O >: A]: O => ZIO[S, E, B] =
+        op => f
     }
-  }
-  case class Authorized[OP](
-    first: Auth[OP],
-    success: Boolean => Auth[OP]
-  ) extends Auth[OP] {
-
-    override def validation[R1 >: OP]: PartialFunction[R1, Validation[Boolean, Boolean]] = {
-      case op =>
-        first.validation
-          .orElse(
-            success(false).validation
-          )
-          .orElse[R1, Validation[Boolean, Boolean]]({
-            case _: R1 => Validation.succeed(false)
-          })(op)
-    }
+  case class Root[A](eval: () => A) extends Auth[Nothing, Nothing, Any, A] {
+    override def validation[O >: Nothing]: O => ZIO[Any, Nothing, A] = _ => ZIO.succeed(eval())
 
   }
+  case class Authorized[OP, E, SENDER, A, B](
+    first: Auth[OP, E, SENDER, A],
+    success: A => Auth[OP, E, SENDER, B]
+  ) extends Auth[OP, E, SENDER, B] {
+    override def validation[O >: OP]: O => ZIO[SENDER, E, B] =
+      op => first.validation(op).flatMap(success(_).validation(op))
+  }
 
-  def succeed(a: Boolean): Auth[Nothing] = Root(() => a)
+  def succeed[A](a: A): Auth[Nothing, Nothing, Any, A] = Root(() => a)
 }
