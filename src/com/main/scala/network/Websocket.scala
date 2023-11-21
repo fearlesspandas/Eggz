@@ -34,82 +34,20 @@ import zio.json.DecoderOps
 import zio.json.EncoderOps
 import zio.prelude.AssociativeBothCovariantOps
 
-trait WebSocketServer {
-  def app(): HttpApp[Any]
-}
-object WebSocketServer {
-  type AUTH_ID = String
-  type SECRET = Session
-  type SESSION_MAP = Map[String, SECRET]
-
-  trait Service {
-    def make: IO[Nothing, WebSocketServer]
-  }
-}
-
-case class WebSocketServerBasic(
-  controller: BasicController[Globz.Service with WorldBlock.Block],
-  authMap: Ref[SESSION_MAP] // maps id to secret that's expected on first connection
-) extends WebSocketServer {
-
-  def app() =
-    Routes(
-      Method.GET / "authenticate" / string("id") -> handler { (id: String, request: Request) =>
-        (for {
-          _ <- Console.printLine("Attempting to update map")
-          _ <- authMap.update(_.updated(id, BasicSession(id, "SECRET")))
-          res <- authMap.get.map(_.get(id)).flatMap(ZIO.fromOption(_))
-          _ <- Console.printLine("map updated successfully")
-        } yield Response.text(res.toJson)).fold(_ => Response.badRequest, x => x)
-
-      },
-      Method.GET / "connect" / string("id") -> handler { (id: String, request: Request) =>
-        BasicWebSocket
-          .make(id)
-          .flatMap(sockerApp => sockerApp.socket(false).toResponse)
-          .provide(ZLayer.succeed(controller) ++ ZLayer.succeed(authMap))
-      }
-    ).toHttpApp
-
-}
-object WebSocketServerBasic extends WebSocketServer.Service {
-  override def make: IO[Nothing, WebSocketServer] =
-    for {
-      controller <- BasicController.make.provide(ZLayer.succeed(Control)).mapError(_ => ???)
-      sessionmap <- Ref.make(Map.empty[String, SECRET])
-    } yield WebSocketServerBasic(controller, sessionmap)
-}
 object WebSocketAdvanced extends ZIOAppDefault {
   //handles auth map and controller
 
   val config =
     Server.defaultWith(_.webSocketConfig(WebSocketConfig.default.copy(subprotocols = Some("json"))))
-  override val run = program().provide(ZLayer.succeed(WebSocketServerBasic))
-  def program(): ZIO[WebSocketServer.Service, Nothing, Unit] =
+
+  override val run = program.provide(ZLayer.succeed(WebSocketServerBasic))
+  val program: ZIO[WebSocketServer.Service, Nothing, Unit] =
     (for {
       _ <- Console.printLine(GET_ALL_GLOBS().toJson)
       wss <- ZIO.service[WebSocketServer.Service].flatMap(_.make)
-      _ <- Server.serve(wss.app()).provide(config)
-    } yield ()).mapError(_ => ???) //.fold(e => Console.printLine(e),x => x)
+      _ <- Server.serve(wss.app).provide(config)
+    } yield ()).mapError(_ => ???)
 }
-
-trait WebSocketControlServer[Env] {
-  def socket(authenticated: Boolean): WebSocketApp[Env]
-}
-
-trait WebsocketError
-object WebSocketControlServer {
-  trait Service[Env] {
-
-    def make(
-      authID: AUTH_ID
-    ): ZIO[BasicController[Globz.Service with WorldBlock.Block] with Ref[SESSION_MAP], Nothing, WebSocketControlServer[
-      Any
-    ]]
-  }
-}
-
-//A ->
 
 case class BasicWebSocket(
   id: String,
@@ -121,10 +59,7 @@ case class BasicWebSocket(
 
   def handleCommand(
     command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
-  ): ZIO[Any, Nothing, Unit] =
-    (for {
-      _ <- controller.runCommand(command.run.mapError(_ => ???))
-    } yield ())
+  ): ZIO[Any, Nothing, Unit] = controller.runCommand(command.run.mapError(_ => ???)).map(_ => ())
 
   def handleQuery(
     query: ResponseQuery[Globz.Service with WorldBlock.Block]
@@ -133,13 +68,51 @@ case class BasicWebSocket(
       res <- controller.runQuery(query.run.mapError(_ => ???))
     } yield res.toJson)
 
-  def handleQueryAsString(
-    query: SerializableCommand[Globz.Service with WorldBlock.Block, Any]
-  ): ZIO[Any, Nothing, String] =
+  val initialize_session: ZIO[Any, Object, Unit] =
     (for {
-      res <- controller.runQuery(query.run.mapError(_ => ???))
-    } yield res.toString)
+      _ <- Console.printLine(s"authenticating session for $id")
+      glob <- controller
+        .runQuery(GET_BLOB(id).run)
+        .map {
+          case Blob(blob) => blob
+        }
+        .fold(_ => None, x => x)
+      _ <- (for {
+        _ <- Console.printLine(s"No blob found for $id creating new one")
+        randx <- Random.nextIntBetween(-10, 10)
+        randz <- Random.nextIntBetween(-10, 10)
+        _ <- controller.runCommand(CREATE_GLOB(id, Vector(0 + randx, 5, 0 + randz)).run)
+        _ <- Console.printLine(s"blob successfully created for $id")
+      } yield ()).when(glob.isEmpty && !server_keys.contains(id))
+    } yield ())
 
+  val parse_message: (String) => ZIO[Any, Nothing, SerializableCommand[_, _]] =
+    text =>
+      ZIO
+        .fromEither(text.fromJson[SerializableCommand[_, _]])
+        .flatMapError(err =>
+          Console
+            .printLine(s"Error processing command $text, error: $err")
+            .fold(_ => ???, x => ???)
+        )
+  def handle_request(command: SerializableCommand[_, _]): ZIO[WebSocketChannel, Object, Unit] =
+    command match {
+      case op: SUBSCRIBE =>
+        ZIO
+          .service[WebSocketChannel]
+          .flatMap(channel => controller.runCommand(SocketSubscribe(channel, op).run))
+          .map(_ => ())
+      case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
+        handleCommand(c)
+      case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
+        for {
+          channel <- ZIO.service[WebSocketChannel]
+          res <- handleQuery(rq)
+          _ <- channel.send(Read(WebSocketFrame.text(res)))
+          //_ <- Console.printLine(s"Query results: $res")
+        } yield ()
+      case _ => ZIO.unit
+    }
   def recieveAllText(
     text: String,
     channel: WebSocketChannel,
@@ -147,56 +120,14 @@ case class BasicWebSocket(
   ): ZIO[Any, Object, Unit] =
     text match {
       case _ if initializing =>
-        (for {
-          _ <- Console.printLine(s"authenticating session for $id")
-          glob <- controller
-            .runQuery(GET_BLOB(id).run)
-            .map {
-              case Blob(blob) => blob
-            }
-          _ <- if (glob.isEmpty && !server_keys.contains(id)) for {
-            _ <- Console.printLine(s"No blob found for $id creating new one")
-            randx <- Random.nextIntBetween(-10, 10)
-            randz <- Random.nextIntBetween(-10, 10)
-            _ <- controller.runCommand(CREATE_GLOB(id, Vector(0 + randx, 5, 0 + randz)).run)
-            _ <- Console.printLine(s"blob successfully created for $id")
-          } yield ()
-          else ZIO.unit
-        } yield ())
+        initialize_session
       case "end" =>
         channel.shutdown
       case text =>
         (for {
-          //_ <- Console.printLine("received text:" + text)
-          _ <- ZIO
-            .fromEither(text.fromJson[SerializableCommand[_, _]])
-            .flatMapError(err =>
-              Console.printLine(s"Error processing command $text, error: $err").mapError(_ => ???)
-            )
-            .flatMap {
-              case op: SUBSCRIBE =>
-                for {
-                  _ <- controller.runCommand(SocketSubscribe(channel, op).run)
-                } yield ()
-              case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
-                handleCommand(c)
-              case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
-                for {
-                  res <- handleQuery(rq)
-                  _ <- channel.send(Read(WebSocketFrame.text(res)))
-                  //_ <- Console.printLine(s"Query results: $res")
-                } yield ()
-              case c: Query[Globz.Service with WorldBlock.Block, _] =>
-                handleQueryAsString(c).flatMap(res => channel.send(Read(WebSocketFrame.text(res))))
-            }
-            .flatMapError(err =>
-              (Console
-                .printLine(s"ERROR PERFORMING COMMAND : $text  ERROR: $err"))
-                .mapError(_ => ???)
-            )
-        } yield ()).fold(_ => (), x => x)
-
-      case _ => ZIO.unit
+          msg <- parse_message(text)
+          _ <- handle_request(msg).provide(ZLayer.succeed(channel))
+        } yield ()).fold(err => println(s"error processing cmd $text :  $err"), x => x)
     }
 
   def recieveAll(channel: WebSocketChannel, text: String) =
@@ -213,15 +144,12 @@ case class BasicWebSocket(
             .fromOption(secretOp)
             .flatMapError(err =>
               Console.printLine(s"Error retrieving secret for $id, cause: $err").mapError(_ => ???)
-            ) //.fold(_ => BasicSession(id, "SECRET"), x => x)
+            )
           _ <- authenticated.update(_ => secret == sentSecret)
           verified <- authenticated.get
-          _ <- Console.printLine("success post verify")
           _ <- if (verified) for {
             _ <- Console.printLine("Verified succeeded")
             _ <- authenticated.update(_ => true)
-            //res <- handleQuery(GET_ALL_GLOBS())
-            //_ <- channel.send(Read(WebSocketFrame.text(res)))
             _ <- recieveAllText(
               text,
               channel,

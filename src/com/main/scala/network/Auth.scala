@@ -4,59 +4,41 @@ import network.Auth.Authorized
 import zio._
 import zio.prelude.Validation
 
-trait Auth[+OP, -SENDER] { self =>
+trait Auth[+OP] { self =>
 
   def validation[R1 >: OP]: PartialFunction[R1, Validation[Boolean, Boolean]]
 
-  def flatMap[R1 >: OP, S <: SENDER: Tag](f: Boolean => Auth[R1, S]): Auth[R1, S] =
+  def flatMap[R1 >: OP](f: Boolean => Auth[R1]): Auth[R1] =
     Authorized(self, f)
 
-  def map[R1 >: OP, S <: SENDER: Tag, B](f: Boolean => Boolean): Auth[R1, S] =
-    flatMap[R1, S](out => Auth.succeed(f(out)))
+  def map[R1 >: OP](f: Boolean => Boolean): Auth[R1] =
+    flatMap[R1](out => Auth.succeed(f(out)))
 }
 
-trait AuthError
 object Auth {
-  type Authorizer[E, A] = Validation[E, A]
-  case class Root(eval: () => Boolean) extends Auth[Nothing, Any] {
+  case class Root(eval: () => Boolean) extends Auth[Nothing] {
 
     override def validation[R1 >: Nothing]: PartialFunction[R1, Validation[Boolean, Boolean]] = {
       case _ => Validation.succeed(eval())
     }
   }
-  case class Authorized[OP, SENDER: Tag, A, B](
-    first: Auth[OP, SENDER],
-    success: Boolean => Auth[OP, SENDER]
-  ) extends Auth[OP, SENDER] {
+  case class Authorized[OP](
+    first: Auth[OP],
+    success: Boolean => Auth[OP]
+  ) extends Auth[OP] {
 
     override def validation[R1 >: OP]: PartialFunction[R1, Validation[Boolean, Boolean]] = {
-
-      case op if first.validation.isDefinedAt(op) =>
-        first
-          .validation(op)
-          .fold(_ => Validation.succeed(false), x => Validation.succeed(x))
-          .map(res => (res, success(res)))
-          .flatMap {
-            case (res, next) if next.validation.isDefinedAt(op) =>
-              next
-                .validation(op)
-                .fold(_ => Validation.succeed(res), x => Validation.succeed(res || x))
-            case (res, next) => Validation.succeed(res)
-          }
       case op =>
-        Validation
-          .succeed(false)
-          .map(res => (res, success(res)))
-          .flatMap {
-            case (res, next) if next.validation.isDefinedAt(op) =>
-              next
-                .validation(op)
-                .fold(_ => Validation.succeed(res), x => Validation.succeed(x))
-            case (res, next) => Validation.succeed(res)
-          }
+        first.validation
+          .orElse(
+            success(false).validation
+          )
+          .orElse[R1, Validation[Boolean, Boolean]]({
+            case _: R1 => Validation.succeed(false)
+          })(op)
     }
 
   }
 
-  def succeed(a: Boolean): Auth[Nothing, Any] = Root(() => a)
+  def succeed(a: Boolean): Auth[Nothing] = Root(() => a)
 }
