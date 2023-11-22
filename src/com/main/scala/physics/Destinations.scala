@@ -9,7 +9,7 @@ trait Destinations {
   def addDestination(location: Vector[Double]): IO[DestinationError, Unit]
   def getNextDestination(): IO[DestinationError, Option[Vector[Double]]]
   def getAllDestinations(): IO[DestinationError, Seq[Vector[Double]]]
-  def popNextDestination(): IO[DestinationError, Vector[Double]]
+  def popNextDestination(): IO[DestinationError, Option[Vector[Double]]]
 }
 trait DestinationError extends PhysicsError
 object Destinations {
@@ -32,11 +32,11 @@ case class BasicDestinations(
 
   override def getAllDestinations(): IO[DestinationError, Seq[Vector[Double]]] = destinations.get
 
-  override def popNextDestination(): IO[DestinationError, Vector[Double]] =
+  override def popNextDestination(): IO[DestinationError, Option[Vector[Double]]] =
     destinations.get.flatMap(dests =>
       for {
         _ <- destinations.update(_.tail)
-      } yield dests.head
+      } yield dests.headOption
     )
 }
 object BasicDestinations extends Destinations.Service {

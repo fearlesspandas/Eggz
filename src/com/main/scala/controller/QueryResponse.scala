@@ -71,3 +71,8 @@ object Blob {
   implicit val encoder: JsonEncoder[Blob] = DeriveJsonEncoder.gen[Blob]
   implicit val decoder: JsonDecoder[Blob] = DeriveJsonDecoder.gen[Blob]
 }
+case class ConsoleResponse(val msg: String) extends QueryResponse
+object ConsoleResponse {
+  implicit val encoder: JsonEncoder[ConsoleResponse] = DeriveJsonEncoder.gen[ConsoleResponse]
+  implicit val decoder: JsonDecoder[ConsoleResponse] = DeriveJsonDecoder.gen[ConsoleResponse]
+}

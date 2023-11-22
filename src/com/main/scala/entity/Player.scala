@@ -178,7 +178,7 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def getAllDestinations(): IO[DestinationError, Seq[Vector[Experience]]] =
     destinations.getAllDestinations()
 
-  override def popNextDestination(): IO[DestinationError, Vector[Experience]] =
+  override def popNextDestination(): IO[DestinationError, Option[Vector[Experience]]] =
     destinations.popNextDestination()
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =

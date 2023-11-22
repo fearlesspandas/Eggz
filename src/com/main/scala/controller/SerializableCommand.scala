@@ -1,5 +1,6 @@
 package controller
 
+import controller.CONSOLE.CONSOLE_ENV
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
@@ -12,6 +13,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.RepairEgg
 import zio.ZIO
+import zio.ZLayer
 import zio.http.ChannelEvent.Read
 import zio.http.WebSocketFrame
 import zio.http._
@@ -326,13 +328,35 @@ object ADD_DESTINATION {
 }
 
 case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with WorldBlock.Block] {
+  val epsilon: Double = 5
+
+  def distance(v1: Vector[Double], v2: Vector[Double]): Double = {
+    val minDist = v1.length min v2.length
+    val v1_trunc = v1.take(minDist)
+    val v2_trun = v2.take(minDist)
+    //performance of this might not be great
+    math.sqrt(
+      v1_trunc
+        .zip(v2_trun)
+        .foldLeft(0.0)((acc, curr) => acc + (curr._1 - curr._2) * (curr._1 - curr._2))
+    )
+  }
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
       location <- ZIO
         .fromOption(blob)
-        .flatMap { case entity: Destinations => entity.getNextDestination() }
-        .mapError(_ => ???)
+        .flatMap {
+          case entity: Destinations with PhysicalEntity =>
+            for {
+              next <- entity.getNextDestination().flatMap(ZIO.fromOption(_))
+              currentLoc <- entity.getLocation
+              dist = distance(next, currentLoc)
+              res <- if (dist > epsilon) entity.getNextDestination()
+              else entity.popNextDestination()
+            } yield res
+        }
+        .mapError(_ => GenericCommandError("Entity is not of type Destination with PhysicalEntity"))
       loc <- ZIO
         .fromOption(location)
         .flatMap(vec => ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2))))
@@ -372,4 +396,18 @@ object GET_ALL_DESTINATIONS {
     DeriveJsonDecoder.gen[GET_ALL_DESTINATIONS]
 }
 
-//case class CONSOLE(cmd:SerializableCommand[_,_]) extends SerializableCommand[Globz.Service with WorldBlock.Block,String]
+case class CONSOLE(cmd: SerializableCommand[CONSOLE_ENV, Any]) extends ResponseQuery[CONSOLE_ENV] {
+  override def run: ZIO[Globz.Service with WorldBlock.Block, CommandError, QueryResponse] =
+    cmd.run
+      .fold(err => s"error processing command : $err", x => s"success: ${x.toString}")
+      .map(ConsoleResponse(_))
+}
+object CONSOLE {
+  type CONSOLE_ENV = Globz.Service with WorldBlock.Block
+  implicit val en: JsonEncoder[SerializableCommand[CONSOLE_ENV, Any]] =
+    DeriveJsonEncoder.gen[SerializableCommand[_, _]].contramap(x => x)
+  implicit val de: JsonDecoder[SerializableCommand[CONSOLE_ENV, Any]] =
+    DeriveJsonDecoder.gen[SerializableCommand[CONSOLE_ENV, Any]] //.map(x => x)
+  implicit val encoder: JsonEncoder[CONSOLE] = DeriveJsonEncoder.gen[CONSOLE]
+  implicit val decoder: JsonDecoder[CONSOLE] = DeriveJsonDecoder.gen[CONSOLE]
+}

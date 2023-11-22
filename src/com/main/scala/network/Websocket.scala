@@ -4,6 +4,7 @@ import controller.SerializableCommand.CommandError
 import controller.AuthCommandService
 import controller.BasicController
 import controller.Blob
+import controller.CONSOLE
 import controller.CREATE_GLOB
 import controller.Control
 import controller.GET_ALL_GLOBS
@@ -126,6 +127,7 @@ case class BasicWebSocket(
         } yield ()
       case _ => ZIO.unit
     }
+
   def recieveAllText(
     text: String,
     channel: WebSocketChannel,
