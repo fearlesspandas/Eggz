@@ -1,6 +1,7 @@
 package network
 
 import controller.SerializableCommand.CommandError
+import controller.AuthCommandService
 import controller.BasicController
 import controller.Blob
 import controller.CREATE_GLOB
@@ -11,12 +12,13 @@ import controller.GET_GLOB_LOCATION
 import controller.Query
 import controller.QueryResponse
 import controller.ResponseQuery
+import controller.SUBSCRIBE
 import controller.SerializableCommand
 import controller.SimpleCommand
 import controller.SimpleCommandSerializable
 import controller.SocketSubscribe
-import controller.SUBSCRIBE
 import controller.Subscription
+import controller.auth.AUTH
 import entity.WorldBlock
 import network.WebSocketServer.AUTH_ID
 import network.WebSocketServer.SECRET
@@ -40,8 +42,8 @@ object WebSocketAdvanced extends ZIOAppDefault {
   val config =
     Server.defaultWith(_.webSocketConfig(WebSocketConfig.default.copy(subprotocols = Some("json"))))
 
-  override val run = program.provide(ZLayer.succeed(WebSocketServerBasic))
-  val program: ZIO[WebSocketServer.Service, Nothing, Unit] =
+  override val run = program().provide(ZLayer.succeed(WebSocketServerBasic))
+  def program(): ZIO[WebSocketServer.Service, Nothing, Unit] =
     (for {
       _ <- Console.printLine(GET_ALL_GLOBS().toJson)
       wss <- ZIO.service[WebSocketServer.Service].flatMap(_.make)
@@ -54,7 +56,8 @@ case class BasicWebSocket(
   authMap: Ref[SESSION_MAP],
   controller: BasicController[Globz.Service with WorldBlock.Block],
   authenticated: Ref[Boolean],
-  server_keys: Set[String]
+  server_keys: Set[String],
+  auth: AUTH[String]
 ) extends WebSocketControlServer[Any] {
 
   def handleCommand(
@@ -95,15 +98,25 @@ case class BasicWebSocket(
             .printLine(s"Error processing command $text, error: $err")
             .fold(_ => ???, x => ???)
         )
+  val authenticateMsg: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
+    cmd =>
+      auth(cmd)
+        .provide(ZLayer.succeed(id))
+        .flatMapError(err => Console.printLine(s"bad auth: $err").mapError(_ => ???))
+        .fold(_ => true, x => x)
+
   def handle_request(command: SerializableCommand[_, _]): ZIO[WebSocketChannel, Object, Unit] =
     command match {
       case op: SUBSCRIBE =>
         ZIO
-          .service[WebSocketChannel]
-          .flatMap(channel => controller.runCommand(SocketSubscribe(channel, op).run))
+          .serviceWithZIO[WebSocketChannel](channel =>
+            controller.runCommand(SocketSubscribe(channel, op).run)
+          )
           .map(_ => ())
+
       case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
         handleCommand(c)
+
       case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
         for {
           channel <- ZIO.service[WebSocketChannel]
@@ -117,7 +130,8 @@ case class BasicWebSocket(
     text: String,
     channel: WebSocketChannel,
     initializing: Boolean = false
-  ): ZIO[Any, Object, Unit] =
+  ): ZIO[Any, Object, Unit] = {
+    println(s"Received Text ${text}")
     text match {
       case _ if initializing =>
         initialize_session
@@ -126,9 +140,12 @@ case class BasicWebSocket(
       case text =>
         (for {
           msg <- parse_message(text)
-          _ <- handle_request(msg).provide(ZLayer.succeed(channel))
+          authorized <- authenticateMsg(msg).debug
+          _ <- if (authorized) handle_request(msg).provide(ZLayer.succeed(channel)) else ZIO.unit
+          //_ <- handle_request(msg).provide(ZLayer.succeed(channel)).debug
         } yield ()).fold(err => println(s"error processing cmd $text :  $err"), x => x)
     }
+  }
 
   def recieveAll(channel: WebSocketChannel, text: String) =
     authenticated.get.flatMap(authd =>
@@ -187,16 +204,16 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
   override def make(authID: AUTH_ID): ZIO[BasicController[
     Globz.Service with WorldBlock.Block
   ] with Ref[SESSION_MAP], Nothing, WebSocketControlServer[Any]] =
-    ZIO
-      .service[BasicController[Globz.Service with WorldBlock.Block]]
-      .flatMap(controller =>
-        ZIO
-          .service[Ref[SESSION_MAP]]
-          .flatMap(sessions =>
-            Ref
-              .make(false)
-              .map(authd => BasicWebSocket(authID, sessions, controller, authd, Set("1")))
-          )
-      )
-//      .map(controller => )
+    for {
+      controller <- ZIO.service[BasicController[Globz.Service with WorldBlock.Block]]
+      sessions <- ZIO.service[Ref[SESSION_MAP]]
+      authd <- Ref.make(false)
+    } yield BasicWebSocket(
+      authID,
+      sessions,
+      controller,
+      authd,
+      Set("1"),
+      AuthCommandService.all(Set("1"))
+    )
 }
