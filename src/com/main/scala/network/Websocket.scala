@@ -103,7 +103,7 @@ case class BasicWebSocket(
       auth(cmd)
         .provide(ZLayer.succeed(id))
         .flatMapError(err => Console.printLine(s"bad auth: $err").mapError(_ => ???))
-        .fold(_ => true, x => x)
+        .fold(_ => false, x => x)
 
   def handle_request(command: SerializableCommand[_, _]): ZIO[WebSocketChannel, Object, Unit] =
     command match {
@@ -130,8 +130,8 @@ case class BasicWebSocket(
     text: String,
     channel: WebSocketChannel,
     initializing: Boolean = false
-  ): ZIO[Any, Object, Unit] = {
-    println(s"Received Text ${text}")
+  ): ZIO[Any, Object, Unit] =
+    //println(s"Received Text ${text}")
     text match {
       case _ if initializing =>
         initialize_session
@@ -140,12 +140,12 @@ case class BasicWebSocket(
       case text =>
         (for {
           msg <- parse_message(text)
-          authorized <- authorizeMsg(msg).debug
-          _ <- if (authorized) handle_request(msg).provide(ZLayer.succeed(channel)) else ZIO.unit
-          //_ <- handle_request(msg).provide(ZLayer.succeed(channel)).debug
+          authorized <- authorizeMsg(msg)
+          _ <- if (authorized)
+            handle_request(msg).provide(ZLayer.succeed(channel))
+          else ZIO.unit
         } yield ()).fold(err => println(s"error processing cmd $text :  $err"), x => x)
     }
-  }
 
   def recieveAll(channel: WebSocketChannel, text: String) =
     authenticated.get.flatMap(authd =>

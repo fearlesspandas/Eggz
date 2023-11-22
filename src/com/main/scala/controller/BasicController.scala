@@ -6,11 +6,9 @@ import entity.WorldBlockInMem
 import src.com.main.scala.entity.Globz
 import zio.IO
 import zio.Ref
-import zio.Tag
 import zio.ZIO
 import zio.ZLayer
 
-import scala.reflect.runtime.universe.TypeTag
 trait BasicController[Env] {
   def runCommand[E](comm: ZIO[Env, E, Unit]): ZIO[Any, E, BasicController[Env]]
   def runQuery[Q, E](query: ZIO[Env, E, Q]): ZIO[Any, E, Q]
@@ -36,7 +34,6 @@ object BasicController {
 
 case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Block])
     extends BasicController[Globz.Service with WorldBlock.Block] {
-
   override def runCommand[E](
     comm: ZIO[Globz.Service with WorldBlock.Block, E, Unit]
   ): ZIO[Any, E, BasicController[Globz.Service with WorldBlock.Block]] =
@@ -65,6 +62,7 @@ case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Block])
       _ <- op.provide(ZLayer.succeed(world) ++ ZLayer.succeed(glob))
     } yield this
 }
+
 object Control extends BasicController.Service[Globz.Service with WorldBlock.Block] {
   override def make: IO[ControllerError, BasicController[Globz.Service with WorldBlock.Block]] =
     for {

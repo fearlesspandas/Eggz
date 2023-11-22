@@ -38,11 +38,11 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant to ADD_DESTINATION")
   }
 
-  val get_next_destination: AUTH[String] = {
+  val get_next_destination: Set[String] => AUTH[String] = server_keys => {
     case GET_NEXT_DESTINATION(id) =>
       for {
         senderId <- ZIO.service[String]
-      } yield id == senderId
+      } yield server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION")
   }
 
@@ -52,7 +52,6 @@ package object auth {
   }
 }
 object AuthCommandService {
-
   val base: Set[String] => AUTH[String] = (server_keys: Set[String]) =>
     (op: Any) => {
       ZIO
@@ -63,13 +62,14 @@ object AuthCommandService {
             relate_eggs(op),
             get_all_globs(op),
             add_destination(op),
-            get_next_destination(op)
+            get_next_destination(server_keys)(op)
           )
         ) { x =>
           x
         }
         .mapError(_ => "failed base validations")
     }
+
   val all: (Set[String]) => AUTH[String] =
     (server_keys: Set[String]) =>
       (op: Any) => {

@@ -1,41 +1,25 @@
 package controller
 
-import controller.Command.CMD
+import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
-import controller.GET_NEXT_DESTINATION.ADDED_DESTINATION
-import controller.SUBSCRIBE.SubscriptionEnv
-import entity.BasicPlayer
-import entity.EggzModel
-import entity.GlobInMemory
-import entity.GlobzInMem
 import entity.GlobzModel
-import entity.PLAYER_EGG
 import entity.PhysicalEntity
-import entity.Player
-import entity.PlayerGlob
 import entity.WorldBlock
 import physics.Destinations
-import physics.Vector3
 import src.com.main.scala.entity.EggzOps.ID
-import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.RepairEgg
-import src.com.main.scala.entity.Globz.GLOBZ_ID
-import zio.Duration.fromMillis
-import zio.IO
-import zio.Schedule
 import zio.ZIO
 import zio.http.ChannelEvent.Read
-import zio.http._
 import zio.http.WebSocketFrame
+import zio.http._
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
 import zio.json.EncoderOps
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
-
-import java.time.Duration
 
 sealed trait SerializableCommand[-Env, +Out] extends Command[Env, Out]
 object SerializableCommand {
@@ -373,11 +357,12 @@ case class GET_ALL_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] 
       location <- ZIO
         .fromOption(blob)
         .flatMap { case entity: Destinations => entity.getAllDestinations() }
-        .mapError(_ => ???)
-      loc = location.map(vec => (vec(0), vec(1), vec(2)))
-    } yield AllDestinations(id, loc)).mapError(_ =>
-      GenericCommandError(s"Error retrieving destination for id $id")
-    )
+        .orElseFail(GenericCommandError(s"entity $id does not support destinations"))
+      loc <- ZIO.foreachPar(location)(vec =>
+        ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
+      )
+    } yield AllDestinations(id, loc))
+      .orElseFail(GenericCommandError(s"Error retrieving destination for id $id"))
 }
 
 object GET_ALL_DESTINATIONS {
@@ -385,5 +370,6 @@ object GET_ALL_DESTINATIONS {
     DeriveJsonEncoder.gen[GET_ALL_DESTINATIONS]
   implicit val decoder: JsonDecoder[GET_ALL_DESTINATIONS] =
     DeriveJsonDecoder.gen[GET_ALL_DESTINATIONS]
-
 }
+
+//case class CONSOLE(cmd:SerializableCommand[_,_]) extends SerializableCommand[Globz.Service with WorldBlock.Block,String]
