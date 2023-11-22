@@ -38,35 +38,15 @@ import zio.json.JsonEncoder
 import java.time.Duration
 
 sealed trait SerializableCommand[-Env, +Out] extends Command[Env, Out]
-
 object SerializableCommand {
-  //we could implement type specific serialization to map onto what commands have been concretely defined
-  //however, there is a natural serialization available regardless of type param
-//  implicit val encoder: JsonEncoder[Command[Globz.Service with WorldBlock.Block, Any]] =
-//    DeriveJsonEncoder.gen[Command[Globz.Service with WorldBlock.Block, Any]]
-//  implicit val decoder: JsonDecoder[Command[Globz.Service with WorldBlock.Block, Any]] =
-//    DeriveJsonDecoder.gen[Command[Globz.Service with WorldBlock.Block, Any]]
   implicit val encoder: JsonEncoder[SerializableCommand[_, _]] =
     DeriveJsonEncoder.gen[SerializableCommand[Nothing, Any]].contramap(x => x)
   implicit val decoder: JsonDecoder[SerializableCommand[_, _]] =
     DeriveJsonDecoder.gen[SerializableCommand[Nothing, Any]].map(x => x)
-  type CommandKey = String
-
-  def make[Env, Out](
-    key: CommandKey
-  ): ZIO[SerializableCommand.Service, CommandError, SerializableCommand[Env, Out]] =
-    ZIO.service[SerializableCommand.Service].flatMap(_.make(key))
-
-  trait Service {
-    def make[Env, Out](key: CommandKey): IO[CommandError, SerializableCommand[Env, Out]]
-  }
-
   trait CommandError
-
   case class GenericCommandError(msg: String) extends CommandError
 
 }
-trait SimpleCommand[-Env] extends Command[Env, Unit]
 sealed trait SimpleCommandSerializable[-Env] extends SerializableCommand[Env, Unit]
 object SimpleCommandSerializable {
   implicit val encoder: JsonEncoder[SimpleCommandSerializable[_]] =
@@ -74,11 +54,6 @@ object SimpleCommandSerializable {
   implicit val decoder: JsonDecoder[SimpleCommandSerializable[_]] =
     DeriveJsonDecoder.gen[SimpleCommandSerializable[Nothing]].map(x => x)
 }
-//todo potentially i should rework this to only output a specific QUERY_RESPONSE type
-// that way serialization is handled separately from the query completely
-// without contaminating the type heirarchy logic
-// Ideally queries as a type can be kept general in output
-// but we can defer our implementation to something with an assumed output standard
 sealed trait Query[-Env, +A] extends SerializableCommand[Env, A] {}
 object Query {
   implicit val encoder: JsonEncoder[Query[_, _]] =
@@ -95,16 +70,8 @@ object ResponseQuery {
     DeriveJsonDecoder.gen[ResponseQuery[Nothing]].map(x => x)
 }
 
-//object RUN_Serializable_COMMAND_ASYNC {
-//  implicit val encoder: JsonEncoder[RUN_Serializable_COMMAND_ASYNC[_, _]] =
-//    DeriveJsonEncoder.gen[RUN_Serializable_COMMAND_ASYNC[Nothing, Any]] //.contramap(x => x)
-//  implicit val decoder: JsonDecoder[RUN_Serializable_COMMAND_ASYNC[_, _]] =
-//    DeriveJsonDecoder.gen[RUN_Serializable_COMMAND_ASYNC[Nothing, Any]] //.map(x => x)
-//}
-
 sealed trait Subscription[Env] extends SerializableCommand[Env, Unit] {
   val query: ResponseQuery[Env]
-
   override def run: ZIO[Env, CommandError, Unit] = ???
 }
 object Subscription {
@@ -124,6 +91,7 @@ object SUBSCRIBE {
   implicit val encoder: JsonEncoder[SUBSCRIBE] = DeriveJsonEncoder.gen[SUBSCRIBE]
   implicit val decoder: JsonDecoder[SUBSCRIBE] = DeriveJsonDecoder.gen[SUBSCRIBE]
 }
+
 case class UNSUBSCRIBE_ALL()
 object UNSUBSCRIBE_ALL {
   type SubscriptionEnv = Globz.Service with WorldBlock.Block
@@ -134,6 +102,7 @@ object UNSUBSCRIBE_ALL {
   implicit val encoder: JsonEncoder[UNSUBSCRIBE_ALL] = DeriveJsonEncoder.gen[UNSUBSCRIBE_ALL]
   implicit val decoder: JsonDecoder[UNSUBSCRIBE_ALL] = DeriveJsonDecoder.gen[UNSUBSCRIBE_ALL]
 }
+
 case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
     extends Command[SubscriptionEnv, Unit] {
   override def run: ZIO[SubscriptionEnv, CommandError, Unit] =
@@ -144,6 +113,7 @@ case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
       10
     ).run
 }
+
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
   override def run: ZIO[Globz.Service with WorldBlock.Block, CommandError, Unit] =
@@ -156,6 +126,7 @@ object CREATE_GLOB {
   implicit val encoder: JsonEncoder[CREATE_GLOB] = DeriveJsonEncoder.gen[CREATE_GLOB]
   implicit val decoder: JsonDecoder[CREATE_GLOB] = DeriveJsonDecoder.gen[CREATE_GLOB]
 }
+
 case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
@@ -164,12 +135,12 @@ case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
     } yield GlobSet(models.collect { case g: GlobzModel => g })).mapError(_ =>
       GenericCommandError("Error retrieving blobs")
     )
-
 }
 object GET_ALL_GLOBS {
   implicit val encoder: JsonEncoder[GET_ALL_GLOBS] = DeriveJsonEncoder.gen[GET_ALL_GLOBS]
   implicit val decoder: JsonDecoder[GET_ALL_GLOBS] = DeriveJsonDecoder.gen[GET_ALL_GLOBS]
 }
+
 case class GET_ALL_ENTITY_IDS() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
@@ -180,6 +151,7 @@ object GET_ALL_ENTITY_IDS {
   implicit val encoder: JsonEncoder[GET_ALL_ENTITY_IDS] = DeriveJsonEncoder.gen[GET_ALL_ENTITY_IDS]
   implicit val decoder: JsonDecoder[GET_ALL_ENTITY_IDS] = DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
 }
+
 case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
@@ -194,6 +166,7 @@ object GET_ALL_EGGZ {
   implicit val encoder: JsonEncoder[GET_ALL_EGGZ] = DeriveJsonEncoder.gen[GET_ALL_EGGZ]
   implicit val decoder: JsonDecoder[GET_ALL_EGGZ] = DeriveJsonDecoder.gen[GET_ALL_EGGZ]
 }
+
 case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
@@ -213,6 +186,7 @@ object GET_ALL_STATS {
   implicit val encoder: JsonEncoder[GET_ALL_STATS] = DeriveJsonEncoder.gen[GET_ALL_STATS]
   implicit val decoder: JsonDecoder[GET_ALL_STATS] = DeriveJsonDecoder.gen[GET_ALL_STATS]
 }
+
 case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -226,6 +200,7 @@ object CREATE_REPAIR_EGG {
   implicit val encoder: JsonEncoder[CREATE_REPAIR_EGG] = DeriveJsonEncoder.gen[CREATE_REPAIR_EGG]
   implicit val decoder: JsonDecoder[CREATE_REPAIR_EGG] = DeriveJsonDecoder.gen[CREATE_REPAIR_EGG]
 }
+
 case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
@@ -251,19 +226,7 @@ object GET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] = DeriveJsonEncoder.gen[GET_GLOB_LOCATION]
   implicit val decoder: JsonDecoder[GET_GLOB_LOCATION] = DeriveJsonDecoder.gen[GET_GLOB_LOCATION]
 }
-case class GET_GLOB_LOCATION_PROCESS(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      glob <- WorldBlock.getBlob(id)
-      location <- ZIO.fromOption(glob).flatMap { case g: PhysicalEntity => g.getLocation }
-    } yield Location(id, (location(0), location(1), location(2)))).fold(_ => NoLocation(id), x => x)
-}
-object GET_GLOB_LOCATION_PROCESS {
-  implicit val encoder: JsonEncoder[GET_GLOB_LOCATION_PROCESS] =
-    DeriveJsonEncoder.gen[GET_GLOB_LOCATION_PROCESS]
-  implicit val decoder: JsonDecoder[GET_GLOB_LOCATION_PROCESS] =
-    DeriveJsonDecoder.gen[GET_GLOB_LOCATION_PROCESS]
-}
+
 case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -278,6 +241,7 @@ object SET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[SET_GLOB_LOCATION] = DeriveJsonEncoder.gen[SET_GLOB_LOCATION]
   implicit val decoder: JsonDecoder[SET_GLOB_LOCATION] = DeriveJsonDecoder.gen[SET_GLOB_LOCATION]
 }
+
 case class RELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID, bidirectional: Boolean)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -293,6 +257,7 @@ object RELATE_EGGS {
   implicit val encoder: JsonEncoder[RELATE_EGGS] = DeriveJsonEncoder.gen[RELATE_EGGS]
   implicit val decoder: JsonDecoder[RELATE_EGGS] = DeriveJsonDecoder.gen[RELATE_EGGS]
 }
+
 case class UNRELATE_EGGS(egg1: ID, egg2: ID, globId: GLOBZ_ID, bidirectional: Boolean)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -323,6 +288,7 @@ object UNRELATE_ALL {
   implicit val encoder: JsonEncoder[UNRELATE_ALL] = DeriveJsonEncoder.gen[UNRELATE_ALL]
   implicit val decoder: JsonDecoder[UNRELATE_ALL] = DeriveJsonDecoder.gen[UNRELATE_ALL]
 }
+
 case class TICK_WORLD() extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     WorldBlock.tickAllBlobs().mapError(_ => GenericCommandError("Error ticking world")).map(_ => ())
@@ -331,6 +297,7 @@ object TICK_WORLD {
   implicit val encoder: JsonEncoder[TICK_WORLD] = DeriveJsonEncoder.gen[TICK_WORLD]
   implicit val decoder: JsonDecoder[TICK_WORLD] = DeriveJsonDecoder.gen[TICK_WORLD]
 }
+
 case class START_EGG(eggId: ID, globId: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =

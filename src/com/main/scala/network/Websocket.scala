@@ -14,7 +14,6 @@ import controller.QueryResponse
 import controller.ResponseQuery
 import controller.SUBSCRIBE
 import controller.SerializableCommand
-import controller.SimpleCommand
 import controller.SimpleCommandSerializable
 import controller.SocketSubscribe
 import controller.Subscription
@@ -98,7 +97,8 @@ case class BasicWebSocket(
             .printLine(s"Error processing command $text, error: $err")
             .fold(_ => ???, x => ???)
         )
-  val authenticateMsg: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
+
+  val authorizeMsg: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
     cmd =>
       auth(cmd)
         .provide(ZLayer.succeed(id))
@@ -140,7 +140,7 @@ case class BasicWebSocket(
       case text =>
         (for {
           msg <- parse_message(text)
-          authorized <- authenticateMsg(msg).debug
+          authorized <- authorizeMsg(msg).debug
           _ <- if (authorized) handle_request(msg).provide(ZLayer.succeed(channel)) else ZIO.unit
           //_ <- handle_request(msg).provide(ZLayer.succeed(channel)).debug
         } yield ()).fold(err => println(s"error processing cmd $text :  $err"), x => x)
