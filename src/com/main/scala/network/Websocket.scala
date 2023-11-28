@@ -45,7 +45,7 @@ object WebSocketAdvanced extends ZIOAppDefault {
   override val run = program().provide(ZLayer.succeed(WebSocketServerBasic))
   def program(): ZIO[WebSocketServer.Service, Nothing, Unit] =
     (for {
-      _ <- Console.printLine(GET_ALL_GLOBS().toJson)
+      _ <- ZIO.logInfo("server started")
       wss <- ZIO.service[WebSocketServer.Service].flatMap(_.make)
       _ <- Server.serve(wss.app).provide(config)
     } yield ()).mapError(_ => ???)
@@ -216,6 +216,6 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
       controller,
       authd,
       Set("1"),
-      AuthCommandService.all(Set("1"))
+      AuthCommandService.all_non_par(Set("1"))
     )
 }

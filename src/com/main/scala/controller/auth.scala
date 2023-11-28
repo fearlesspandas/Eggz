@@ -77,7 +77,24 @@ object AuthCommandService {
         }
         .mapError(_ => "failed base validations")
     }
-
+  val base_non_par: Set[String] => AUTH[String] = (server_keys: Set[String]) =>
+    (op: Any) => {
+      ZIO
+        .validateFirstPar(
+          Seq(
+            set_glob_location(server_keys)(op),
+            get_glob_location(op),
+            relate_eggs(op),
+            get_all_globs(op),
+            add_destination(op),
+            get_next_destination(server_keys)(op),
+            get_all_destinations(op)
+          )
+        ) { x =>
+          x
+        }
+        .mapError(_ => "failed base validations")
+    }
   val all: (Set[String]) => AUTH[String] =
     (server_keys: Set[String]) =>
       (op: Any) => {
@@ -88,5 +105,16 @@ object AuthCommandService {
             x
           }
           .mapError(_ => "failed group validate")
-      }
+      }.fold(_ => false, x => x)
+  val all_non_par: (Set[String]) => AUTH[String] =
+    (server_keys: Set[String]) =>
+      (op: Any) => {
+        val other_tests = base(server_keys)
+        val sub = subscribe(other_tests(_).mapError(_ => ""))
+        ZIO
+          .validateFirstPar(Seq(other_tests(op), sub(op))) { x =>
+            x
+          }
+          .mapError(_ => "failed group validate")
+      }.fold(_ => false, x => x)
 }
