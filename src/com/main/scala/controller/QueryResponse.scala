@@ -66,6 +66,17 @@ object NoLocation {
   implicit val encoder: JsonEncoder[NoLocation] = DeriveJsonEncoder.gen[NoLocation]
   implicit val decoder: JsonDecoder[NoLocation] = DeriveJsonDecoder.gen[NoLocation]
 }
+
+case class Input(id: GLOBZ_ID, vec: (Double, Double, Double)) extends QueryResponse
+object Input {
+  implicit val encoder: JsonEncoder[Input] = DeriveJsonEncoder.gen[Input]
+  implicit val decoder: JsonDecoder[Input] = DeriveJsonDecoder.gen[Input]
+}
+case class NoInput(id: GLOBZ_ID) extends QueryResponse
+object NoInput {
+  implicit val encoder: JsonEncoder[NoInput] = DeriveJsonEncoder.gen[NoInput]
+  implicit val decoder: JsonDecoder[NoInput] = DeriveJsonDecoder.gen[NoInput]
+}
 case class Blob(blob: Option[GlobzModel]) extends QueryResponse
 object Blob {
   implicit val encoder: JsonEncoder[Blob] = DeriveJsonEncoder.gen[Blob]

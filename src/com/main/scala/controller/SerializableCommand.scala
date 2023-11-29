@@ -106,6 +106,7 @@ case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     (for {
       glob <- Globz.create(globId)
       _ <- WorldBlock.spawnBlob(glob, location)
+      _ <- glob match { case pe: PhysicalEntity => pe.teleport(location); case _ => ZIO.unit }
     } yield ()).mapError(_ => GenericCommandError("error creating glob"))
 }
 object CREATE_GLOB {
@@ -394,6 +395,46 @@ object GET_ALL_DESTINATIONS {
     DeriveJsonEncoder.gen[GET_ALL_DESTINATIONS]
   implicit val decoder: JsonDecoder[GET_ALL_DESTINATIONS] =
     DeriveJsonDecoder.gen[GET_ALL_DESTINATIONS]
+}
+
+case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
+    extends SimpleCommandSerializable[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      _ <- glob match {
+        case pe: PhysicalEntity => pe.setInputVec(Vector(vec._1, vec._2, vec._3))
+        case _                  => ZIO.unit
+      }
+    } yield ()).orElseFail(GenericCommandError(""))
+}
+object APPLY_VECTOR {
+  implicit val encoder: JsonEncoder[APPLY_VECTOR] =
+    DeriveJsonEncoder.gen[APPLY_VECTOR]
+  implicit val decoder: JsonDecoder[APPLY_VECTOR] =
+    DeriveJsonDecoder.gen[APPLY_VECTOR]
+}
+
+case class GET_INPUT_VECTOR(id: ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      resraw <- glob match { case physicalEntity: PhysicalEntity => physicalEntity.getInputVec() }
+      res <- ZIO
+        .fromOption(resraw)
+        .flatMap(vec =>
+          ZIO
+            .succeed(vec(0))
+            .zip(ZIO.succeed(vec(1)))
+            .zip(ZIO.succeed(vec(2)))
+        )
+    } yield Input(id, res)).fold(_ => NoInput(id), x => x)
+}
+object GET_INPUT_VECTOR {
+  implicit val encoder: JsonEncoder[GET_INPUT_VECTOR] =
+    DeriveJsonEncoder.gen[GET_INPUT_VECTOR]
+  implicit val decoder: JsonDecoder[GET_INPUT_VECTOR] =
+    DeriveJsonDecoder.gen[GET_INPUT_VECTOR]
 }
 
 case class CONSOLE(cmd: SerializableCommand[CONSOLE_ENV, Any]) extends ResponseQuery[CONSOLE_ENV] {

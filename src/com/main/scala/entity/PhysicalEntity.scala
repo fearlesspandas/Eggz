@@ -13,6 +13,8 @@ trait PhysicalEntity {
   def setVelocity(velocity: Vector[Double]): IO[PhysicsError, Unit]
   def move(location: Vector[Double]): IO[PhysicsError, Unit]
   def teleport(location: Vector[Double]): IO[PhysicsError, Unit]
+  def setInputVec(vec: Vector[Double]): IO[PhysicsError, Unit]
+  def getInputVec(): IO[PhysicsError, Option[Vector[Double]]]
 }
 trait PhysicsError
 object PhysicalEntity {
@@ -24,7 +26,8 @@ object PhysicalEntity {
 case class BasicPhysicalEntity(
   location: Ref[Vector[Double]],
   destination: Ref[Option[Vector[Double]]],
-  velocity: Ref[Vector[Double]]
+  velocity: Ref[Vector[Double]],
+  input: Ref[Option[Vector[Double]]]
 ) extends PhysicalEntity {
   override def getLocation: IO[PhysicsError, Vector[Double]] = location.get
 
@@ -42,6 +45,11 @@ case class BasicPhysicalEntity(
   //todo make this also remove destination based on internal dest epsilon
   override def teleport(loc: Vector[Double]): IO[PhysicsError, Unit] =
     location.update(_ => loc)
+
+  override def setInputVec(vec: Vector[Double]): IO[PhysicsError, Unit] =
+    input.update(_ => Some(vec))
+
+  override def getInputVec(): IO[PhysicsError, Option[Vector[Double]]] = input.get
 }
 
 object BasicPhysicalEntity extends PhysicalEntity.Service {
@@ -50,5 +58,6 @@ object BasicPhysicalEntity extends PhysicalEntity.Service {
       loc <- Ref.make(Vector(0.0, 10, 0))
       dest <- Ref.make(Option.empty[Vector[Double]])
       vel <- Ref.make(Vector(0.0, 0, 0))
-    } yield BasicPhysicalEntity(loc, dest, vel)
+      inpt <- Ref.make[Option[Vector[Double]]](None)
+    } yield BasicPhysicalEntity(loc, dest, vel, inpt)
 }

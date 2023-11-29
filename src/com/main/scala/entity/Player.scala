@@ -189,16 +189,15 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
-    } yield PlayerGlob(this.id, stats, location)).mapError(_ =>
-      s"Error while trying to Serialize glob ${glob.id}"
-    )
+    } yield PlayerGlob(this.id, stats, location))
+      .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
     for {
       health <- health()
       energy <- energy()
       stats = Stats(id, health, energy)
-      loc <- getLocation.mapError(_ => ???)
+      loc <- getLocation.orElseFail(???)
       location <- ZIO.succeed(loc(0)).zip(ZIO.succeed(loc(1))).zip(ZIO.succeed(loc(2)))
     } yield PLAYER_EGG(id, stats, location)
 
@@ -212,6 +211,11 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
     egg: scala.entity.Globz.GLOBZ_IN,
     direction: Level
   ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction)
+
+  override def setInputVec(vec: Vector[Experience]): IO[PhysicsError, Unit] =
+    physics.setInputVec(vec)
+
+  override def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] = physics.getInputVec()
 }
 
 object BasicPlayer extends Globz.Service {

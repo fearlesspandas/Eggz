@@ -52,7 +52,20 @@ package object auth {
       } yield id == senderId
     case cmd => ZIO.fail(s"$cmd not relevant to GET_ALL_DESTINATIONS")
   }
-
+  val apply_vector: AUTH[String] = {
+    case APPLY_VECTOR(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield id == senderId
+    case cmd => ZIO.fail(s"$cmd not relevant to APPLY_VECTOR")
+  }
+  val get_input_vector: Set[String] => AUTH[String] = server_keys => {
+    case GET_INPUT_VECTOR(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield server_keys.contains(senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_INPUT_VECTOR")
+  }
   val subscribe: AUTH[String] => AUTH[String] = masterAuth => {
     case SUBSCRIBE(query) => masterAuth(query)
     case cmd              => ZIO.fail(s"$cmd not relevant to SUBSCRIBE")
@@ -70,7 +83,9 @@ object AuthCommandService {
             get_all_globs(op),
             add_destination(op),
             get_next_destination(server_keys)(op),
-            get_all_destinations(op)
+            get_all_destinations(op),
+            apply_vector(op),
+            get_input_vector(server_keys)(op).debug
           )
         ) { x =>
           x
@@ -88,7 +103,9 @@ object AuthCommandService {
             get_all_globs(op),
             add_destination(op),
             get_next_destination(server_keys)(op),
-            get_all_destinations(op)
+            get_all_destinations(op),
+            apply_vector(op),
+            get_input_vector(server_keys)(op)
           )
         ) { x =>
           x
@@ -109,7 +126,7 @@ object AuthCommandService {
   val all_non_par: (Set[String]) => AUTH[String] =
     (server_keys: Set[String]) =>
       (op: Any) => {
-        val other_tests = base(server_keys)
+        val other_tests = base_non_par(server_keys)
         val sub = subscribe(other_tests(_).mapError(_ => ""))
         ZIO
           .validateFirstPar(Seq(other_tests(op), sub(op))) { x =>
