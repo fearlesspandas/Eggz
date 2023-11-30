@@ -389,12 +389,28 @@ case class GET_ALL_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] 
     } yield AllDestinations(id, loc))
       .orElseFail(GenericCommandError(s"Error retrieving destination for id $id"))
 }
-
 object GET_ALL_DESTINATIONS {
   implicit val encoder: JsonEncoder[GET_ALL_DESTINATIONS] =
     DeriveJsonEncoder.gen[GET_ALL_DESTINATIONS]
   implicit val decoder: JsonDecoder[GET_ALL_DESTINATIONS] =
     DeriveJsonDecoder.gen[GET_ALL_DESTINATIONS]
+}
+
+case class CLEAR_DESTINATIONS(id: GLOBZ_ID) extends SimpleCommandSerializable[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      _ <- glob match {
+        case pe: Destinations => pe.clearDestinations()
+        case _                => ZIO.unit
+      }
+    } yield ()).orElseFail(GenericCommandError(s"Error clearing destinations for $id"))
+}
+object CLEAR_DESTINATIONS {
+  implicit val encoder: JsonEncoder[CLEAR_DESTINATIONS] =
+    DeriveJsonEncoder.gen[CLEAR_DESTINATIONS]
+  implicit val decoder: JsonDecoder[CLEAR_DESTINATIONS] =
+    DeriveJsonDecoder.gen[CLEAR_DESTINATIONS]
 }
 
 case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))

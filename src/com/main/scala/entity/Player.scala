@@ -216,6 +216,8 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
     physics.setInputVec(vec)
 
   override def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] = physics.getInputVec()
+
+  override def clearDestinations(): IO[DestinationError, Unit] = destinations.clearDestinations()
 }
 
 object BasicPlayer extends Globz.Service {

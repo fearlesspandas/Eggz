@@ -66,12 +66,24 @@ package object auth {
       } yield server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to GET_INPUT_VECTOR")
   }
+  val clear_destinations: AUTH[String] = {
+    case CLEAR_DESTINATIONS(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATIONS")
+  }
   val subscribe: AUTH[String] => AUTH[String] = masterAuth => {
     case SUBSCRIBE(query) => masterAuth(query)
     case cmd              => ZIO.fail(s"$cmd not relevant to SUBSCRIBE")
   }
+  val console: AUTH[String] => AUTH[String] = masterAuth => {
+    case CONSOLE(query) => masterAuth(query)
+    case cmd            => ZIO.fail(s"$cmd not relevant to CONSOLE")
+  }
 }
 object AuthCommandService {
+
   val base: Set[String] => AUTH[String] = (server_keys: Set[String]) =>
     (op: Any) => {
       ZIO
@@ -85,13 +97,15 @@ object AuthCommandService {
             get_next_destination(server_keys)(op),
             get_all_destinations(op),
             apply_vector(op),
-            get_input_vector(server_keys)(op).debug
+            get_input_vector(server_keys)(op),
+            clear_destinations(op)
           )
         ) { x =>
           x
         }
         .mapError(_ => "failed base validations")
     }
+
   val base_non_par: Set[String] => AUTH[String] = (server_keys: Set[String]) =>
     (op: Any) => {
       ZIO
@@ -105,31 +119,36 @@ object AuthCommandService {
             get_next_destination(server_keys)(op),
             get_all_destinations(op),
             apply_vector(op),
-            get_input_vector(server_keys)(op)
+            get_input_vector(server_keys)(op),
+            clear_destinations(op)
           )
         ) { x =>
           x
         }
         .mapError(_ => "failed base validations")
     }
+
   val all: (Set[String]) => AUTH[String] =
     (server_keys: Set[String]) =>
       (op: Any) => {
         val other_tests = base(server_keys)
         val sub = subscribe(other_tests(_).mapError(_ => ""))
+        val cnsl = console(other_tests(_))
         ZIO
-          .validateFirstPar(Seq(other_tests(op), sub(op))) { x =>
+          .validateFirstPar(Seq(other_tests(op), sub(op), cnsl(op))) { x =>
             x
           }
           .mapError(_ => "failed group validate")
       }.fold(_ => false, x => x)
+
   val all_non_par: (Set[String]) => AUTH[String] =
     (server_keys: Set[String]) =>
       (op: Any) => {
         val other_tests = base_non_par(server_keys)
         val sub = subscribe(other_tests(_).mapError(_ => ""))
+        val cnsl = console(other_tests(_))
         ZIO
-          .validateFirstPar(Seq(other_tests(op), sub(op))) { x =>
+          .validateFirstPar(Seq(other_tests(op), sub(op), cnsl(op))) { x =>
             x
           }
           .mapError(_ => "failed group validate")

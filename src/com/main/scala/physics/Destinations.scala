@@ -10,6 +10,7 @@ trait Destinations {
   def getNextDestination(): IO[DestinationError, Option[Vector[Double]]]
   def getAllDestinations(): IO[DestinationError, Seq[Vector[Double]]]
   def popNextDestination(): IO[DestinationError, Option[Vector[Double]]]
+  def clearDestinations(): IO[DestinationError, Unit]
 }
 trait DestinationError extends PhysicsError
 object Destinations {
@@ -38,6 +39,8 @@ case class BasicDestinations(
         _ <- destinations.update(_.tail)
       } yield dests.headOption
     )
+
+  override def clearDestinations(): IO[DestinationError, Unit] = destinations.update(_ => Seq())
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =
