@@ -403,8 +403,9 @@ case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
       _ <- glob match {
-        case pe: PhysicalEntity => pe.setInputVec(Vector(vec._1, vec._2, vec._3))
-        case _                  => ZIO.unit
+        case pe: PhysicalEntity =>
+          pe.setInputVec(Vector(vec._1, vec._2, vec._3))
+        case _ => ZIO.unit
       }
     } yield ()).orElseFail(GenericCommandError(""))
 }

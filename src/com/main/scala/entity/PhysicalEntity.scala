@@ -47,7 +47,7 @@ case class BasicPhysicalEntity(
     location.update(_ => loc)
 
   override def setInputVec(vec: Vector[Double]): IO[PhysicsError, Unit] =
-    input.update(_ => Some(vec))
+    input.update { case _ if (vec.find(_ != 0).nonEmpty) => Some(vec); case _ => None }
 
   override def getInputVec(): IO[PhysicsError, Option[Vector[Double]]] = input.get
 }
