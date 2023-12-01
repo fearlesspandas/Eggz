@@ -218,6 +218,11 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] = physics.getInputVec()
 
   override def clearDestinations(): IO[DestinationError, Unit] = destinations.clearDestinations()
+
+  override def adjustMaxSpeed(delta: Experience): IO[PhysicsError, Unit] =
+    physics.adjustMaxSpeed(delta)
+
+  override def getMaxSpeed(): IO[PhysicsError, Experience] = physics.getMaxSpeed()
 }
 
 object BasicPlayer extends Globz.Service {

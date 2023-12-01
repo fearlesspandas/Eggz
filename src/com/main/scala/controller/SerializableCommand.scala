@@ -453,7 +453,72 @@ object GET_INPUT_VECTOR {
   implicit val decoder: JsonDecoder[GET_INPUT_VECTOR] =
     DeriveJsonDecoder.gen[GET_INPUT_VECTOR]
 }
+case class SET_LV(id: GLOBZ_ID, lv: (Double, Double, Double))
+    extends SimpleCommandSerializable[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      _ <- glob match {
+        case pe: PhysicalEntity => pe.setVelocity(Vector(lv._1, lv._2, lv._3)); case _ => ZIO.unit
+      }
+    } yield ()).orElseFail(GenericCommandError(s"error while trying to set lv for $id"))
+}
+object SET_LV {
+  implicit val encoder: JsonEncoder[SET_LV] =
+    DeriveJsonEncoder.gen[SET_LV]
+  implicit val decoder: JsonDecoder[SET_LV] =
+    DeriveJsonDecoder.gen[SET_LV]
+}
+case class LAZY_LV(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      blob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      res <- blob match {
+        case physicalEntity: PhysicalEntity =>
+          physicalEntity.getVelocity.flatMap(vec =>
+            ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
+          )
+      }
+    } yield LV(id, res)).orElseFail(GenericCommandError(s"No LV found for $id"))
+}
+object LAZY_LV {
+  implicit val encoder: JsonEncoder[LAZY_LV] =
+    DeriveJsonEncoder.gen[LAZY_LV]
+  implicit val decoder: JsonDecoder[LAZY_LV] =
+    DeriveJsonDecoder.gen[LAZY_LV]
+}
 
+case class PhysicalStats(speed_delta: Double)
+object PhysicalStats {
+  implicit val encoder: JsonEncoder[PhysicalStats] = DeriveJsonEncoder.gen[PhysicalStats]
+
+  implicit val decoder: JsonDecoder[PhysicalStats] =
+    DeriveJsonDecoder.gen[PhysicalStats]
+}
+case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
+    extends SimpleCommandSerializable[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      _ <- glob match { case pe: PhysicalEntity => pe.adjustMaxSpeed(delta.speed_delta) }
+    } yield ()).orElseFail(GenericCommandError(s"Error adjusting speed for $id"))
+}
+object ADJUST_PHYSICAL_STATS {
+  implicit val encoder: JsonEncoder[ADJUST_PHYSICAL_STATS] =
+    DeriveJsonEncoder.gen[ADJUST_PHYSICAL_STATS]
+  implicit val decoder: JsonDecoder[ADJUST_PHYSICAL_STATS] =
+    DeriveJsonDecoder.gen[ADJUST_PHYSICAL_STATS]
+}
+
+case class GET_PHYSICAL_STATS(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      res <- glob match {
+        case pe: PhysicalEntity => pe.getMaxSpeed()
+      }
+    } yield PhysStat(id, res)).orElseFail(GenericCommandError(s"Error getting phys_stats for $id "))
+}
 case class CONSOLE(cmd: SerializableCommand[CONSOLE_ENV, Any]) extends ResponseQuery[CONSOLE_ENV] {
   override def run: ZIO[Globz.Service with WorldBlock.Block, CommandError, QueryResponse] =
     cmd.run

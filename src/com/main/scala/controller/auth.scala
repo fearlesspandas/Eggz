@@ -73,6 +73,34 @@ package object auth {
       } yield senderId == id
     case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATIONS")
   }
+  val set_lv: Set[String] => AUTH[String] = server_keys => {
+    case SET_LV(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield server_keys.contains(senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant for SET_LV")
+  }
+  val lazy_lv: AUTH[String] = {
+    case LAZY_LV(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant for LAZY_LV")
+  }
+  val adjust_physical_stats: AUTH[String] = {
+    case ADJUST_PHYSICAL_STATS(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_PHYSICAL_STATS")
+  }
+  val get_physical_stats: Set[String] => AUTH[String] = server_keys => {
+    case GET_PHYSICAL_STATS(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender) || sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_PHYSICAL_STATS")
+  }
   val subscribe: AUTH[String] => AUTH[String] = masterAuth => {
     case SUBSCRIBE(query) => masterAuth(query)
     case cmd              => ZIO.fail(s"$cmd not relevant to SUBSCRIBE")
@@ -98,7 +126,11 @@ object AuthCommandService {
             get_all_destinations(op),
             apply_vector(op),
             get_input_vector(server_keys)(op),
-            clear_destinations(op)
+            clear_destinations(op),
+            set_lv(server_keys)(op),
+            lazy_lv(op),
+            adjust_physical_stats(op),
+            get_physical_stats(server_keys)(op)
           )
         ) { x =>
           x
@@ -120,7 +152,11 @@ object AuthCommandService {
             get_all_destinations(op),
             apply_vector(op),
             get_input_vector(server_keys)(op),
-            clear_destinations(op)
+            clear_destinations(op),
+            set_lv(server_keys)(op),
+            lazy_lv(op),
+            adjust_physical_stats(op),
+            get_physical_stats(server_keys)(op)
           )
         ) { x =>
           x
@@ -132,7 +168,7 @@ object AuthCommandService {
     (server_keys: Set[String]) =>
       (op: Any) => {
         val other_tests = base(server_keys)
-        val sub = subscribe(other_tests(_).mapError(_ => ""))
+        val sub = subscribe(other_tests(_))
         val cnsl = console(other_tests(_))
         ZIO
           .validateFirstPar(Seq(other_tests(op), sub(op), cnsl(op))) { x =>

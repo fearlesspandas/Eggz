@@ -39,7 +39,6 @@ case class BasicDestinations(
         _ <- destinations.update(_.tail)
       } yield dests.headOption
     )
-
   override def clearDestinations(): IO[DestinationError, Unit] = destinations.update(_ => Seq())
 }
 object BasicDestinations extends Destinations.Service {

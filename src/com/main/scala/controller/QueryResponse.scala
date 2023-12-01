@@ -82,6 +82,17 @@ object Blob {
   implicit val encoder: JsonEncoder[Blob] = DeriveJsonEncoder.gen[Blob]
   implicit val decoder: JsonDecoder[Blob] = DeriveJsonDecoder.gen[Blob]
 }
+case class LV(id: GLOBZ_ID, lv: (Double, Double, Double)) extends QueryResponse
+object LV {
+  implicit val encoder: JsonEncoder[LV] = DeriveJsonEncoder.gen[LV]
+  implicit val decoder: JsonDecoder[LV] = DeriveJsonDecoder.gen[LV]
+}
+case class PhysStat(id: GLOBZ_ID, max_speed: Double) extends QueryResponse
+object PhysStat {
+  implicit val encoder: JsonEncoder[PhysStat] =
+    DeriveJsonEncoder.gen[PhysStat]
+  implicit val decoder: JsonDecoder[PhysStat] = DeriveJsonDecoder.gen[PhysStat]
+}
 case class ConsoleResponse(val msg: String) extends QueryResponse
 object ConsoleResponse {
   implicit val encoder: JsonEncoder[ConsoleResponse] = DeriveJsonEncoder.gen[ConsoleResponse]
