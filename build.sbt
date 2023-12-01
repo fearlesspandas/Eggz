@@ -20,3 +20,9 @@ libraryDependencies += "org.bouncycastle" % "bcprov-jdk15on" % "1.70"
 libraryDependencies += "org.bouncycastle" % "bcpkix-jdk15on" % "1.70"
 //// https://mvnrepository.com/artifact/dev.zio/zio-streams
 //libraryDependencies += "dev.zio" %% "zio-streams" % "2.0.0-RC2"
+Compile / mainClass := Some("network.WebSocketAdvanced")
+
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case x                             => MergeStrategy.first
+}
