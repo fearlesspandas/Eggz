@@ -17,6 +17,7 @@ import zio.ZLayer
 import zio.http.ChannelEvent.Read
 import zio.http.WebSocketFrame
 import zio.http._
+import zio.json.DecoderOps
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
 import zio.json.EncoderOps
@@ -365,7 +366,6 @@ case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with
       .mapError(_ => GenericCommandError(s"Error retrieving destination for id $id"))
       .fold(err => NoLocation(id), x => x)
 }
-
 object GET_NEXT_DESTINATION {
   implicit val encoder: JsonEncoder[GET_NEXT_DESTINATION] =
     DeriveJsonEncoder.gen[GET_NEXT_DESTINATION]
@@ -453,6 +453,7 @@ object GET_INPUT_VECTOR {
   implicit val decoder: JsonDecoder[GET_INPUT_VECTOR] =
     DeriveJsonDecoder.gen[GET_INPUT_VECTOR]
 }
+
 case class SET_LV(id: GLOBZ_ID, lv: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -491,9 +492,7 @@ object LAZY_LV {
 case class PhysicalStats(speed_delta: Double)
 object PhysicalStats {
   implicit val encoder: JsonEncoder[PhysicalStats] = DeriveJsonEncoder.gen[PhysicalStats]
-
-  implicit val decoder: JsonDecoder[PhysicalStats] =
-    DeriveJsonDecoder.gen[PhysicalStats]
+  implicit val decoder: JsonDecoder[PhysicalStats] = DeriveJsonDecoder.gen[PhysicalStats]
 }
 case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
     extends SimpleCommandSerializable[WorldBlock.Block] {
@@ -519,6 +518,13 @@ case class GET_PHYSICAL_STATS(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Blo
       }
     } yield PhysStat(id, res)).orElseFail(GenericCommandError(s"Error getting phys_stats for $id "))
 }
+object GET_PHYSICAL_STATS {
+  implicit val encoder: JsonEncoder[GET_PHYSICAL_STATS] =
+    DeriveJsonEncoder.gen[GET_PHYSICAL_STATS]
+  implicit val decoder: JsonDecoder[GET_PHYSICAL_STATS] =
+    DeriveJsonDecoder.gen[GET_PHYSICAL_STATS]
+}
+
 case class CONSOLE(cmd: SerializableCommand[CONSOLE_ENV, Any]) extends ResponseQuery[CONSOLE_ENV] {
   override def run: ZIO[Globz.Service with WorldBlock.Block, CommandError, QueryResponse] =
     cmd.run

@@ -55,7 +55,8 @@ case class BasicPhysicalEntity(
 
   override def getInputVec(): IO[PhysicsError, Option[Vector[Double]]] = input.get
 
-  override def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit] = max_speed.update(_ + delta)
+  override def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit] =
+    max_speed.update(curr => Math.max(curr + delta, 0))
 
   override def getMaxSpeed(): IO[PhysicsError, Double] = max_speed.get
 }
