@@ -2,6 +2,9 @@ package controller
 
 import entity.EggzModel
 import entity.GlobzModel
+import physics.DESTINATION_TYPE
+import physics.DestinationModel
+import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz
@@ -45,13 +48,12 @@ object AllStats {
   implicit val decoder: JsonDecoder[AllStats] = DeriveJsonDecoder.gen[AllStats]
 }
 
-case class NextDestination(id: ID, location: (Double, Double, Double)) extends QueryResponse
+case class NextDestination(id: ID, destination: destination) extends QueryResponse
 object NextDestination {
   implicit val encoder: JsonEncoder[NextDestination] = DeriveJsonEncoder.gen[NextDestination]
   implicit val decoder: JsonDecoder[NextDestination] = DeriveJsonDecoder.gen[NextDestination]
 }
-case class AllDestinations(id: ID, destinations: Seq[(Double, Double, Double)])
-    extends QueryResponse
+case class AllDestinations(id: ID, destinations: Seq[destination]) extends QueryResponse
 object AllDestinations {
   implicit val encoder: JsonEncoder[AllDestinations] = DeriveJsonEncoder.gen[AllDestinations]
   implicit val decoder: JsonDecoder[AllDestinations] = DeriveJsonDecoder.gen[AllDestinations]

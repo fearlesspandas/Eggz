@@ -7,7 +7,10 @@ import controller.SerializableCommand.GenericCommandError
 import entity.GlobzModel
 import entity.PhysicalEntity
 import entity.WorldBlock
+import physics.Destination
+import physics.DestinationModel
 import physics.Destinations
+import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz
@@ -307,7 +310,7 @@ object START_EGG {
   implicit val decoder: JsonDecoder[START_EGG] = DeriveJsonDecoder.gen[START_EGG]
 }
 
-case class ADD_DESTINATION(id: ID, location: Vector[Double])
+case class ADD_DESTINATION(id: ID, dest: destination)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
@@ -316,7 +319,10 @@ case class ADD_DESTINATION(id: ID, location: Vector[Double])
         .fromOption(blob)
         .flatMap({
           case entity: Destinations =>
-            entity.addDestination(location)
+            for {
+              res <- dest.deserialize
+              _ <- entity.addDestination(res)
+            } yield ()
         })
     } yield ()).mapError(_ => GenericCommandError(s"Error adding destination to entity $id"))
 }
@@ -353,16 +359,16 @@ case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with
             for {
               next <- entity.getNextDestination().flatMap(ZIO.fromOption(_))
               currentLoc <- entity.getLocation
-              dist = distance(next, currentLoc)
+              dist = distance(next.location, currentLoc)
               res <- if (dist > epsilon) entity.getNextDestination()
               else entity.popNextDestination()
             } yield res
         }
         .mapError(_ => GenericCommandError("Entity is not of type Destination with PhysicalEntity"))
-      loc <- ZIO
+      dest <- ZIO
         .fromOption(location)
-        .flatMap(vec => ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2))))
-    } yield NextDestination(id, loc))
+        .flatMap(_.serialize)
+    } yield NextDestination(id, dest))
       .mapError(_ => GenericCommandError(s"Error retrieving destination for id $id"))
       .fold(err => NoLocation(id), x => x)
 }
@@ -379,14 +385,12 @@ case class GET_ALL_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] 
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
-      location <- ZIO
+      allDestinations <- ZIO
         .fromOption(blob)
         .flatMap { case entity: Destinations => entity.getAllDestinations() }
         .orElseFail(GenericCommandError(s"entity $id does not support destinations"))
-      loc <- ZIO.foreachPar(location)(vec =>
-        ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
-      )
-    } yield AllDestinations(id, loc))
+      dests <- ZIO.foreachPar(allDestinations)(dest => dest.serialize)
+    } yield AllDestinations(id, dests))
       .orElseFail(GenericCommandError(s"Error retrieving destination for id $id"))
 }
 object GET_ALL_DESTINATIONS {

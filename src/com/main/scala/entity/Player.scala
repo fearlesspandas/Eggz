@@ -10,8 +10,9 @@ import entity.Skill.SkillError
 import entity.SkillSet.SkillId
 import entity.SkillSet.SkillsetError
 import physics.BasicDestinations
-import physics.DestinationError
+import physics.Destination
 import physics.Destinations
+import physics.DestinationsError
 import src.com.main.scala
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
@@ -169,16 +170,16 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def setVelocity(velocity: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.setVelocity(velocity)
 
-  override def addDestination(location: Vector[Experience]): IO[DestinationError, Unit] =
-    destinations.addDestination(location)
+  override def addDestination(dest: Destination): IO[DestinationsError, Unit] =
+    destinations.addDestination(dest)
 
-  override def getNextDestination(): IO[DestinationError, Option[Vector[Experience]]] =
+  override def getNextDestination(): IO[DestinationsError, Option[Destination]] =
     destinations.getNextDestination()
 
-  override def getAllDestinations(): IO[DestinationError, Seq[Vector[Experience]]] =
+  override def getAllDestinations(): IO[DestinationsError, Seq[Destination]] =
     destinations.getAllDestinations()
 
-  override def popNextDestination(): IO[DestinationError, Option[Vector[Experience]]] =
+  override def popNextDestination(): IO[DestinationsError, Option[Destination]] =
     destinations.popNextDestination()
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
@@ -217,7 +218,7 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 
   override def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] = physics.getInputVec()
 
-  override def clearDestinations(): IO[DestinationError, Unit] = destinations.clearDestinations()
+  override def clearDestinations(): IO[DestinationsError, Unit] = destinations.clearDestinations()
 
   override def adjustMaxSpeed(delta: Experience): IO[PhysicsError, Unit] =
     physics.adjustMaxSpeed(delta)

@@ -6,44 +6,44 @@ import zio.Ref
 import zio.ZIO
 
 trait Destinations {
-  def addDestination(location: Vector[Double]): IO[DestinationError, Unit]
-  def getNextDestination(): IO[DestinationError, Option[Vector[Double]]]
-  def getAllDestinations(): IO[DestinationError, Seq[Vector[Double]]]
-  def popNextDestination(): IO[DestinationError, Option[Vector[Double]]]
-  def clearDestinations(): IO[DestinationError, Unit]
+  def addDestination(dest: Destination): IO[DestinationsError, Unit]
+  def getNextDestination(): IO[DestinationsError, Option[Destination]]
+  def getAllDestinations(): IO[DestinationsError, Seq[Destination]]
+  def popNextDestination(): IO[DestinationsError, Option[Destination]]
+  def clearDestinations(): IO[DestinationsError, Unit]
 }
-trait DestinationError extends PhysicsError
+trait DestinationsError extends PhysicsError
 object Destinations {
   trait Service {
-    def make(): IO[DestinationError, Destinations]
+    def make(): IO[DestinationsError, Destinations]
   }
-  def make(): ZIO[Destinations.Service, DestinationError, Destinations] =
+  def make(): ZIO[Destinations.Service, DestinationsError, Destinations] =
     ZIO.service[Destinations.Service].flatMap(_.make())
 }
 
 case class BasicDestinations(
-  destinations: Ref[Seq[Vector[Double]]]
+  destinations: Ref[Seq[Destination]]
 ) extends Destinations {
-  override def addDestination(location: Vector[Double]): IO[DestinationError, Unit] =
-    destinations.update(_.appended(location))
+  override def addDestination(dest: Destination): IO[DestinationsError, Unit] =
+    destinations.update(_.appended(dest))
 
-  override def getNextDestination(): IO[DestinationError, Option[Vector[Double]]] =
+  override def getNextDestination(): IO[DestinationsError, Option[Destination]] =
     destinations.get
       .map(_.headOption)
 
-  override def getAllDestinations(): IO[DestinationError, Seq[Vector[Double]]] = destinations.get
+  override def getAllDestinations(): IO[DestinationsError, Seq[Destination]] = destinations.get
 
-  override def popNextDestination(): IO[DestinationError, Option[Vector[Double]]] =
+  override def popNextDestination(): IO[DestinationsError, Option[Destination]] =
     destinations.get.flatMap(dests =>
       for {
         _ <- destinations.update(_.tail)
       } yield dests.headOption
     )
-  override def clearDestinations(): IO[DestinationError, Unit] = destinations.update(_ => Seq())
+  override def clearDestinations(): IO[DestinationsError, Unit] = destinations.update(_ => Seq())
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =
     for {
-      ref <- Ref.make(Seq.empty[Vector[Double]])
+      ref <- Ref.make(Seq.empty[Destination])
     } yield BasicDestinations(ref)
 }
