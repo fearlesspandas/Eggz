@@ -336,7 +336,6 @@ object ADD_DESTINATION {
 }
 
 case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with WorldBlock.Block] {
-  val epsilon: Double = 5
 
   def distance(v1: Vector[Double], v2: Vector[Double]): Double = {
     val minDist = v1.length min v2.length
@@ -360,7 +359,7 @@ case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with
               next <- entity.getNextDestination().flatMap(ZIO.fromOption(_))
               currentLoc <- entity.getLocation
               dist = distance(next.location, currentLoc)
-              res <- if (dist > epsilon) entity.getNextDestination()
+              res <- if (dist > next.radius) entity.getNextDestination()
               else entity.popNextDestination()
             } yield res
         }
