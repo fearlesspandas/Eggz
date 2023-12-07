@@ -211,7 +211,8 @@ case class GET_GLOB_LOCATION(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Bloc
     (for {
       glob <- WorldBlock.getBlob(id)
       location <- ZIO.fromOption(glob).flatMap { case g: PhysicalEntity => g.getLocation }
-    } yield Location(id, (location(0), location(1), location(2)))).fold(_ => NoLocation(id), x => x)
+    } yield MSG(id, Location(id, (location(0), location(1), location(2)))))
+      .fold(_ => NoLocation(id), x => x)
 }
 object GET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] = DeriveJsonEncoder.gen[GET_GLOB_LOCATION]
@@ -367,7 +368,7 @@ case class GET_NEXT_DESTINATION(id: ID) extends ResponseQuery[Globz.Service with
       dest <- ZIO
         .fromOption(location)
         .flatMap(_.serialize)
-    } yield NextDestination(id, dest))
+    } yield MSG(id, NextDestination(id, dest)))
       .mapError(_ => GenericCommandError(s"Error retrieving destination for id $id"))
       .fold(err => NoLocation(id), x => x)
 }
@@ -448,7 +449,7 @@ case class GET_INPUT_VECTOR(id: ID) extends ResponseQuery[WorldBlock.Block] {
             .zip(ZIO.succeed(vec(1)))
             .zip(ZIO.succeed(vec(2)))
         )
-    } yield Input(id, res)).fold(_ => NoInput(id), x => x)
+    } yield MSG(id, Input(id, res))).fold(_ => NoInput(id), x => x)
 }
 object GET_INPUT_VECTOR {
   implicit val encoder: JsonEncoder[GET_INPUT_VECTOR] =
@@ -528,7 +529,8 @@ object GET_PHYSICAL_STATS {
     DeriveJsonDecoder.gen[GET_PHYSICAL_STATS]
 }
 
-case class CONSOLE(cmd: SerializableCommand[CONSOLE_ENV, Any]) extends ResponseQuery[CONSOLE_ENV] {
+case class CONSOLE(execute_as: GLOBZ_ID, cmd: SerializableCommand[CONSOLE_ENV, Any])
+    extends ResponseQuery[CONSOLE_ENV] {
   override def run: ZIO[Globz.Service with WorldBlock.Block, CommandError, QueryResponse] =
     cmd.run
       .fold(err => s"error processing command : $err", x => s"success: ${x.toString}")

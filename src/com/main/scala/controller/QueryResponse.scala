@@ -22,6 +22,12 @@ object QueryResponse {
   implicit val decoder: JsonDecoder[QueryResponse] = DeriveJsonDecoder.gen[QueryResponse]
 }
 
+case class MSG(route: String, message: QueryResponse) extends QueryResponse
+object MSG {
+  implicit val encoder: JsonEncoder[MSG] = DeriveJsonEncoder.gen[MSG]
+  implicit val decoder: JsonDecoder[MSG] = DeriveJsonDecoder.gen[MSG]
+}
+
 case class GlobSet(globs: Set[GlobzModel]) extends QueryResponse
 object GlobSet {
   implicit val encoder: JsonEncoder[GlobSet] = DeriveJsonEncoder.gen[GlobSet]

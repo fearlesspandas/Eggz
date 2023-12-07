@@ -4,6 +4,7 @@ import controller.auth._
 import zio.ZIO
 
 package object auth {
+
   //authorization layer for each command
   //compose these through flatmap/map/for-comprehension
   //to create a live validation service.
@@ -106,8 +107,8 @@ package object auth {
     case cmd              => ZIO.fail(s"$cmd not relevant to SUBSCRIBE")
   }
   val console: AUTH[String] => AUTH[String] = masterAuth => {
-    case CONSOLE(query) => masterAuth(query)
-    case cmd            => ZIO.fail(s"$cmd not relevant to CONSOLE")
+    case CONSOLE(_, query) => masterAuth(query)
+    case cmd               => ZIO.fail(s"$cmd not relevant to CONSOLE")
   }
 }
 object AuthCommandService {
