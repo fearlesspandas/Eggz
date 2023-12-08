@@ -56,7 +56,8 @@ object SkillSet {
   trait Service {
     def make: IO[Nothing, SkillSet]
   }
-  def make: ZIO[SkillSet.Service, Nothing, SkillSet] = ZIO.service[SkillSet.Service].flatMap(_.make)
+  def make: ZIO[SkillSet.Service, Nothing, SkillSet] =
+    ZIO.service[SkillSet.Service].flatMap(_.make)
   trait SkillsetError
 }
 trait Skill {
@@ -85,7 +86,11 @@ object Player {
   trait PlayerError
 }
 
-case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Service[Item]])(
+case class BasicPlayer(
+  id: ID,
+  skillset: SkillSet,
+  inventory: Ref[Storage.Service[Item]]
+)(
   healthRef: Ref[Double],
   energyRef: Ref[Double],
   physics: PhysicalEntity,
@@ -93,16 +98,21 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   destinations: Destinations
 ) extends Player
     with Destinations {
-  override def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B] = ???
+  override def doAction[E, B](action: ZIO[PlayerEnv, E, B]): ZIO[Player, E, B] =
+    ???
 
   override def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 
   override def getName: IO[PlayerError, String] = ZIO.succeed(id)
 
-  override def add(item: Item*): IO[Storage.ServiceError, Storage.Service[Item]] =
+  override def add(
+    item: Item*
+  ): IO[Storage.ServiceError, Storage.Service[Item]] =
     inventory.get.flatMap(_.add(item: _*))
 
-  override def remove(item: Item*): IO[Storage.ServiceError, Storage.Service[Item]] =
+  override def remove(
+    item: Item*
+  ): IO[Storage.ServiceError, Storage.Service[Item]] =
     inventory.get.flatMap(_.remove(item: _*))
 
   override def getInventory(): IO[Storage.ServiceError, Set[Item]] =
@@ -118,11 +128,12 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
       _ <- healthRef.update(_ => value)
     } yield this
 
-  override def health(): IO[Eggz.EggzError, Double] = healthRef.get
+  override def health: IO[Eggz.EggzError, Double] = healthRef.get
 
-  override def energy(): IO[Eggz.EggzError, Double] = energyRef.get
+  override def energy: IO[Eggz.EggzError, Double] = energyRef.get
 
-  override def op: ZIO[_root_.src.com.main.scala.entity.Globz, GLOBZ_ERR, ExitCode] =
+  override def op
+    : ZIO[_root_.src.com.main.scala.entity.Globz, GLOBZ_ERR, ExitCode] =
     ZIO.succeed(ExitCode.success)
 
   override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
@@ -147,45 +158,58 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   ): IO[GLOBZ_ERR, Unit] =
     glob.relate(egg1, egg2, bidirectional)
 
-  override def neighbors(egg: Eggz.Service, direction: Int): IO[GLOBZ_ERR, Vector[Eggz.Service]] =
+  override def neighbors(
+    egg: Eggz.Service,
+    direction: Int
+  ): IO[GLOBZ_ERR, Vector[Eggz.Service]] =
     glob.neighbors(egg, direction)
 
   override def scheduleEgg(id: GLOBZ_IN): IO[GLOBZ_ERR, Unit] =
     glob.scheduleEgg(id)
 
-  override def getLocation: IO[PhysicsError, Vector[Experience]] = physics.getLocation
+  override def getLocation: IO[PhysicsError, Vector[Experience]] =
+    physics.getLocation
 
-  override def getDestination: IO[PhysicsError, Option[Vector[Experience]]] = physics.getDestination
+  override def getDestination: IO[PhysicsError, Option[Vector[Experience]]] =
+    physics.getDestination
 
-  override def setDestination(dest: Vector[Experience]): IO[PhysicsError, Unit] =
+  override def setDestination(
+    dest: Vector[Experience]
+  ): IO[PhysicsError, Unit] =
     physics.setDestination(dest)
 
-  override def getVelocity: IO[PhysicsError, Vector[Experience]] = physics.getVelocity
+  override def getVelocity: IO[PhysicsError, Vector[Experience]] =
+    physics.getVelocity
 
-  override def move(location: Vector[Experience]): IO[PhysicsError, Unit] = physics.move(location)
+  override def move(location: Vector[Experience]): IO[PhysicsError, Unit] =
+    physics.move(location)
 
   override def teleport(location: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.teleport(location)
 
-  override def setVelocity(velocity: Vector[Experience]): IO[PhysicsError, Unit] =
+  override def setVelocity(
+    velocity: Vector[Experience]
+  ): IO[PhysicsError, Unit] =
     physics.setVelocity(velocity)
 
   override def addDestination(dest: Destination): IO[DestinationsError, Unit] =
     destinations.addDestination(dest)
 
-  override def getNextDestination(): IO[DestinationsError, Option[Destination]] =
+  override def getNextDestination()
+    : IO[DestinationsError, Option[Destination]] =
     destinations.getNextDestination()
 
   override def getAllDestinations(): IO[DestinationsError, Seq[Destination]] =
     destinations.getAllDestinations()
 
-  override def popNextDestination(): IO[DestinationsError, Option[Destination]] =
+  override def popNextDestination()
+    : IO[DestinationsError, Option[Destination]] =
     destinations.popNextDestination()
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
-      health <- this.health()
-      energy <- this.energy()
+      health <- this.health
+      energy <- this.energy
       stats = Stats(this.id, health, energy)
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
@@ -195,11 +219,14 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
     for {
-      health <- health()
-      energy <- energy()
+      health <- health
+      energy <- energy
       stats = Stats(id, health, energy)
       loc <- getLocation.orElseFail(???)
-      location <- ZIO.succeed(loc(0)).zip(ZIO.succeed(loc(1))).zip(ZIO.succeed(loc(2)))
+      location <- ZIO
+        .succeed(loc(0))
+        .zip(ZIO.succeed(loc(1)))
+        .zip(ZIO.succeed(loc(2)))
     } yield PLAYER_EGG(id, stats, location)
 
   override def unrelate(
@@ -216,18 +243,23 @@ case class BasicPlayer(id: ID, skillset: SkillSet, inventory: Ref[Storage.Servic
   override def setInputVec(vec: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.setInputVec(vec)
 
-  override def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] = physics.getInputVec()
+  override def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] =
+    physics.getInputVec()
 
-  override def clearDestinations(): IO[DestinationsError, Unit] = destinations.clearDestinations()
+  override def clearDestinations(): IO[DestinationsError, Unit] =
+    destinations.clearDestinations()
 
   override def adjustMaxSpeed(delta: Experience): IO[PhysicsError, Unit] =
     physics.adjustMaxSpeed(delta)
 
-  override def getMaxSpeed(): IO[PhysicsError, Experience] = physics.getMaxSpeed()
+  override def getMaxSpeed(): IO[PhysicsError, Experience] =
+    physics.getMaxSpeed()
 }
 
 object BasicPlayer extends Globz.Service {
-  override def make(id: GLOBZ_ID): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
+  override def make(
+    id: GLOBZ_ID
+  ): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
       stor <- Storage.make[Item](() => basicStorage[Item](Set()))

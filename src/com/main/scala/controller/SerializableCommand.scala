@@ -166,8 +166,8 @@ case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
       s <- ZIO.collectAllPar(
         nested.map(x =>
           for {
-            health <- x.health()
-            energy <- x.energy()
+            health <- x.health
+            energy <- x.energy
           } yield Stats(x.id, health, energy)
         )
       )

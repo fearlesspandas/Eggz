@@ -32,8 +32,8 @@ object Eggz {
     // replace with no default
     def setHealth(health: Double): IO[EggzError, Eggz.Service]
     def setEnergy(value: Double): IO[EggzError, Eggz.Service]
-    def health(): IO[EggzError, Double]
-    def energy(): IO[EggzError, Double]
+    def health: IO[EggzError, Double]
+    def energy: IO[EggzError, Double]
 
     def serializeEgg: IO[EggzError, EggzModel]
   }

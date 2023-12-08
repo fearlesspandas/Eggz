@@ -29,13 +29,14 @@ case class RepairEgg(
           ZIO.succeed(ExitCode.success)
         } else
           for {
-            //repairs self
+            // repairs self
             _ <- this
               .setHealth(h + repairValue)
               .flatMap(_.setEnergy(e - cost))
-              .flatMap {
-                case stor: Storage.Service[String] =>
-                  stor.add(s"Set health and energy values: ${stor.health}:${stor.energy}")
+              .flatMap { case stor: Storage.Service[String] =>
+                stor.add(
+                  s"Set health and energy values: ${stor.health}:${stor.energy}"
+                )
               }
               .fold[Eggz.Service](_ => this, { case x: Eggz.Service => x })
             ud <- ZIO
@@ -64,14 +65,18 @@ case class RepairEgg(
       _ <- this.energyRef.update(_ => value)
     } yield this
 
-  override def add(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
+  override def add(
+    item: String*
+  ): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
       i <- inventory.get
       iUP <- i.add(item: _*)
       r <- inventory.update(_ => iUP)
     } yield this).mapError(_ => GenericServiceError(""))
 
-  override def remove(item: String*): IO[Storage.ServiceError, Storage.Service[String]] =
+  override def remove(
+    item: String*
+  ): IO[Storage.ServiceError, Storage.Service[String]] =
     (for {
       i <- inventory.get
       iUp <- i.remove(item: _*)
@@ -84,25 +89,36 @@ case class RepairEgg(
       inv <- i.getInventory()
     } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
 
-  override def health(): IO[Eggz.EggzError, Double] = healthRef.get
+  override def health: IO[Eggz.EggzError, Double] = healthRef.get
 
-  override def energy(): IO[Eggz.EggzError, Double] = energyRef.get
+  override def energy: IO[Eggz.EggzError, Double] = energyRef.get
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
     for {
-      health <- health()
-      energy <- energy()
+      health <- health
+      energy <- energy
       stats = Stats(id, health, energy)
     } yield REPAIR_EGG(id, stats, cost, repairValue)
 }
 
 object RepairEgg {
-  def make(id: ID, health: Double, repairValue: Double): IO[Nothing, Eggz.Service] =
+  def make(
+    id: ID,
+    health: Double,
+    repairValue: Double
+  ): IO[Nothing, Eggz.Service] =
     for {
       h <- Ref.make(health)
       e <- Ref.make(10000.0)
       bs <- Ref.make(basicStorage[String](Set()))
-    } yield RepairEgg(id, h, repairValue, e, 20, bs.asInstanceOf[Ref[Storage.Service[String]]])
+    } yield RepairEgg(
+      id,
+      h,
+      repairValue,
+      e,
+      20,
+      bs.asInstanceOf[Ref[Storage.Service[String]]]
+    )
 
   def op(egg: Eggz.Service): ZIO[Globz, GLOBZ_ERR, ExitCode] = egg.op
 }
