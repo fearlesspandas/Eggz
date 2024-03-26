@@ -1,6 +1,7 @@
 package entity
 
 import entity.Terrain.TerrainId
+import entity.TerrainBlock.TerrainRef
 import entity.TerrainBlock.generate_lattice
 import zio.IO
 import zio.Ref
@@ -17,7 +18,7 @@ trait Terrain {
     location: Vector[Double]
   ): IO[TerrainError, Unit]
   def remove_terrain(id: TerrainId): IO[TerrainError, Unit]
-  def get_terrain(): IO[TerrainError, Unit]
+  def get_terrain(): IO[TerrainError, Seq[Terrain]]
   def get_terrain_within_distance(
     location: Vector[Double],
     distance: Double
@@ -31,7 +32,7 @@ case class TerrainAddError(msg: String) extends TerrainError
 
 case class TerrainBlock(
   centerRef: Ref[Vector[Double]],
-  terrainRef: Ref[Map[Vector[Int], Ref[Terrain]] | TerrainId],
+  terrainRef: Ref[TerrainRef],
   size: Ref[Int],
   radius: Double
 ) extends Terrain {
@@ -48,7 +49,7 @@ case class TerrainBlock(
       if quad.length > 0 && radius > 1 then
         center.zip(quad).map((a, b) => a + (b * radius))
       else location
-    ref <- Ref.make[Map[Vector[Int], Ref[Terrain]] | TerrainId](
+    ref <- Ref.make[TerrainRef](
       if radius > 1 then Map()
       else {
         println(s"new id $id , $location")
@@ -72,7 +73,7 @@ case class TerrainBlock(
     distance: Double
   ): Boolean = {
     val diffs = center.zip(location).map((a, b) => abs(a - b))
-    diffs.forall(diff => diff <= radius)
+    diffs.forall(diff => diff <= distance)
   }
   // manhattan distance used to test for inclusion within block
   def is_within_block(location: Vector[Double]): IO[TerrainError, Boolean] =
@@ -138,7 +139,7 @@ case class TerrainBlock(
 
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
 
-  override def get_terrain(): IO[TerrainError, Unit] = ???
+  override def get_terrain(): IO[TerrainError, Seq[Terrain]] = ???
 
   override def get_terrain_within_distance(
     location: Vector[Double],
@@ -182,8 +183,9 @@ object TerrainBlock extends ZIOAppDefault {
     sz <- Ref.make(0)
     tb = TerrainBlock(cr, tr, sz, 10)
     _ <- tb.add_terrain("1", Vector(5, 5, 5))
-    // _ <- tb.add_terrain("2", Vector(5, -5, 5))
-    res <- tb.get_terrain_within_distance(Vector(5.5, 5.5, 5.5), 10)
+    _ <- tb.add_terrain("2", Vector(5, -5, 5))
+    res <- tb.get_terrain_within_distance(Vector(5.5, 5.5, 5.5), 11)
+    // _ <- tb.get_terrain()
     _ <- ZIO.log(tb.toString)
     sz <- tb.size.get
     _ <- ZIO.log(sz.toString)
