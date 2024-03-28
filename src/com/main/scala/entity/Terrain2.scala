@@ -163,6 +163,7 @@ case class QUADRANT(
           .flatMap(
             ZIO.fromOption(_).mapError(_ => ???)
           )
+          .debug
         subQuad <- terrain.get
           .map(t => t.get(quad))
         _ <- (subQuad match {
@@ -172,21 +173,23 @@ case class QUADRANT(
           case Some(u: TerrainUnit2) =>
             // todo double check the location logic on this
             // case for when coords exactly match
-            for {
-              tref <- Ref.make(Map[Quadrant, Terrain2]())
-              newCenter = quad
-                .map(i => i * radius / 2)
-                .zip(center)
-                .map(x => x._1 + x._2)
-              newQuadLocOp <- get_quadrant(u.offset, newCenter, radius / 2)
-              newQuadLoc <- ZIO
-                .fromOption(newQuadLocOp)
-                .mapError(_ => TerrainAddError("whoops"))
-              _ <- tref.update(_.updated(newQuadLoc, u))
-              newQuad = QUADRANT(newCenter, radius / 2, tref)
-              _ <- newQuad.add_terrain(id, location)
-              _ <- terrain.update(_.updated(quad, newQuad))
-            } yield ()
+            if (u.offset == location) u.add_terrain_unit(id, 1)
+            else
+              for {
+                tref <- Ref.make(Map[Quadrant, Terrain2]())
+                newCenter = quad
+                  .map(i => i * radius / 2)
+                  .zip(center)
+                  .map(x => x._1 + x._2)
+                newQuadLocOp <- get_quadrant(u.offset, newCenter, radius / 2)
+                newQuadLoc <- ZIO
+                  .fromOption(newQuadLocOp)
+                  .mapError(_ => TerrainAddError("whoops"))
+                _ <- tref.update(_.updated(newQuadLoc, u))
+                newQuad = QUADRANT(newCenter, radius / 2, tref)
+                _ <- newQuad.add_terrain(id, location)
+                _ <- terrain.update(_.updated(quad, newQuad))
+              } yield ()
           case None =>
             for {
               tu <- TerrainUnit2.make(id, location)
@@ -197,7 +200,6 @@ case class QUADRANT(
           x => x,
           e =>
             for {
-              _ <- ZIO.logError("Creating Terrain")
               tu <- TerrainUnit2.make(id, location)
               _ <- terrain.update(_.updated(quad, tu))
             } yield ()
@@ -214,8 +216,16 @@ case class QUADRANT(
 //and can cover all levels of granularity
 //todo currently TerrainUnit has no 'radius' meaning only exact location matches will be
 //  considered the same cell
-case class TerrainUnit2(id: TerrainId, offset: Vector[Double])
-    extends Terrain2 {
+case class TerrainUnit2(
+  entitiesRef: Ref[Map[TerrainId, Int]],
+  offset: Vector[Double]
+) extends Terrain2 {
+
+  def add_terrain_unit(id: TerrainId, units: Int): IO[TerrainError, Unit] =
+    for {
+      entityCount <- entitiesRef.get.map(_.getOrElse(id, 0))
+      _ <- entitiesRef.update(_.updated(id, entityCount + units))
+    } yield ()
 
   override def get_terrain(): IO[TerrainError, Seq[Terrain2]] =
     ZIO.succeed(Seq(this))
@@ -234,8 +244,8 @@ object TerrainUnit2 {
     id: TerrainId,
     location: Vector[Double]
   ): IO[TerrainError, Terrain2] = for {
-    idref <- Ref.make(Map(id, 1))
-  } yield TerrainUnit2(id, location)
+    idref <- Ref.make(Map((id, 1)))
+  } yield TerrainUnit2(idref, location)
 }
 case class Terrainblock(
   center: Vector[Double],
@@ -285,9 +295,7 @@ case class TerrainUnit(id: TerrainId, center: Vector[Double]) extends Terrain2 {
     .when(is_within_radius(location, center, distance))(ZIO.succeed(Seq(this)))
     .map(_.getOrElse(Seq()))
 }
-object TerrainUnit {
-  def make(): IO[TerrainError, Terrain2] = ???
-}
+object TerrainUnit {}
 
 object TerrainTests extends ZIOAppDefault {
 
@@ -297,7 +305,7 @@ object TerrainTests extends ZIOAppDefault {
       quad = QUADRANT(Vector(0, 0, 0), 20, tref)
       _ <- quad.add_terrain("testid", Vector(1, 0, 2))
       _ <- quad.add_terrain("testid2", Vector(1, 1, 2))
-      _ <- quad.add_terrain("testid3", Vector(1, 1, 2.25))
+      _ <- quad.add_terrain("testid3", Vector(1, 1, 2))
       _ <- quad.add_terrain("testid4", Vector(2, 1, 2))
       _ <- quad.add_terrain("testid5", Vector(4, 1, 2))
       _ <- quad.add_terrain("testid6", Vector(1, 3, 3))
