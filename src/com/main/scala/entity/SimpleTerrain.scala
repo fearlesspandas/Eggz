@@ -66,6 +66,8 @@ case class SimpleTerrainBlock(
       )
       .map(_.getOrElse(Seq()))
   } yield res
+
+  override def serialize: TerrainModel = ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {
@@ -78,5 +80,7 @@ case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
   ): zio.IO[TerrainError, Seq[Terrain]] = ZIO
     .when(is_within_radius(location, center, distance))(ZIO.succeed(Seq(this)))
     .map(_.getOrElse(Seq()))
+
+  override def serialize: TerrainModel = ???
 }
 object SimpleTerrainUnit {}

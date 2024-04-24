@@ -7,6 +7,11 @@ import entity.Terrain.get_quadrant
 import entity.Terrain.is_within_disance
 import entity.Terrain.is_within_radius
 import entity.Terrain.is_within_range
+import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Globz
+import src.com.main.scala.entity.Globz.*
+import src.com.main.scala.entity.EggzOps.*
+import zio.ExitCode
 import zio.IO
 import zio.Ref
 import zio.Scope
@@ -16,6 +21,7 @@ import zio.ZIOAppDefault
 
 import scala.math.Ordered.orderingToOrdered
 import scala.math.abs
+import scala.util.Random
 
 trait TerrainManager {
   def add_terrain(
@@ -41,6 +47,8 @@ trait Terrain {
     location: Vector[Double],
     distance: Double
   ): IO[TerrainError, Seq[Terrain]]
+
+  def serialize: TerrainModel
 }
 
 object Terrain {
@@ -53,7 +61,7 @@ object Terrain {
     center: Vector[Double],
     distance: Double
   ): Boolean = {
-    val diffs: Seq[Double] = center.zip(location).map((a, b) => abs(a - b))
+    val diffs: Seq[Double] = center.zip(location).map((a, b) => abs(b - a))
     val dist = diffs.foldLeft(0.0)((a, c) => a + c)
     dist <= distance
   }
@@ -166,7 +174,6 @@ case class TerrainRegion(
           .flatMap(
             ZIO.fromOption(_).mapError(_ => ???)
           )
-          .debug
         subQuad <- terrain.get
           .map(t => t.get(quad))
         _ <- (subQuad match {
@@ -174,8 +181,7 @@ case class TerrainRegion(
           case Some(q: TerrainRegion) => q.add_terrain(id, location)
           // create new sub-quad that contains both new and old terrain unit
           case Some(u: TerrainUnit) =>
-            // todo double check the location logic on this
-            // case for when coords exactly match
+            // if coords match, they share a 'cell'/TerrainUnit
             if (u.location == location) u.add_terrain_unit(id, 1)
             else
               for {
@@ -210,8 +216,18 @@ case class TerrainRegion(
       } yield ()
 
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
+
+  override def serialize: TerrainModel = ???
 }
 
+object TerrainRegion {
+  def make(
+    center: Vector[Double],
+    radius: Double
+  ): IO[Nothing, TerrainManager] = for {
+    t <- Ref.make(Map.empty[Quadrant, Terrain])
+  } yield TerrainRegion(center, radius, t)
+}
 //terrain unit represents the most granular cell of terrain geometry
 //i.e. if two terrain entities are "close enough" they can be considered
 //part of the same cell and will share a TerrainUnit
@@ -234,13 +250,14 @@ case class TerrainUnit(
     ZIO.succeed(Seq(this))
 
   override def get_terrain_within_distance(
-    location: Vector[Double],
+    loc: Vector[Double],
     distance: Double
   ): IO[TerrainError, Seq[Terrain]] =
-    if (is_within_disance(location, location, distance)) {
+    if (is_within_disance(location, loc, distance)) {
       ZIO.succeed(Seq(this))
     } else ZIO.succeed(Seq())
 
+  override def serialize: TerrainModel = ???
 }
 object TerrainUnit {
   def make(
@@ -248,16 +265,29 @@ object TerrainUnit {
     location: Vector[Double]
   ): IO[TerrainError, Terrain] = for {
     idref <- Ref.make(Map((id, 1)))
+    glob <- GlobzInMem.make(id).mapError(_ => ???)
   } yield TerrainUnit(idref, location)
 }
 
 object TerrainTests extends ZIOAppDefault {
 
+  def randomVec(min: Double, max: Double): Vector[Double] = {
+    val negX = Random.nextBoolean()
+    val negy = Random.nextBoolean()
+    val negz = Random.nextBoolean()
+    val x = Random.nextDouble() * (if negX then min else max)
+    val y = Random.nextDouble() * (if negy then min else max)
+    val z = Random.nextDouble() * (if negz then min else max)
+    Vector(x, y, z)
+  }
   override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
     for {
       tref <- Ref.make(Map.empty[Quadrant, Terrain])
       quad = TerrainRegion(Vector(0, 0, 0), 20, tref)
-      _ <- quad.add_terrain("testid", Vector(1, 0, 2))
+      minRand = -100
+      maxRand = 100
+      testterrain = (0 to 100000).map(x => (s"testId$x", randomVec(-10, 10)))
+      _ <- quad.add_terrain("testid", Vector(-1, 0, 2))
       _ <- quad.add_terrain("testid2", Vector(1, 1, 2))
       _ <- quad.add_terrain("testid3", Vector(1, 1, 2))
       _ <- quad.add_terrain("testid4", Vector(2, 1, 2))
@@ -265,13 +295,34 @@ object TerrainTests extends ZIOAppDefault {
       _ <- quad.add_terrain("testid6", Vector(1, 3, 3))
       _ <- quad.add_terrain("testid7", Vector(1, 5, 2))
       _ <- quad.add_terrain("testid8", Vector(1, 5, 10))
+      _ <- ZIO.collectAll(testterrain.map { case (id, v) =>
+        quad.add_terrain(id, v)
+      })
       res <- quad.get_terrain_within_distance(Vector(0, 0, 0), 3)
       res2 <- quad.get_terrain_within_distance(Vector(0, 0, 0), 4)
       res3 <- quad.get_terrain_within_distance(Vector(0, 0, 0), 5)
       allterain <- quad.get_terrain()
+
       _ <- ZIO.log(s"Terrain within Distance 3: ${res.toString}")
-      _ <- ZIO.log(s"Terrain within Distance 4: ${res2.toString}")
-      _ <- ZIO.log(s"Terrain within Distance 5: ${res3.toString}")
-      _ <- ZIO.log(s"All Terrain: $allterain")
-    } yield {}
+//      _ <- ZIO.log(s"Terrain within Distance 4: ${res2.toString}")
+//      _ <- ZIO.log(s"Terrain within Distance 5: ${res3.toString}")
+      // _ <- ZIO.log(s"All Terrain: $allterain")
+    } yield {
+
+      val failed = res.filter {
+        case tu: TerrainUnit =>
+          tu.location.foldLeft(0.0)((a, c) => a + abs(c)) > 3
+        case _ => false
+      }
+      assert(
+        res.forall {
+          case tu: TerrainUnit =>
+            tu.location.foldLeft(0.0)((a, c) => a + abs(c)) <= 3
+          case _ => true
+        },
+        s"some locations are outside the range of 3: ${failed.map { case tu: TerrainUnit =>
+            tu.location.foldLeft(0.0)((a, c) => a + abs(c))
+          }}"
+      )
+    }
 }

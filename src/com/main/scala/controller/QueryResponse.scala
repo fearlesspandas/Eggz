@@ -2,6 +2,8 @@ package controller
 
 import entity.EggzModel
 import entity.GlobzModel
+import entity.TerrainModel
+import entity.TerrainUnitM
 import physics.DESTINATION_TYPE
 import physics.DestinationModel
 import physics.destination
@@ -18,10 +20,13 @@ import zio.json.JsonEncoder
 sealed trait QueryResponse {}
 
 object QueryResponse {
-  implicit val encoder: JsonEncoder[QueryResponse] = DeriveJsonEncoder.gen[QueryResponse]
-  implicit val decoder: JsonDecoder[QueryResponse] = DeriveJsonDecoder.gen[QueryResponse]
+  implicit val encoder: JsonEncoder[QueryResponse] =
+    DeriveJsonEncoder.gen[QueryResponse]
+  implicit val decoder: JsonDecoder[QueryResponse] =
+    DeriveJsonDecoder.gen[QueryResponse]
 }
 
+//MSG contains an id that can be used to route the response back to the original sender entity
 case class MSG(route: String, message: QueryResponse) extends QueryResponse
 object MSG {
   implicit val encoder: JsonEncoder[MSG] = DeriveJsonEncoder.gen[MSG]
@@ -40,8 +45,10 @@ object EggSet {
 }
 case class EntityIDSet(ids: Set[GLOBZ_ID]) extends QueryResponse
 object EntityIDSet {
-  implicit val encoder: JsonEncoder[EntityIDSet] = DeriveJsonEncoder.gen[EntityIDSet]
-  implicit val decoder: JsonDecoder[EntityIDSet] = DeriveJsonDecoder.gen[EntityIDSet]
+  implicit val encoder: JsonEncoder[EntityIDSet] =
+    DeriveJsonEncoder.gen[EntityIDSet]
+  implicit val decoder: JsonDecoder[EntityIDSet] =
+    DeriveJsonDecoder.gen[EntityIDSet]
 }
 case class Stats(id: ID, health: Double, energy: Double) extends QueryResponse
 object Stats {
@@ -54,28 +61,38 @@ object AllStats {
   implicit val decoder: JsonDecoder[AllStats] = DeriveJsonDecoder.gen[AllStats]
 }
 
-case class NextDestination(id: ID, destination: destination) extends QueryResponse
+case class NextDestination(id: ID, destination: destination)
+    extends QueryResponse
 object NextDestination {
-  implicit val encoder: JsonEncoder[NextDestination] = DeriveJsonEncoder.gen[NextDestination]
-  implicit val decoder: JsonDecoder[NextDestination] = DeriveJsonDecoder.gen[NextDestination]
+  implicit val encoder: JsonEncoder[NextDestination] =
+    DeriveJsonEncoder.gen[NextDestination]
+  implicit val decoder: JsonDecoder[NextDestination] =
+    DeriveJsonDecoder.gen[NextDestination]
 }
-case class AllDestinations(id: ID, destinations: Seq[destination]) extends QueryResponse
+case class AllDestinations(id: ID, destinations: Seq[destination])
+    extends QueryResponse
 object AllDestinations {
-  implicit val encoder: JsonEncoder[AllDestinations] = DeriveJsonEncoder.gen[AllDestinations]
-  implicit val decoder: JsonDecoder[AllDestinations] = DeriveJsonDecoder.gen[AllDestinations]
+  implicit val encoder: JsonEncoder[AllDestinations] =
+    DeriveJsonEncoder.gen[AllDestinations]
+  implicit val decoder: JsonDecoder[AllDestinations] =
+    DeriveJsonDecoder.gen[AllDestinations]
 }
-case class Location(id: GLOBZ_ID, location: (Double, Double, Double)) extends QueryResponse
+case class Location(id: GLOBZ_ID, location: (Double, Double, Double))
+    extends QueryResponse
 object Location {
   implicit val encoder: JsonEncoder[Location] = DeriveJsonEncoder.gen[Location]
   implicit val decoder: JsonDecoder[Location] = DeriveJsonDecoder.gen[Location]
 }
 case class NoLocation(id: GLOBZ_ID) extends QueryResponse
 object NoLocation {
-  implicit val encoder: JsonEncoder[NoLocation] = DeriveJsonEncoder.gen[NoLocation]
-  implicit val decoder: JsonDecoder[NoLocation] = DeriveJsonDecoder.gen[NoLocation]
+  implicit val encoder: JsonEncoder[NoLocation] =
+    DeriveJsonEncoder.gen[NoLocation]
+  implicit val decoder: JsonDecoder[NoLocation] =
+    DeriveJsonDecoder.gen[NoLocation]
 }
 
-case class Input(id: GLOBZ_ID, vec: (Double, Double, Double)) extends QueryResponse
+case class Input(id: GLOBZ_ID, vec: (Double, Double, Double))
+    extends QueryResponse
 object Input {
   implicit val encoder: JsonEncoder[Input] = DeriveJsonEncoder.gen[Input]
   implicit val decoder: JsonDecoder[Input] = DeriveJsonDecoder.gen[Input]
@@ -101,8 +118,18 @@ object PhysStat {
     DeriveJsonEncoder.gen[PhysStat]
   implicit val decoder: JsonDecoder[PhysStat] = DeriveJsonDecoder.gen[PhysStat]
 }
+
+case class TerrainSet(terrain: Set[TerrainModel]) extends QueryResponse
+object Terrainset {
+  implicit val encoder: JsonEncoder[TerrainSet] =
+    DeriveJsonEncoder.gen[TerrainSet]
+  implicit val decoder: JsonDecoder[TerrainSet] =
+    DeriveJsonDecoder.gen[TerrainSet]
+}
 case class ConsoleResponse(val msg: String) extends QueryResponse
 object ConsoleResponse {
-  implicit val encoder: JsonEncoder[ConsoleResponse] = DeriveJsonEncoder.gen[ConsoleResponse]
-  implicit val decoder: JsonDecoder[ConsoleResponse] = DeriveJsonDecoder.gen[ConsoleResponse]
+  implicit val encoder: JsonEncoder[ConsoleResponse] =
+    DeriveJsonEncoder.gen[ConsoleResponse]
+  implicit val decoder: JsonDecoder[ConsoleResponse] =
+    DeriveJsonDecoder.gen[ConsoleResponse]
 }
