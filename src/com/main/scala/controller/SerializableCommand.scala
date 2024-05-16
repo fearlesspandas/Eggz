@@ -625,8 +625,16 @@ case class ADD_TERRAIN(id: String, location: Vector[Double])
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     for {
-      t <- WorldBlock.getTerrain.mapError(_ => ???)
-      _ <- t.add_terrain(id, location).mapError(_ => ???)
+      _ <- ZIO.log("ADDING TERRAIN")
+      t <- WorldBlock.getTerrain.mapError(e =>
+        GenericCommandError("Could not retrieve terrain manager")
+      )
+      _ <- ZIO.log("successfully retrieved terrain manager")
+      _ <- t
+        .add_terrain(id, location)
+        .mapError(_ => GenericCommandError("Could not add terrain"))
+      r <- t.get_terrain().mapError(_ => ???)
+      _ <- ZIO.log(s"successfully added terrain : ${r}")
     } yield ()
 }
 object ADD_TERRAIN {
@@ -636,12 +644,15 @@ object ADD_TERRAIN {
     DeriveJsonDecoder.gen[ADD_TERRAIN]
 }
 
-case class GET_ALL_TERRAIN() extends ResponseQuery[WorldBlock.Block]:
+case class GET_ALL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
-      res <- WorldBlock.getTerrain.flatMap(_.get_terrain()).mapError(_ => ???)
-    } yield ??? // TerrainSet(res.map(_.serialize).toSet)
-
+      res <- WorldBlock.getTerrain
+        .flatMap(_.get_terrain())
+        .mapError(_ => GenericCommandError("Failed to get Terrain"))
+        .debug
+    } yield TerrainSet(res.map(_.serialize).toSet)
+}
 case class CONSOLE(
   execute_as: GLOBZ_ID,
   cmd: SerializableCommand[CONSOLE_ENV, Any]
