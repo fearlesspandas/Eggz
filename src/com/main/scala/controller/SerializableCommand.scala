@@ -6,6 +6,7 @@ import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
 import entity.GlobzModel
 import entity.PhysicalEntity
+import entity.TerrainModel
 import entity.WorldBlock
 import physics.Destination
 import physics.DestinationModel
@@ -19,7 +20,7 @@ import zio.ZIO
 import zio.ZLayer
 import zio.http.ChannelEvent.Read
 import zio.http.WebSocketFrame
-import zio.http._
+import zio.http.*
 import zio.json.DecoderOps
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
@@ -647,11 +648,17 @@ object ADD_TERRAIN {
 case class GET_ALL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
+      _ <- ZIO.log("retrieving all terrain")
       res <- WorldBlock.getTerrain
         .flatMap(_.get_terrain())
-        .mapError(_ => GenericCommandError("Failed to get Terrain"))
-        .debug
-    } yield TerrainSet(res.map(_.serialize).toSet)
+        .orElseFail(GenericCommandError("Failed to get Terrain"))
+      r2 <- ZIO
+        .foreachPar(res)(_.serialize)
+        .mapBoth(
+          _ => GenericCommandError("Failed to Serialize Terrain"),
+          _.flatten.toSet
+        )
+    } yield TerrainSet(r2)
 }
 case class CONSOLE(
   execute_as: GLOBZ_ID,

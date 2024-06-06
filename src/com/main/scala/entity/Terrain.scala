@@ -48,7 +48,7 @@ trait Terrain {
     distance: Double
   ): IO[TerrainError, Seq[Terrain]]
 
-  def serialize: TerrainModel
+  def serialize: IO[TerrainError, Set[TerrainModel]]
 }
 
 object Terrain {
@@ -217,7 +217,10 @@ case class TerrainRegion(
 
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
 
-  override def serialize: TerrainModel = ???
+  override def serialize: IO[TerrainError, Set[TerrainModel]] = for {
+    r1 <- get_terrain()
+    r2 <- ZIO.foreachPar(r1)(_.serialize)
+  } yield r2.flatten.toSet
 }
 
 object TerrainRegion {
@@ -257,7 +260,10 @@ case class TerrainUnit(
       ZIO.succeed(Seq(this))
     } else ZIO.succeed(Seq())
 
-  override def serialize: TerrainModel = ???
+  override def serialize: IO[TerrainError, Set[TerrainModel]] =
+    for {
+      entities <- entitiesRef.get
+    } yield Set(TerrainUnitM(location, entities))
 }
 object TerrainUnit {
   def make(
