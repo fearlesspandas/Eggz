@@ -135,7 +135,20 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      terrain <- TerrainRegion.make(Vector(0, 0, 0), 1000)
+      terrain <- TerrainRegion.make(
+        Vector(0, 0, 0),
+        1000
+      ) // create terrain region for world block
+      _ <- terrain // add spawn block frame to terrain
+        .add_terrain("6", Vector(0, 5, 0))
+        .mapError(_ =>
+          GenericWorldBlockError("Could not add spawn block to terrain block")
+        )
+//      _ <- terrain // add spawn block to terrain
+//        .add_terrain("3", Vector(0, 0, 0))
+//        .mapError(_ =>
+//          GenericWorldBlockError("Could not add spawn block to terrain block")
+//        )
     } yield WorldBlockInMem(s, t, terrain)
 }
 object WorldBlockEnvironment {
