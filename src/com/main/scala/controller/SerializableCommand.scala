@@ -6,6 +6,7 @@ import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
 import entity.GlobzModel
 import entity.PhysicalEntity
+import entity.Player
 import entity.TerrainModel
 import entity.WorldBlock
 import physics.Destination
@@ -645,19 +646,36 @@ object ADD_TERRAIN {
     DeriveJsonDecoder.gen[ADD_TERRAIN]
 }
 
-case class GET_ALL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
+case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
+    extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    // todo split between get_all_terrain_within_block and get_all_terrain_within_radius_of_loc
     for {
-      _ <- ZIO.log("retrieving all terrain")
+      loc <- WorldBlock
+        .getBlob(id)
+        .flatMap {
+          case Some(g: Player) => g.getLocation;
+          case None            => ZIO.succeed(Vector(0.0, 0, 0))
+        }
+        .mapError(_ => GenericCommandError("failed to find player location"))
+        .debug
+        .fold(_ => Vector(0.0, 0, 0), x => x)
+      // .flatMapError(err => ZIO.log(err.msg))
+      _ <- ZIO.log(s"retrieving all terrain, non_relative:$non_relative")
+      radius = 1000
       res <- WorldBlock.getTerrain
-        .flatMap(_.get_terrain())
+        .flatMap(
+          if (non_relative) _.get_terrain()
+          else _.get_terrain_within_distance(loc, radius)
+        )
         .orElseFail(GenericCommandError("Failed to get Terrain"))
       r2 <- ZIO
-        .foreachPar(res)(_.serialize)
+        .foreachPar(res)(_.serialize(loc, non_relative, radius))
         .mapBoth(
           _ => GenericCommandError("Failed to Serialize Terrain"),
           _.flatten.toSet
         )
+        .mapError(_ => GenericCommandError("faliled to Serialize Terrain"))
     } yield TerrainSet(r2)
 }
 case class CONSOLE(

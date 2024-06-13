@@ -6,6 +6,8 @@ import zio.json.DeriveJsonEncoder
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
 
+import java.util.UUID
+
 sealed trait TerrainModel
 
 object TerrainModel {
@@ -15,8 +17,11 @@ object TerrainModel {
     DeriveJsonEncoder.gen[TerrainModel]
 }
 
-case class TerrainUnitM(location: Vector[Double], entities: Map[TerrainId, Int])
-    extends TerrainModel
+case class TerrainUnitM(
+  location: Vector[Double],
+  entities: Map[TerrainId, Int],
+  uuid: UUID
+) extends TerrainModel
 
 object TerrainUnitM {
   implicit val decoder: JsonDecoder[TerrainUnitM] =
@@ -25,7 +30,9 @@ object TerrainUnitM {
     DeriveJsonEncoder.gen[TerrainUnitM]
 }
 
-case class TerrainRegionM(terrain: Set[TerrainModel]) extends TerrainModel
+case class TerrainRegionM(
+  terrain: Set[(Vector[Double], Map[TerrainId, Int], UUID)]
+) extends TerrainModel
 object TerrainRegionM {
   implicit val decoder: JsonDecoder[TerrainRegionM] =
     DeriveJsonDecoder.gen[TerrainRegionM]

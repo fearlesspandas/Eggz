@@ -104,11 +104,11 @@ package object auth {
       } yield server_keys.contains(sender) || sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for GET_PHYSICAL_STATS")
   }
-  val get_all_terrain: AUTH[String] = {
-    case GET_ALL_TERRAIN() =>
+  val get_all_terrain: Set[String] => AUTH[String] = server_keys => {
+    case GET_ALL_TERRAIN(id, non_relative) =>
       for {
         send <- ZIO.service[String]
-      } yield true
+      } yield id == send || (non_relative && server_keys.contains(send))
     case cmd => ZIO.fail(s"$cmd not relevant for GET_ALL_TERRAIN")
   }
   val add_terrain: AUTH[String] = {
@@ -148,7 +148,7 @@ object AuthCommandService {
             lazy_lv(op),
             adjust_physical_stats(op),
             get_physical_stats(server_keys)(op),
-            get_all_terrain(op),
+            get_all_terrain(server_keys)(op),
             add_terrain(op)
           )
         ) { x =>
@@ -175,7 +175,7 @@ object AuthCommandService {
             lazy_lv(op),
             adjust_physical_stats(op),
             get_physical_stats(server_keys)(op),
-            get_all_terrain(op),
+            get_all_terrain(server_keys)(op),
             add_terrain(op)
           )
         ) { x =>

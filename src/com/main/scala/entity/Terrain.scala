@@ -19,6 +19,7 @@ import zio.ZIO
 import zio.ZIOAppArgs
 import zio.ZIOAppDefault
 
+import java.util.UUID
 import scala.math.Ordered.orderingToOrdered
 import scala.math.abs
 import scala.util.Random
@@ -48,7 +49,11 @@ trait Terrain {
     distance: Double
   ): IO[TerrainError, Seq[Terrain]]
 
-  def serialize: IO[TerrainError, Set[TerrainModel]]
+  def serialize(
+    relative: Vector[Double] = Vector(0, 0, 0),
+    non_relative: Boolean,
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]]
 }
 
 object Terrain {
@@ -217,9 +222,15 @@ case class TerrainRegion(
 
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
 
-  override def serialize: IO[TerrainError, Set[TerrainModel]] = for {
-    r1 <- get_terrain()
-    r2 <- ZIO.foreachPar(r1)(_.serialize)
+  override def serialize(
+    relative: Vector[Double] = Vector(0, 0, 0),
+    non_relative: Boolean,
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]] = for {
+    r1 <-
+      if (non_relative) get_terrain()
+      else get_terrain_within_distance(relative, radius)
+    r2 <- ZIO.foreachPar(r1)(_.serialize(relative, non_relative, radius))
   } yield r2.flatten.toSet
 }
 
@@ -242,7 +253,7 @@ case class TerrainUnit(
   entitiesRef: Ref[Map[TerrainId, Int]],
   location: Vector[Double]
 ) extends Terrain {
-
+  val uuid: UUID = UUID.randomUUID()
   def add_terrain_unit(id: TerrainId, units: Int): IO[TerrainError, Unit] =
     for {
       entityCount <- entitiesRef.get.map(_.getOrElse(id, 0))
@@ -260,10 +271,14 @@ case class TerrainUnit(
       ZIO.succeed(Seq(this))
     } else ZIO.succeed(Seq())
 
-  override def serialize: IO[TerrainError, Set[TerrainModel]] =
+  override def serialize(
+    relative: Vector[Double] = Vector(0, 0, 0),
+    non_relative: Boolean,
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]] =
     for {
       entities <- entitiesRef.get
-    } yield Set(TerrainUnitM(location, entities))
+    } yield Set(TerrainUnitM(location, entities, uuid))
 }
 object TerrainUnit {
   def make(

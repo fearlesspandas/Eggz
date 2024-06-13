@@ -8,11 +8,11 @@ import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
 import zio.Ref
 import zio.ZLayer
+
 //import src.com.main.scala.entity.Globz
 import zio.ExitCode
 //import zio.Has
-import zio.IO
-import zio.ZIO
+import zio._
 
 object WorldBlock {
 
@@ -139,16 +139,30 @@ object WorldBlockInMem extends WorldBlock.Service {
         Vector(0, 0, 0),
         1000
       ) // create terrain region for world block
-      _ <- terrain // add spawn block frame to terrain
-        .add_terrain("6", Vector(0, 5, 0))
+      // condense output schema to increase payload size
+      radius = 1000
+      _ <- ZIO
+        .collectAll(
+          (0 to 300)
+            .map(_ =>
+              for {
+                x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                _ <- terrain.add_terrain("6", Vector(x, y, z))
+                _ <- ZIO.log(s"Creating terrain: $x, $y, $z")
+
+              } yield ()
+            )
+        )
+        .mapError(_ => ???)
+      _ <- terrain // add spawn block to terrain
+        .add_terrain("9", Vector(0, -20, 0))
         .mapError(_ =>
           GenericWorldBlockError("Could not add spawn block to terrain block")
         )
-//      _ <- terrain // add spawn block to terrain
-//        .add_terrain("3", Vector(0, 0, 0))
-//        .mapError(_ =>
-//          GenericWorldBlockError("Could not add spawn block to terrain block")
-//        )
+      all <- terrain.get_terrain().mapError(_ => ???)
+      _ <- ZIO.log(s"Initializing with Terrain: $all")
     } yield WorldBlockInMem(s, t, terrain)
 }
 object WorldBlockEnvironment {
