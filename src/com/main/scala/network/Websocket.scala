@@ -10,6 +10,7 @@ import controller.Control
 import controller.GET_ALL_GLOBS
 import controller.GET_BLOB
 import controller.GET_GLOB_LOCATION
+import controller.PaginatedResponse
 import controller.Query
 import controller.QueryResponse
 import controller.ResponseQuery
@@ -25,12 +26,12 @@ import network.WebSocketServer.SECRET
 import network.WebSocketServer.SESSION_MAP
 import src.com.main.scala.entity.Globz
 import zio.Ref
-import zio._
+import zio.*
 import zio.http.ChannelEvent.ExceptionCaught
 import zio.http.ChannelEvent.Read
 import zio.http.ChannelEvent.UserEvent
 import zio.http.ChannelEvent.UserEventTriggered
-import zio.http._
+import zio.http.*
 import zio.http.codec.PathCodec.string
 import zio.json.DecoderOps
 import zio.json.EncoderOps
@@ -71,10 +72,13 @@ case class BasicWebSocket(
 
   def handleQuery(
     query: ResponseQuery[Globz.Service with WorldBlock.Block]
-  ): ZIO[Any, Nothing, String] =
+  ): ZIO[Any, Nothing, Seq[String]] =
     for {
       res <- controller.runQuery(query.run.mapError(_ => ???))
-    } yield res.toJson
+    } yield res match {
+      case PaginatedResponse(responses) => responses.map(_.toJson)
+      case r                            => Seq(r.toJson)
+    }
 
   val initialize_session: ZIO[Any, Object, Unit] =
     for {
@@ -133,7 +137,9 @@ case class BasicWebSocket(
         for {
           channel <- ZIO.service[WebSocketChannel]
           res <- handleQuery(rq)
-          _ <- channel.send(Read(WebSocketFrame.text(res)))
+          _ <- ZIO.foreach(res)(txt =>
+            channel.send(Read(WebSocketFrame.text(txt)))
+          )
           // _ <- Console.printLine(s"Query results: $res")
         } yield ()
       case _ => ZIO.unit
