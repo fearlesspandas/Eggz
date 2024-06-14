@@ -68,19 +68,22 @@ case class SimpleTerrainBlock(
       .map(_.getOrElse(Seq()))
   } yield res
 
-  override def serialize_relative(location: Vector[Double], radius: Double): IO[TerrainError, Set[TerrainModel]] = ???
+  override def serialize_relative(
+    location: Vector[Double],
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]] = ???
 
   override def get_terrain_by_quadrant(
     quadrant: Quadrant
   ): IO[TerrainError, Seq[Terrain]] = ???
 
+  override def serialize(): IO[TerrainError, Set[TerrainModel]] = ???
+
   override def serializeMini(
     relative: Vector[Double],
     non_relative: Boolean,
     radius: Double
-  ): IO[TerrainError, Set[TerrainModel]] = ???
-
-  override def serialize(): IO[TerrainError, Set[TerrainModel]] = ???
+  ): IO[TerrainError, TerrainRegionM] = ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {
@@ -94,11 +97,8 @@ case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     .when(is_within_radius(location, center, distance))(ZIO.succeed(Seq(this)))
     .map(_.getOrElse(Seq()))
 
-  override def serialize_relative(location: Vector[Double], radius: Double): IO[TerrainError, Set[TerrainModel]] = ???
-
-  override def serializeMini(
-    relative: Vector[Double],
-    non_relative: Boolean,
+  override def serialize_relative(
+    location: Vector[Double],
     radius: Double
   ): IO[TerrainError, Set[TerrainModel]] = ???
 

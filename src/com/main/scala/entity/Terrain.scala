@@ -43,6 +43,12 @@ trait TerrainManager {
   def get_terrain_by_quadrant(
     quadrant: Quadrant
   ): IO[TerrainError, Seq[Terrain]]
+
+  def serializeMini(
+    relative: Vector[Double] = Vector(0, 0, 0),
+    non_relative: Boolean,
+    radius: Double
+  ): IO[TerrainError, TerrainRegionM]
 }
 
 trait Terrain {
@@ -61,11 +67,6 @@ trait Terrain {
 
   def serialize(): IO[TerrainError, Set[TerrainModel]]
 
-  def serializeMini(
-    relative: Vector[Double] = Vector(0, 0, 0),
-    non_relative: Boolean,
-    radius: Double
-  ): IO[TerrainError, Set[TerrainModel]]
 }
 
 object Terrain {
@@ -256,17 +257,17 @@ case class TerrainRegion(
     relative: Vector[Double] = Vector(0, 0, 0),
     non_relative: Boolean,
     radius: Double
-  ): IO[TerrainError, Set[TerrainModel]] = for {
+  ): IO[TerrainError, TerrainRegionM] = for {
     r1 <-
       if (non_relative) get_terrain()
       else get_terrain_within_distance(relative, radius)
     r2 <- ZIO
-      .foreachPar(r1)(_.serializeMini(relative, non_relative, radius))
+      .foreachPar(r1)(_.serialize())
       .map(_.flatten.toSet.map { case tm: TerrainUnitM =>
         (tm.location, tm.entities, tm.uuid)
       })
       .map(TerrainRegionM(_))
-  } yield Set(r2)
+  } yield r2
 
   override def get_terrain_by_quadrant(
     quadrant: Quadrant
@@ -328,15 +329,6 @@ case class TerrainUnit(
     } yield Set(TerrainUnitM(location, entities, uuid))
 
   override def serialize(): IO[TerrainError, Set[TerrainModel]] =
-    for {
-      entities <- entitiesRef.get
-    } yield Set(TerrainUnitM(location, entities, uuid))
-
-  override def serializeMini(
-    relative: Vector[Double] = Vector(0, 0, 0),
-    non_relative: Boolean,
-    radius: Double
-  ): IO[TerrainError, Set[TerrainModel]] =
     for {
       entities <- entitiesRef.get
     } yield Set(TerrainUnitM(location, entities, uuid))

@@ -8,6 +8,7 @@ import entity.GlobzModel
 import entity.PhysicalEntity
 import entity.Player
 import entity.TerrainModel
+import entity.TerrainRegionM
 import entity.WorldBlock
 import physics.Destination
 import physics.DestinationModel
@@ -684,7 +685,15 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
           _.serializeMini(loc, non_relative, radius)
         )
         .mapError(_ => ???)
-    } yield TerrainSet(r3) // TerrainSet(r2)
+      rr = r3.terrain.toSeq
+        .grouped(100)
+        .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
+        .toSeq
+      _ <- ZIO.log(s"Length ${rr.size}")
+    } yield PaginatedResponse(
+      rr
+    )
+    // TerrainSet(Set(r3)) // TerrainSet(r2)
 }
 //
 //case class GET_ALL_TERRAIN_BY_QUADRANT(id: ID, quadrant: Vector[Int])
