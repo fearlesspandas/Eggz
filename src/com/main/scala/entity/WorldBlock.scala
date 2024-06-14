@@ -33,8 +33,9 @@ object WorldBlock {
 
     def updateBlob(blob: Globz): IO[WorldBlockError, ExitCode]
 
-    val terrain: TerrainManager
-    def getTerrain = ZIO.succeed(terrain)
+    val terrain: TerrainManager with Terrain
+    def getTerrain: IO[WorldBlockError, TerrainManager with Terrain] =
+      ZIO.succeed(terrain)
   }
 
   trait Service {
@@ -67,7 +68,8 @@ object WorldBlock {
   ): ZIO[WorldBlock.Block, WorldBlockError, Option[Globz]] =
     ZIO.service[WorldBlock.Block].flatMap(_.getBlob(id))
 
-  def getTerrain: ZIO[WorldBlock.Block, WorldBlockError, TerrainManager] =
+  def getTerrain
+    : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
     ZIO.environmentWithZIO(_.get.getTerrain)
   trait WorldBlockError
 
@@ -78,7 +80,7 @@ object WorldBlock {
 case class WorldBlockInMem(
   coordsRef: Ref[Map[GLOBZ_ID, Vector[Double]]],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
-  terrain: TerrainManager
+  terrain: TerrainManager with Terrain
 ) extends WorldBlock.Block {
 
   override def spawnBlob(
@@ -143,7 +145,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       radius = 1000
       _ <- ZIO
         .collectAll(
-          (0 to 300)
+          (0 to 30)
             .map(_ =>
               for {
                 x <- Random.nextDouble.map(t => (t * radius) - radius / 2)

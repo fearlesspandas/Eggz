@@ -3,7 +3,9 @@ package controller
 import entity.EggzModel
 import entity.GlobzModel
 import entity.TerrainModel
+import entity.TerrainRegionM
 import entity.TerrainUnitM
+import entity.Terrain.TerrainId
 import physics.DESTINATION_TYPE
 import physics.DestinationModel
 import physics.destination
@@ -16,6 +18,8 @@ import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
+
+import java.util.UUID
 
 sealed trait QueryResponse {}
 
@@ -126,6 +130,28 @@ object Terrainset {
   implicit val decoder: JsonDecoder[TerrainSet] =
     DeriveJsonDecoder.gen[TerrainSet]
 }
+
+case class TerrainRegionSet(
+  terrain: TerrainRegionM
+) extends QueryResponse
+
+object TerrainRegionSet {
+  implicit val encoder: JsonEncoder[TerrainRegionSet] =
+    DeriveJsonEncoder.gen[TerrainRegionSet]
+  implicit val decoder: JsonDecoder[TerrainRegionSet] =
+    DeriveJsonDecoder.gen[TerrainRegionSet]
+}
+
+case class PaginatedResponse(responses: Seq[QueryResponse])
+    extends QueryResponse
+
+object PaginatedResponse {
+  implicit val encoder: JsonEncoder[PaginatedResponse] =
+    DeriveJsonEncoder.gen[PaginatedResponse]
+  implicit val decoder: JsonDecoder[PaginatedResponse] =
+    DeriveJsonDecoder.gen[PaginatedResponse]
+}
+
 case class ConsoleResponse(val msg: String) extends QueryResponse
 object ConsoleResponse {
   implicit val encoder: JsonEncoder[ConsoleResponse] =

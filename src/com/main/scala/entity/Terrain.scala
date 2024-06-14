@@ -7,6 +7,7 @@ import entity.Terrain.get_quadrant
 import entity.Terrain.is_within_disance
 import entity.Terrain.is_within_radius
 import entity.Terrain.is_within_range
+import entity.TerrainRegion.GetTerrainByQuadrantError
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz.*
@@ -38,6 +39,10 @@ trait TerrainManager {
     location: Vector[Double],
     distance: Double
   ): IO[TerrainError, Seq[Terrain]]
+
+  def get_terrain_by_quadrant(
+    quadrant: Quadrant
+  ): IO[TerrainError, Seq[Terrain]]
 }
 
 trait Terrain {
@@ -49,7 +54,14 @@ trait Terrain {
     distance: Double
   ): IO[TerrainError, Seq[Terrain]]
 
-  def serialize(
+  def serialize_relative(
+    location: Vector[Double] = Vector(0, 0, 0),
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]]
+
+  def serialize(): IO[TerrainError, Set[TerrainModel]]
+
+  def serializeMini(
     relative: Vector[Double] = Vector(0, 0, 0),
     non_relative: Boolean,
     radius: Double
@@ -222,7 +234,25 @@ case class TerrainRegion(
 
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
 
-  override def serialize(
+  override def serialize_relative(
+    location: Vector[Double] = Vector(0, 0, 0),
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]] = for {
+    r1 <- get_terrain_within_distance(location, radius)
+    r2 <- ZIO.foreachPar(r1)(
+      _.serialize_relative(location, radius)
+    )
+  } yield r2.flatten.toSet
+
+  override def serialize(): IO[TerrainError, Set[TerrainModel]] = for {
+    r1 <-
+      get_terrain()
+    r2 <- ZIO.foreachPar(r1)(
+      _.serialize()
+    )
+  } yield r2.flatten.toSet
+
+  override def serializeMini(
     relative: Vector[Double] = Vector(0, 0, 0),
     non_relative: Boolean,
     radius: Double
@@ -230,17 +260,35 @@ case class TerrainRegion(
     r1 <-
       if (non_relative) get_terrain()
       else get_terrain_within_distance(relative, radius)
-    r2 <- ZIO.foreachPar(r1)(_.serialize(relative, non_relative, radius))
-  } yield r2.flatten.toSet
+    r2 <- ZIO
+      .foreachPar(r1)(_.serializeMini(relative, non_relative, radius))
+      .map(_.flatten.toSet.map { case tm: TerrainUnitM =>
+        (tm.location, tm.entities, tm.uuid)
+      })
+      .map(TerrainRegionM(_))
+  } yield Set(r2)
+
+  override def get_terrain_by_quadrant(
+    quadrant: Quadrant
+  ): IO[TerrainError, Seq[Terrain]] = for {
+    quadop <- terrain.get
+      .map(_.get(quadrant))
+    res <- quadop match {
+      case Some(quad) => quad.get_terrain()
+      case None       => ZIO.succeed(Seq())
+    }
+  } yield res
 }
 
 object TerrainRegion {
   def make(
     center: Vector[Double],
     radius: Double
-  ): IO[Nothing, TerrainManager] = for {
+  ): IO[Nothing, TerrainManager with Terrain] = for {
     t <- Ref.make(Map.empty[Quadrant, Terrain])
   } yield TerrainRegion(center, radius, t)
+
+  case class GetTerrainByQuadrantError(msg: String) extends TerrainError
 }
 //terrain unit represents the most granular cell of terrain geometry
 //i.e. if two terrain entities are "close enough" they can be considered
@@ -271,7 +319,20 @@ case class TerrainUnit(
       ZIO.succeed(Seq(this))
     } else ZIO.succeed(Seq())
 
-  override def serialize(
+  override def serialize_relative(
+    location: Vector[Double] = Vector(0, 0, 0),
+    radius: Double
+  ): IO[TerrainError, Set[TerrainModel]] =
+    for {
+      entities <- entitiesRef.get
+    } yield Set(TerrainUnitM(location, entities, uuid))
+
+  override def serialize(): IO[TerrainError, Set[TerrainModel]] =
+    for {
+      entities <- entitiesRef.get
+    } yield Set(TerrainUnitM(location, entities, uuid))
+
+  override def serializeMini(
     relative: Vector[Double] = Vector(0, 0, 0),
     non_relative: Boolean,
     radius: Double
