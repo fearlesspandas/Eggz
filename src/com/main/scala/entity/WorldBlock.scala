@@ -145,7 +145,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       radius = 1000
       _ <- ZIO
         .collectAll(
-          (0 to 10000)
+          (0 to 5000)
             .map(_ =>
               for {
                 x <- Random.nextDouble.map(t => (t * radius) - radius / 2)

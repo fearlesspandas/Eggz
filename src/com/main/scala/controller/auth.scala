@@ -111,6 +111,24 @@ package object auth {
       } yield id == send || (non_relative && server_keys.contains(send))
     case cmd => ZIO.fail(s"$cmd not relevant for GET_ALL_TERRAIN")
   }
+  val get_terrain_within_distance: Set[String] => AUTH[String] = server_keys =>
+    {
+      case GET_TERRAIN_WITHIN_DISTANCE(location, radius) =>
+        for {
+          sender <- ZIO.service[String]
+        } yield server_keys.contains(sender)
+      case cmd => ZIO.fail(s"$cmd not relevant for GET_TERRAIN_WITHIN_DISTANCE")
+    }
+
+  val get_terrain_within_player_distance: Set[String] => AUTH[String] =
+    server_keys => {
+      case GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id, radius) =>
+        for {
+          sender <- ZIO.service[String]
+        } yield sender == id || server_keys.contains(sender)
+      case cmd =>
+        ZIO.fail(s"$cmd not relevant for GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
+    }
   val add_terrain: AUTH[String] = {
     case ADD_TERRAIN(id, location) =>
       for {
@@ -149,6 +167,8 @@ object AuthCommandService {
             adjust_physical_stats(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
+            get_terrain_within_distance(server_keys)(op),
+            get_terrain_within_player_distance(server_keys)(op),
             add_terrain(op)
           )
         ) { x =>
@@ -176,6 +196,8 @@ object AuthCommandService {
             adjust_physical_stats(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
+            get_terrain_within_distance(server_keys)(op),
+            get_terrain_within_player_distance(server_keys)(op),
             add_terrain(op)
           )
         ) { x =>

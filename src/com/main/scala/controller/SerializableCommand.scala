@@ -663,72 +663,91 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
         .fold(_ => Vector(0.0, 0, 0), x => x)
       // .flatMapError(err => ZIO.log(err.msg))
       _ <- ZIO.log(s"retrieving all terrain, non_relative:$non_relative")
-      radius = 10000
-      res <- WorldBlock.getTerrain
-        .flatMap(
-          if (non_relative) _.get_terrain()
-          else _.get_terrain_within_distance(loc, radius)
-        )
-        .orElseFail(GenericCommandError("Failed to get Terrain"))
-      r2 <- ZIO
-        .foreachPar(res)(t =>
-          if (non_relative) t.serialize()
-          else t.serialize_relative(loc, radius)
-        )
-        .mapBoth(
-          _ => GenericCommandError("Failed to Serialize Terrain"),
-          _.flatten.toSet
-        )
-        .mapError(_ => GenericCommandError("faliled to Serialize Terrain"))
+
       r3 <- WorldBlock.getTerrain
         .flatMap(
-          _.serializeMini(loc, non_relative, radius)
+          _.serializeMini(loc, non_relative, 1000)
         )
         .mapError(_ => ???)
       rr = r3.terrain.toSeq
         .grouped(100)
         .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
         .toSeq
-      _ <- ZIO.log(s"Length ${rr.size}")
-    } yield PaginatedResponse(
-      rr
-    )
-    // TerrainSet(Set(r3)) // TerrainSet(r2)
+    } yield PaginatedResponse(rr)
 }
-//
-//case class GET_ALL_TERRAIN_BY_QUADRANT(id: ID, quadrant: Vector[Int])
-//    extends ResponseQuery[WorldBlock.Block] {
-//
-//  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
-//    r <- WorldBlock.getTerrain
-//      .flatMap(_.get_terrain_by_quadrant(quadrant))
-//      .mapError(_ =>
-//        GenericCommandError(s"Cannot retrieve terrain for quadrant $quadrant")
-//      )
-//    res <- ZIO
-//      .collectAllPar(
-//        r.map(_.serializeMini(Vector(0, 0, 0), true, 1000))
-//      )
-//      .map(_.flatten)
-//      .mapError(_ => GenericCommandError("Error while serializing results"))
-//  } yield TerrainSet(res.toSet)
-//}
-//
-//case class GET_TERRAIN_WITHIN_DISTANCE(location: Vector[Double], radius: Double)
-//    extends ResponseQuery[WorldBlock.Block] {
-//  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
-//    res <- WorldBlock.getTerrain
-//      .flatMap(
-//        _.get_terrain_within_distance(location, radius)
-//      )
-//      .flatMap(r => ZIO.collectAllPar(r.map(_.serialize())).map(_.flatten))
-//      .mapError(_ =>
-//        GenericCommandError(
-//          s"Error while retrieving terrain within radius $radius around point $location"
-//        )
-//      )
-//  } yield TerrainSet(res.toSet)
-//}
+
+object GET_ALL_TERRAIN {
+  implicit val encoder: JsonEncoder[GET_ALL_TERRAIN] =
+    DeriveJsonEncoder.gen[GET_ALL_TERRAIN]
+  implicit val decoder: JsonDecoder[GET_ALL_TERRAIN] =
+    DeriveJsonDecoder.gen[GET_ALL_TERRAIN]
+}
+
+case class GET_TERRAIN_WITHIN_DISTANCE(location: Vector[Double], radius: Double)
+    extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    res <- WorldBlock.getTerrain
+      .flatMap(
+        _.get_terrain_within_distance(location, radius)
+      )
+      .flatMap(r => ZIO.collectAllPar(r.map(_.serialize())).map(_.flatten))
+      .mapError(_ =>
+        GenericCommandError(
+          s"Error while retrieving terrain within radius $radius around point $location"
+        )
+      )
+  } yield TerrainSet(res.toSet)
+}
+
+object GET_TERRAIN_WITHIN_DISTANCE {
+  implicit val encoder: JsonEncoder[GET_TERRAIN_WITHIN_DISTANCE] =
+    DeriveJsonEncoder.gen[GET_TERRAIN_WITHIN_DISTANCE]
+  implicit val decoder: JsonDecoder[GET_TERRAIN_WITHIN_DISTANCE] =
+    DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_DISTANCE]
+}
+
+case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
+    extends ResponseQuery[WorldBlock.Block] {
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    _ <- ZIO.log("GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
+    location <- WorldBlock
+      .getBlob(id)
+      .flatMap(ZIO.fromOption(_))
+      .flatMap(g =>
+        g match {
+          case p: Player => p.getLocation;
+          case _ =>
+            ZIO.fail(
+              GenericCommandError(s"Player not found when retrieving terrain")
+            )
+        }
+      )
+      .mapError(_ =>
+        GenericCommandError(
+          s"could not retrieve player location while attempting to get terrain"
+        )
+      )
+    res <- WorldBlock.getTerrain
+      .flatMap(
+        _.get_terrain_within_distance(location, radius)
+      )
+      .flatMap(r => ZIO.collectAllPar(r.map(_.serialize())).map(_.flatten))
+      .mapError(_ =>
+        GenericCommandError(
+          s"Error while retrieving terrain within radius $radius around point $location"
+        )
+      )
+    _ <- ZIO.log(s"terrain within distance $res")
+    rr = res.grouped(100).map(x => TerrainSet(x.toSet))
+  } yield PaginatedResponse(rr.toSeq)
+}
+
+object GET_TERRAIN_WITHIN_PLAYER_DISTANCE {
+  implicit val encoder: JsonEncoder[GET_TERRAIN_WITHIN_PLAYER_DISTANCE] =
+    DeriveJsonEncoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
+  implicit val decoder: JsonDecoder[GET_TERRAIN_WITHIN_PLAYER_DISTANCE] =
+    DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
+}
 case class CONSOLE(
   execute_as: GLOBZ_ID,
   cmd: SerializableCommand[CONSOLE_ENV, Any]
