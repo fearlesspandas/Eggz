@@ -174,6 +174,7 @@ case class BasicWebSocket(
         recieveAllText(text, channel)
       } else
         (for {
+          _ <- ZIO.log(s"Authorizing: $text")
           sentSecret <- ZIO
             .fromEither(text.fromJson[Session])
             .flatMapError(_ =>
