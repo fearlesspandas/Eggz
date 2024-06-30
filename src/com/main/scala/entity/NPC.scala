@@ -99,6 +99,8 @@ object Prowler extends Globz.Service {
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
-    } yield Prowler(id, ss, stor)(href, eref, pe, g, dests)
+      res = Prowler(id, ss, stor)(href, eref, pe, g, dests)
+      _ <- res.adjustMaxSpeed(10).mapError(_ => ???)
+    } yield res
 
 }

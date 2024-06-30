@@ -166,11 +166,14 @@ object WorldBlockInMem extends WorldBlock.Service {
       all <- terrain.get_terrain().mapError(_ => ???)
       _ <- ZIO.log(s"Initializing with Terrain: $all")
       res = WorldBlockInMem(s, t, terrain)
-      gim <- GlobzInMem.make("-1")
-      glob <- Globz.create("2").provide(ZLayer.succeed("-1"))
+      glob <- Globz
+        .create("100000")
+        .provide(ZLayer.succeed(Prowler))
+        .mapError(_ => ???)
       _ <- res
-        .spawnFreshBlob(Vector(0, 0, 0))
-        .provideLayer(ZLayer.succeed(glob)).mapError( _ => ???)
+        .spawnBlob(glob, Vector(0, 10, 0))
+        .mapError(_ => ???)
+      
     } yield res
 }
 object WorldBlockEnvironment {
