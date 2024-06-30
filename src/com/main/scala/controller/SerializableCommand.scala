@@ -16,6 +16,7 @@ import physics.Destinations
 import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
+import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.RepairEgg
 import zio.ZIO
@@ -362,7 +363,14 @@ case class START_EGG(eggId: ID, globId: GLOBZ_ID)
         .flatMap(glob =>
           for {
             egg <- glob.get(eggId)
-            _ <- ZIO.fromOption(egg).flatMap(glob.scheduleEgg(_))
+            _ <- ZIO
+              .fromOption(egg)
+              .flatMap((egg: GLOBZ_IN) =>
+                glob.scheduleEgg(
+                  egg,
+                  egg.op.provide(ZLayer.succeed(glob)).map(_ => ())
+                )
+              )
           } yield ()
         )
 

@@ -145,7 +145,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       radius = 1000
       _ <- ZIO
         .collectAll(
-          (0 to 5000)
+          (0 to 10000)
             .map(_ =>
               for {
                 x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
@@ -165,7 +165,13 @@ object WorldBlockInMem extends WorldBlock.Service {
         )
       all <- terrain.get_terrain().mapError(_ => ???)
       _ <- ZIO.log(s"Initializing with Terrain: $all")
-    } yield WorldBlockInMem(s, t, terrain)
+      res = WorldBlockInMem(s, t, terrain)
+      gim <- GlobzInMem.make("-1")
+      glob <- Globz.create("2").provide(ZLayer.succeed("-1"))
+      _ <- res
+        .spawnFreshBlob(Vector(0, 0, 0))
+        .provideLayer(ZLayer.succeed(glob)).mapError( _ => ???)
+    } yield res
 }
 object WorldBlockEnvironment {
 

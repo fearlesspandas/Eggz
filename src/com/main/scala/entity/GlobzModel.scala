@@ -10,18 +10,42 @@ import zio.json.JsonEncoder
 
 sealed trait GlobzModel {}
 object GlobzModel {
-  implicit val encoder: JsonEncoder[GlobzModel] = DeriveJsonEncoder.gen[GlobzModel]
-  implicit val decoder: JsonDecoder[GlobzModel] = DeriveJsonDecoder.gen[GlobzModel]
+  implicit val encoder: JsonEncoder[GlobzModel] =
+    DeriveJsonEncoder.gen[GlobzModel]
+  implicit val decoder: JsonDecoder[GlobzModel] =
+    DeriveJsonDecoder.gen[GlobzModel]
 }
-case class PlayerGlob(id: String, stats: Stats, location: (Double, Double, Double))
-    extends GlobzModel
+case class PlayerGlob(
+  id: String,
+  stats: Stats,
+  location: (Double, Double, Double)
+) extends GlobzModel
 object PlayerGlob {
-  implicit val encoder: JsonEncoder[PlayerGlob] = DeriveJsonEncoder.gen[PlayerGlob]
-  implicit val decoder: JsonDecoder[PlayerGlob] = DeriveJsonDecoder.gen[PlayerGlob]
+  implicit val encoder: JsonEncoder[PlayerGlob] =
+    DeriveJsonEncoder.gen[PlayerGlob]
+  implicit val decoder: JsonDecoder[PlayerGlob] =
+    DeriveJsonDecoder.gen[PlayerGlob]
 }
-case class GlobInMemory(id: String, eggs: Set[EggzModel], relations: Set[(ID, ID)])
-    extends GlobzModel
+case class GlobInMemory(
+  id: String,
+  eggs: Set[EggzModel],
+  relations: Set[(ID, ID)]
+) extends GlobzModel
 object GlobInMemory {
-  implicit val encoder: JsonEncoder[GlobInMemory] = DeriveJsonEncoder.gen[GlobInMemory]
-  implicit val decoder: JsonDecoder[GlobInMemory] = DeriveJsonDecoder.gen[GlobInMemory]
+  implicit val encoder: JsonEncoder[GlobInMemory] =
+    DeriveJsonEncoder.gen[GlobInMemory]
+  implicit val decoder: JsonDecoder[GlobInMemory] =
+    DeriveJsonDecoder.gen[GlobInMemory]
+}
+
+case class ProwlerModel(
+  id: String,
+  stats: Stats,
+  location: (Double, Double, Double)
+) extends GlobzModel
+object ProwlerModel {
+  implicit val encoder: JsonEncoder[ProwlerModel] =
+    DeriveJsonEncoder.gen[ProwlerModel]
+  implicit val decoder: JsonDecoder[ProwlerModel] =
+    DeriveJsonDecoder.gen[ProwlerModel]
 }

@@ -1,45 +1,29 @@
 package entity
 
 import controller.Stats
+import entity.LivingEntity.LivingEntityEnv
 import entity.Player.Item
-import entity.Player.PlayerEnv
-import entity.Player.PlayerError
-import entity.Skill.Experience
-import entity.Skill.Level
-import entity.SkillSet.SkillId
-import entity.LivingEntity._
 import physics.BasicDestinations
-import physics.Destination
 import physics.Destinations
-import physics.DestinationsError
-import src.com.main.scala
-import src.com.main.scala.entity
+import physics.WaypointDestination
 import src.com.main.scala.entity.EggzOps.ID
-import src.com.main.scala.entity.Eggz
-import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.Storage
-import src.com.main.scala.entity.StorageEgg
-import src.com.main.scala.entity.basicStorage
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
-import src.com.main.scala.entity.Globz.GLOBZ_OUT
+import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Globz
+import src.com.main.scala.entity.Storage
+import src.com.main.scala.entity.basicStorage
 import zio.ExitCode
 import zio.IO
 import zio.Ref
 import zio.ZIO
 import zio.ZLayer
 
-trait Player extends LivingEntity {}
-
-object Player {
-  type Item = String
-  type PlayerEnv = Globz
-  trait PlayerError
-}
-
-case class BasicPlayer(
+trait NPC extends LivingEntity
+trait NPC_ERROR
+case class GenericNPCError(msg: String) extends NPC_ERROR
+case class Prowler(
   id: ID,
   skillset: SkillSet,
   inventory: Ref[Storage.Service[Item]]
@@ -49,9 +33,9 @@ case class BasicPlayer(
   val physics: PhysicalEntity,
   val glob: Globz,
   val destinations: Destinations
-) extends Player {
-  def doAction2[E, B](
-    action: ZIO[PlayerEnv, E, B]
+) extends NPC {
+  override def doAction[E, B](
+    action: ZIO[LivingEntityEnv, E, B]
   ): ZIO[LivingEntity, E, B] =
     ???
 
@@ -63,7 +47,7 @@ case class BasicPlayer(
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
-    } yield PlayerGlob(this.id, stats, location))
+    } yield ProwlerModel(this.id, stats, location))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
@@ -76,19 +60,34 @@ case class BasicPlayer(
         .succeed(loc(0))
         .zip(ZIO.succeed(loc(1)))
         .zip(ZIO.succeed(loc(2)))
-    } yield PLAYER_EGG(id, stats, location)
+    } yield PROWLER_EGG(id, stats, location)
 
-  override def defaultOP[GLOBZ_OUT]: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] =
-    ZIO.succeed(ExitCode.success)
+  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
+    worldblock <- ZIO.service[WorldBlock.Block]
+    player <- worldblock
+      .getBlob(id)
+      .flatMap { case l: Player =>
+        ZIO.fromOption(l)
+      }
+      .mapError(_ => GenericNPCError(s"Player not found for $id"))
+    _ <- player match {
+      case l: LivingEntity =>
+        for {
+          loc <- l.physics.getLocation.mapError(_ => ???)
+          _ <- destinations.clearDestinations().mapError(_ => ???)
+          _ <- destinations
+            .addDestination(WaypointDestination(loc, 0))
+            .mapError(_ => ???)
+        } yield ()
+    }
+  } yield ()
 
-  override def doAction[E, B](
-    action: ZIO[LivingEntityEnv, E, B]
-  ): ZIO[LivingEntity, E, B] = ???
+  override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
-  override def op: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] = ???
+  override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
 }
 
-object BasicPlayer extends Globz.Service {
+object Prowler extends Globz.Service {
   override def make(
     id: GLOBZ_ID
   ): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
@@ -100,6 +99,6 @@ object BasicPlayer extends Globz.Service {
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
-    } yield BasicPlayer(id, ss, stor)(href, eref, pe, g, dests)
+    } yield Prowler(id, ss, stor)(href, eref, pe, g, dests)
 
 }

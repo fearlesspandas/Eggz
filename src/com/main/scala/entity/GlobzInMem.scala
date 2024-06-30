@@ -21,14 +21,15 @@ import zio.ExitCode
 import zio.IO
 import zio.ZIO
 import zio.ZLayer
-case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap) extends Globz {
+case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
+    extends Globz {
   private val db = new util.HashMap[String, Eggz.Service]()
 
   override def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
-    (for {
+    for {
       _ <- dbref.update(_.updated(eggz.id, eggz))
       udtd <- dbref.get
-    } yield this)
+    } yield this
   override def get(id: ID): IO[GLOBZ_ERR, Option[GLOBZ_IN]] =
     for {
       r <- dbref.get
@@ -89,7 +90,10 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
       _ <- relationRef.update(_.updated((egg1.id, egg2.id), false))
     } yield ()
 
-  override def unrelateAll(egg: entity.Globz.GLOBZ_IN, direction: Int): IO[GLOBZ_ERR, Unit] =
+  override def unrelateAll(
+    egg: entity.Globz.GLOBZ_IN,
+    direction: Int
+  ): IO[GLOBZ_ERR, Unit] =
     for {
       neighbors <- neighbors(egg, direction)
       _ <- ZIO.foreachPar(neighbors) { n =>
@@ -100,7 +104,10 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
         } else unrelate(egg, n, true)
       }
     } yield ()
-  override def neighbors(egg: Eggz.Service, direction: Int): IO[GLOBZ_ERR, Vector[GLOBZ_IN]] =
+  override def neighbors(
+    egg: Eggz.Service,
+    direction: Int
+  ): IO[GLOBZ_ERR, Vector[GLOBZ_IN]] =
     (for {
       rels <- relationRef.get
       tasks = rels.toVector
@@ -110,13 +117,17 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
         }
         .map(x => get(x))
       k <- ZIO.collectAllPar(tasks)
-    } yield k.collect({ case Some(g) => g })).mapError(_ => "whoops")
+    } yield k.collect { case Some(g) => g }).mapError(_ => "whoops")
 
   override def scheduleEgg(
-    id: GLOBZ_IN
+    egg: GLOBZ_IN,
+    op: ZIO[GLOBZ_IN, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
-    get(id.id)
-      .flatMap(_.map(eg => eg.op).getOrElse(ZIO.succeed(ExitCode.failure)))
+    get(egg.id)
+      .flatMap(
+        _.map(eg => op.provide(ZLayer.succeed(egg)))
+          .getOrElse(ZIO.succeed(ExitCode.failure))
+      )
       .repeat(Schedule.spaced(fromMillis(100)))
       .provide(ZLayer.succeed(this))
       .fork
@@ -126,15 +137,17 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
     for {
       eggs <- this.dbref.get
       mapped <- ZIO
-        .collectAllPar(eggs.map {
-          case (id, egg) => egg.serializeEgg
+        .collectAllPar(eggs.map { case (id, egg) =>
+          egg.serializeEgg
         })
         .mapError(_ => s"Error while trying to serialize glob ${this.id}")
       rels <- this.relationRef.get
     } yield GlobInMemory(
       this.id,
       mapped.toSet,
-      rels.toSet.collect[(ID, ID)] { case (ids: (ID, ID), related: Boolean) if related => ids }
+      rels.toSet.collect[(ID, ID)] {
+        case (ids: (ID, ID), related: Boolean) if related => ids
+      }
     )
 
 }
