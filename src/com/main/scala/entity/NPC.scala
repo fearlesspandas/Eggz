@@ -66,8 +66,9 @@ case class Prowler(
     worldblock <- ZIO.service[WorldBlock.Block]
     player <- worldblock
       .getBlob(id)
-      .flatMap { case l: Player =>
+      .flatMap { l =>
         ZIO.fromOption(l)
+      // case _ => ZIO.fail(GenericNPCError("No Player found"))
       }
       .mapError(_ => GenericNPCError(s"Player not found for $id"))
     _ <- player match {
@@ -78,6 +79,10 @@ case class Prowler(
           _ <- destinations
             .addDestination(WaypointDestination(loc, 0))
             .mapError(_ => ???)
+          ms <- physics.getMaxSpeed().mapError(_ => ???)
+          _ <-
+            if (ms <= 0) physics.adjustMaxSpeed(10).mapError(_ => ???)
+            else ZIO.unit
         } yield ()
     }
   } yield ()

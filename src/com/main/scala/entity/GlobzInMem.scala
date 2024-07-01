@@ -16,7 +16,8 @@ import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
 import zio.Ref
 import zio.Schedule
-import zio.Duration._
+import zio.Duration.fromMillis
+import zio.Duration.*
 import zio.ExitCode
 import zio.IO
 import zio.ZIO
@@ -123,13 +124,21 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
     egg: GLOBZ_IN,
     op: ZIO[GLOBZ_IN, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
-    get(egg.id)
-      .flatMap(
-        _.map(eg => op.provide(ZLayer.succeed(egg)))
-          .getOrElse(ZIO.succeed(ExitCode.failure))
+    (for {
+      _ <- ZIO.log("Scheduling egg")
+      _ <- get(egg.id)
+        .flatMap(
+          _.map(eg => op.provide(ZLayer.succeed(egg)))
+            .getOrElse(ZIO.succeed(ExitCode.failure))
+        )
+        .flatMapError(err => ZIO.log(err))
+    } yield ())
+      .fold(
+        err => (),
+        x => x
       )
-      .repeat(Schedule.spaced(fromMillis(100)))
-      .provide(ZLayer.succeed(this))
+      .repeat(Schedule.spaced(fromMillis(1000)))
+      // .provide(ZLayer.succeed(this))
       .fork
       .map(_ => ())
 

@@ -3,6 +3,7 @@ package entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity
 import src.com.main.scala.entity.Globz
+import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import zio.*
 trait NPCHandler {
@@ -14,6 +15,11 @@ trait NPCHandler {
       .mapError(_ => ???)
       .map(_ => ())
   def remove_entity_as_npc(id: ID): IO[NPCHandlerError, Unit] = ???
+
+  def scheduleEgg(
+    egg: GLOBZ_IN,
+    op: ZIO[GLOBZ_IN, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] = glob.scheduleEgg(egg, op)
 }
 
 trait NPCHandlerError

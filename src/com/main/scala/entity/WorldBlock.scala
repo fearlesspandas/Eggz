@@ -80,7 +80,8 @@ object WorldBlock {
 case class WorldBlockInMem(
   coordsRef: Ref[Map[GLOBZ_ID, Vector[Double]]],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
-  terrain: TerrainManager with Terrain
+  terrain: TerrainManager with Terrain,
+  npc_handler: NPCHandler
 ) extends WorldBlock.Block {
 
   override def spawnBlob(
@@ -144,36 +145,54 @@ object WorldBlockInMem extends WorldBlock.Service {
       // condense output schema to increase payload size
       radius = 1000
       _ <- ZIO
-        .collectAll(
-          (0 to 10000)
-            .map(_ =>
-              for {
-                x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-                y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-                z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-                _ <- terrain.add_terrain("6", Vector(x, y, z))
-                _ <- ZIO.log(s"Creating terrain: $x, $y, $z")
+        .foreach(0 to 10000) { _ =>
+          for {
+            x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+            y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+            z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+            _ <- terrain.add_terrain("6", Vector(x, y, z))
+            _ <- ZIO.log(s"Creating terrain: $x, $y, $z")
 
-              } yield ()
-            )
+          } yield ()
+        }
+        .orElseFail(
+          GenericWorldBlockError("Error while adding randomized terrain")
         )
-        .mapError(_ => ???)
       _ <- terrain // add spawn block to terrain
         .add_terrain("9", Vector(0, -20, 0))
-        .mapError(_ =>
+        .orElseFail(
           GenericWorldBlockError("Could not add spawn block to terrain block")
         )
-      all <- terrain.get_terrain().mapError(_ => ???)
+      all <- terrain
+        .get_terrain()
+        .mapError(_ => GenericWorldBlockError("Error while gettng terrain"))
       _ <- ZIO.log(s"Initializing with Terrain: $all")
-      res = WorldBlockInMem(s, t, terrain)
-      glob <- Globz
-        .create("100000")
+
+      npchandler <- NPCHandler
+        .make()
+        .orElseFail(GenericWorldBlockError("Error while creating npchandler"))
+
+      res = WorldBlockInMem(s, t, terrain, npchandler)
+
+      prowler <- Globz
+        .create("Prowler1")
         .provide(ZLayer.succeed(Prowler))
+        .map { case p: Prowler => p }
         .mapError(_ => ???)
       _ <- res
-        .spawnBlob(glob, Vector(0, 10, 0))
+        .spawnBlob(prowler, Vector(0, 10, 0))
         .mapError(_ => ???)
-      
+      _ <- res.npc_handler.add_entity_as_npc(prowler).mapError(_ => ???)
+      _ <- res.npc_handler
+        .scheduleEgg(
+          prowler,
+          prowler
+            .follow_player("2")
+            .provide(ZLayer.succeed(res))
+            .mapError(err => err.toString)
+        )
+        .mapError(_ => ???)
+
     } yield res
 }
 object WorldBlockEnvironment {
