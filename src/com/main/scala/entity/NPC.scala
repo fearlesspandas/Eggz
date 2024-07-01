@@ -63,6 +63,7 @@ case class Prowler(
     } yield PROWLER_EGG(id, stats, location)
 
   def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
+    // _ <- ZIO.log(s"Following player $id")
     worldblock <- ZIO.service[WorldBlock.Block]
     player <- worldblock
       .getBlob(id)

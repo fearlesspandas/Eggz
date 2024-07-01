@@ -125,7 +125,6 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
     op: ZIO[GLOBZ_IN, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
     (for {
-      _ <- ZIO.log("Scheduling egg")
       _ <- get(egg.id)
         .flatMap(
           _.map(eg => op.provide(ZLayer.succeed(egg)))

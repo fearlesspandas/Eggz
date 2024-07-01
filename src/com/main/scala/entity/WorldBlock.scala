@@ -174,28 +174,42 @@ object WorldBlockInMem extends WorldBlock.Service {
 
       res = WorldBlockInMem(s, t, terrain, npchandler)
 
-      prowler <- Globz
-        .create("Prowler1")
-        .provide(ZLayer.succeed(Prowler))
-        .map { case p: Prowler => p }
-        .mapError(_ => ???)
-      _ <- res
-        .spawnBlob(prowler, Vector(0, 10, 0))
-        .mapError(_ => ???)
-      _ <- res.npc_handler.add_entity_as_npc(prowler).mapError(_ => ???)
-      _ <- res.npc_handler
-        .scheduleEgg(
-          prowler,
-          prowler
-            .follow_player("2")
-            .provide(ZLayer.succeed(res))
-            .mapError(err => err.toString)
-        )
-        .mapError(_ => ???)
+      _ <- WorldBlockEnvironment.add_prowlers(res, 15, 200).mapError(_ => ???)
 
     } yield res
 }
 object WorldBlockEnvironment {
+
+  def add_prowlers(worldblock: WorldBlockInMem, count: Int, radius: Double) =
+    for {
+      prowlers <- ZIO.collectAllPar {
+        (1 to count).map(i =>
+          for {
+            prowler <- Globz
+              .create(s"Prowler_$i")
+              .provide(ZLayer.succeed(Prowler))
+              .map { case p: Prowler => p }
+          } yield prowler
+        )
+      }
+      _ <- ZIO.foreach(prowlers) { p =>
+        for {
+          x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+          y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+          z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+          _ <- worldblock.spawnBlob(p, Vector(x, y, z))
+          _ <- worldblock.npc_handler.add_entity_as_npc(p)
+          _ <- worldblock.npc_handler
+            .scheduleEgg(
+              p,
+              p.follow_player("2")
+                .provide(ZLayer.succeed(worldblock))
+                .mapError(err => err.toString)
+            )
+            .mapError(_ => ???)
+        } yield ()
+      }
+    } yield ()
 
 //  val worldblock =
 //    ZLayer[Ref[Map[GLOBZ_ID, Vector[Double]]] with Ref[

@@ -110,7 +110,7 @@ case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
       sub.query.flatMap(response =>
         Command.fromZIO(socket.send(Read(WebSocketFrame.text(response.toJson))))
       ),
-      10
+      30
     ).run
 }
 
