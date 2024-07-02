@@ -18,6 +18,11 @@ libraryDependencies += "org.bouncycastle" % "bcutil-jdk15on" % "1.70"
 libraryDependencies += "org.bouncycastle" % "bcprov-jdk15on" % "1.70"
 // https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk15on
 libraryDependencies += "org.bouncycastle" % "bcpkix-jdk15on" % "1.70"
+
+libraryDependencies += "dev.zio" %% "zio-profiling" % "0.3.1"
+libraryDependencies += compilerPlugin(
+  "dev.zio" %% "zio-profiling-tagging-plugin" % "0.3.1"
+)
 //// https://mvnrepository.com/artifact/dev.zio/zio-streams
 //libraryDependencies += "dev.zio" %% "zio-streams" % "2.0.0-RC2"
 Compile / mainClass := Some("network.WebSocketAdvanced")

@@ -174,7 +174,7 @@ object WorldBlockInMem extends WorldBlock.Service {
 
       res = WorldBlockInMem(s, t, terrain, npchandler)
 
-      _ <- WorldBlockEnvironment.add_prowlers(res, 15, 200).mapError(_ => ???)
+      _ <- WorldBlockEnvironment.add_prowlers(res, 30, 200).mapError(_ => ???)
 
     } yield res
 }

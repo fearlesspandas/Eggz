@@ -31,7 +31,9 @@ import zio.json.EncoderOps
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
 
-sealed trait SerializableCommand[-Env, +Out] extends Command[Env, Out]
+sealed trait SerializableCommand[-Env, +Out] extends Command[Env, Out] {
+  val REF_TYPE: Any
+}
 object SerializableCommand {
   implicit val encoder: JsonEncoder[SerializableCommand[_, _]] =
     DeriveJsonEncoder.gen[SerializableCommand[Nothing, Any]].contramap(x => x)
@@ -42,7 +44,7 @@ object SerializableCommand {
 
 }
 sealed trait SimpleCommandSerializable[-Env]
-    extends SerializableCommand[Env, Unit]
+    extends SerializableCommand[Env, Unit] {}
 object SimpleCommandSerializable {
   implicit val encoder: JsonEncoder[SimpleCommandSerializable[_]] =
     DeriveJsonEncoder.gen[SimpleCommandSerializable[Nothing]].contramap(x => x)
@@ -77,7 +79,9 @@ object Subscription {
 }
 
 case class SUBSCRIBE(query: ResponseQuery[SubscriptionEnv])
-    extends Subscription[SubscriptionEnv]
+    extends Subscription[SubscriptionEnv] {
+  override val REF_TYPE: Any = query.REF_TYPE
+}
 object SUBSCRIBE {
   type SubscriptionEnv = Globz.Service with WorldBlock.Block
   implicit val en: JsonEncoder[ResponseQuery[SubscriptionEnv]] =
@@ -116,6 +120,7 @@ case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
 
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
+  val REF_TYPE: Any = CREATE_GLOB
   override def run
     : ZIO[Globz.Service with WorldBlock.Block, CommandError, Unit] =
     (for {
@@ -134,6 +139,7 @@ object CREATE_GLOB {
 }
 
 case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_ALL_GLOBS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
@@ -150,6 +156,7 @@ object GET_ALL_GLOBS {
 }
 
 case class GET_ALL_ENTITY_IDS() extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_ALL_ENTITY_IDS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
@@ -165,6 +172,7 @@ object GET_ALL_ENTITY_IDS {
 }
 
 case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_ALL_EGGZ
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
@@ -186,6 +194,7 @@ object GET_ALL_EGGZ {
 }
 
 case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_ALL_STATS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
@@ -213,6 +222,7 @@ object GET_ALL_STATS {
 
 case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (CREATE_REPAIR_EGG, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       egg <- RepairEgg.make(eggId, 1000, 20)
@@ -228,6 +238,7 @@ object CREATE_REPAIR_EGG {
 }
 
 case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_BLOB, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       g <- WorldBlock.getBlob(id)
@@ -243,6 +254,7 @@ object GET_BLOB {
 
 case class GET_GLOB_LOCATION(id: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_GLOB_LOCATION, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock.getBlob(id)
@@ -261,6 +273,7 @@ object GET_GLOB_LOCATION {
 
 case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
+  override val REF_TYPE: Any = (SET_GLOB_LOCATION, id)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id)
@@ -284,6 +297,7 @@ case class RELATE_EGGS(
   globId: GLOBZ_ID,
   bidirectional: Boolean
 ) extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (RELATE_EGGS, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       globOp <- WorldBlock.getBlob(globId)
@@ -306,6 +320,7 @@ case class UNRELATE_EGGS(
   globId: GLOBZ_ID,
   bidirectional: Boolean
 ) extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (UNRELATE_EGGS, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       globOp <- WorldBlock.getBlob(globId)
@@ -324,6 +339,7 @@ object UNRELATE_EGGS {
 
 case class UNRELATE_ALL(egg1: ID, globId: GLOBZ_ID, direction: Int)
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  val REF_TYPE = (UNRELATE_ALL, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       globOp <- WorldBlock.getBlob(globId)
@@ -340,6 +356,7 @@ object UNRELATE_ALL {
 }
 
 case class TICK_WORLD() extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = TICK_WORLD
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     WorldBlock
       .tickAllBlobs()
@@ -355,6 +372,7 @@ object TICK_WORLD {
 
 case class START_EGG(eggId: ID, globId: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (START_EGG, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       g <- WorldBlock.getBlob(globId)
@@ -385,6 +403,7 @@ object START_EGG {
 
 case class ADD_DESTINATION(id: ID, dest: destination)
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (ADD_DESTINATION, 2)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       blob <- WorldBlock.getBlob(id)
@@ -411,7 +430,7 @@ object ADD_DESTINATION {
 
 case class GET_NEXT_DESTINATION(id: ID)
     extends ResponseQuery[Globz.Service with WorldBlock.Block] {
-
+  override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)
   def distance(v1: Vector[Double], v2: Vector[Double]): Double = {
     val minDist = v1.length min v2.length
     val v1_trunc = v1.take(minDist)
@@ -465,6 +484,7 @@ object GET_NEXT_DESTINATION {
 
 case class GET_ALL_DESTINATIONS(id: ID)
     extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_ALL_DESTINATIONS, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
@@ -489,6 +509,7 @@ object GET_ALL_DESTINATIONS {
 
 case class CLEAR_DESTINATIONS(id: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (CLEAR_DESTINATIONS, id)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -508,6 +529,7 @@ object CLEAR_DESTINATIONS {
 
 case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (APPLY_VECTOR, id)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -526,6 +548,7 @@ object APPLY_VECTOR {
 }
 
 case class GET_INPUT_VECTOR(id: ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_INPUT_VECTOR, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -551,6 +574,7 @@ object GET_INPUT_VECTOR {
 
 case class SET_LV(id: GLOBZ_ID, lv: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = SET_LV
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -568,6 +592,7 @@ object SET_LV {
     DeriveJsonDecoder.gen[SET_LV]
 }
 case class LAZY_LV(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = LAZY_LV
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -598,6 +623,7 @@ object PhysicalStats {
 }
 case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  val REF_TYPE: Any = (ADJUST_PHYSICAL_STATS, id)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -616,6 +642,7 @@ object ADJUST_PHYSICAL_STATS {
 
 case class GET_PHYSICAL_STATS(id: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = GET_PHYSICAL_STATS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
@@ -634,6 +661,7 @@ object GET_PHYSICAL_STATS {
 
 case class ADD_TERRAIN(id: String, location: Vector[Double])
     extends SimpleCommandSerializable[WorldBlock.Block] {
+  val REF_TYPE: Any = ADD_TERRAIN
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     for {
       _ <- ZIO.log("ADDING TERRAIN")
@@ -657,6 +685,7 @@ object ADD_TERRAIN {
 
 case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
     extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = GET_ALL_TERRAIN
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     // todo split between get_all_terrain_within_block and get_all_terrain_within_radius_of_loc
     for {
@@ -693,6 +722,7 @@ object GET_ALL_TERRAIN {
 
 case class GET_TERRAIN_WITHIN_DISTANCE(location: Vector[Double], radius: Double)
     extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = GET_TERRAIN_WITHIN_DISTANCE
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     res <- WorldBlock.getTerrain
       .flatMap(
@@ -716,6 +746,7 @@ object GET_TERRAIN_WITHIN_DISTANCE {
 
 case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
     extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = (GET_TERRAIN_WITHIN_PLAYER_DISTANCE, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     _ <- ZIO.log("GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
     location <- WorldBlock
@@ -760,6 +791,7 @@ case class CONSOLE(
   execute_as: GLOBZ_ID,
   cmd: SerializableCommand[CONSOLE_ENV, Any]
 ) extends ResponseQuery[CONSOLE_ENV] {
+  val REF_TYPE: Any = (cmd.REF_TYPE, execute_as)
   override def run
     : ZIO[Globz.Service with WorldBlock.Block, CommandError, QueryResponse] =
     cmd.run

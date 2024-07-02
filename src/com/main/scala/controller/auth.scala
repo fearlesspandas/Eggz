@@ -1,9 +1,12 @@
 package controller
 
-import controller.auth._
+import controller.auth.*
+import zio.Ref
 import zio.ZIO
 
 package object auth {
+
+  case class CommandAuth(authorizer: AUTH[String]) {}
 
   // authorization layer for each command
   // compose these through flatmap/map/for-comprehension
@@ -232,4 +235,28 @@ object AuthCommandService {
             }
             .mapError(_ => "failed group validate")
         }.fold(_ => false, x => x)
+}
+
+case class AuthenticationService(
+  cachedAuth: Ref[Map[Any, Boolean]],
+  authorizer: AUTH[String]
+) {
+  def verify_with_caching: AUTH[String] = (cmd: Any) =>
+    cmd match {
+      case command: SerializableCommand[_, _] =>
+        for {
+          cached <- cachedAuth.get.map(_.get(command.REF_TYPE))
+          res <- cached match {
+            case Some(r) =>
+              ZIO.succeed(r)
+            case None =>
+              for {
+                _ <- ZIO.log("creating cached")
+                rres <- authorizer(cmd)
+                _ <- cachedAuth.update(_.updated(command.REF_TYPE, rres))
+              } yield rres
+          }
+        } yield res
+      case _ => ZIO.succeed(false)
+    }
 }

@@ -2,6 +2,7 @@ package network
 
 import controller.SerializableCommand.CommandError
 import controller.AuthCommandService
+import controller.AuthenticationService
 import controller.BasicController
 import controller.Blob
 import controller.CONSOLE
@@ -36,7 +37,8 @@ import zio.http.codec.PathCodec.string
 import zio.json.DecoderOps
 import zio.json.EncoderOps
 import zio.prelude.AssociativeBothCovariantOps
-
+import zio.profiling.sampling.*
+import zio.profiling.causal.*
 object WebSocketAdvanced extends ZIOAppDefault {
   // handles auth map and controller
 
@@ -47,7 +49,14 @@ object WebSocketAdvanced extends ZIOAppDefault {
       )
     )
 
-  override val run = program().provide(ZLayer.succeed(WebSocketServerBasic))
+  override val run =
+//    CausalProfiler(10)
+//      .profile(
+    program()
+      .provide(ZLayer.succeed(WebSocketServerBasic))
+      .map(x => ???)
+//      )
+//      .flatMap(_.renderToFile("profile.causal"))
   def program(): ZIO[WebSocketServer.Service, Nothing, Unit] =
     (for {
       _ <- ZIO.logInfo("server started")
@@ -215,6 +224,12 @@ case class BasicWebSocket(
       channel.receiveAll {
         case Read(WebSocketFrame.Text(text)) =>
           recieveAll(channel, text).mapError(_ => ???)
+        // *> CausalProfiler
+//            .progressPoint(
+//              "rendered command" +
+//                ""
+//            )
+
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>
@@ -224,6 +239,7 @@ case class BasicWebSocket(
             "Closing channel with status: " + status + " and reason: " + reason
           )
         case ExceptionCaught(cause) =>
+          // channel.shutdown
           Console.printLine(s"Channel error!: ${cause.getMessage}")
 
       }
@@ -240,12 +256,16 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
         .service[BasicController[Globz.Service with WorldBlock.Block]]
       sessions <- ZIO.service[Ref[SESSION_MAP]]
       authd <- Ref.make(false)
+      cachedAuth <- Ref.make(Map.empty[Any, Boolean])
     } yield BasicWebSocket(
       authID,
       sessions,
       controller,
       authd,
       Set("1"),
-      AuthCommandService.all_non_par(Set("1"))
+      AuthenticationService(
+        cachedAuth,
+        AuthCommandService.all_non_par(Set("1"))
+      ).verify_with_caching
     )
 }
