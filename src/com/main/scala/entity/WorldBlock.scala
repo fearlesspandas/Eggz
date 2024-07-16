@@ -198,6 +198,7 @@ object WorldBlockEnvironment {
           y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
           z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
           _ <- worldblock.spawnBlob(p, Vector(x, y, z))
+          _ <- p.teleport(Vector(x, y, z))
           _ <- worldblock.npc_handler.add_entity_as_npc(p)
           _ <- worldblock.npc_handler
             .scheduleEgg(

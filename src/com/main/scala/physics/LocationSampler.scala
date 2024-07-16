@@ -1,0 +1,5 @@
+package physics
+
+trait LocationSampler {
+
+}
