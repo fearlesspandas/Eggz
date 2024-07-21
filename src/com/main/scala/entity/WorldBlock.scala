@@ -6,17 +6,16 @@ import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
+import src.com.main.scala.network.PhysicsChannel
 import zio.Ref
 import zio.ZLayer
 
 //import src.com.main.scala.entity.Globz
 import zio.ExitCode
-//import zio.Has
 import zio._
 
 object WorldBlock {
 
-//  type WorldBlock = Has[WorldBlock.Service]
 
   trait Block {
     def spawnBlob(
@@ -36,6 +35,9 @@ object WorldBlock {
     val terrain: TerrainManager with Terrain
     def getTerrain: IO[WorldBlockError, TerrainManager with Terrain] =
       ZIO.succeed(terrain)
+    val physics_channel:PhysicsChannel
+    def getPhysicsChannel:IO[WorldBlockError,PhysicsChannel] = 
+      ZIO.succeed(physics_channel)
   }
 
   trait Service {
@@ -71,6 +73,10 @@ object WorldBlock {
   def getTerrain
     : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
     ZIO.environmentWithZIO(_.get.getTerrain)
+  
+  def getPhysicsChannel:ZIO[WorldBlock.Block,WorldBlockError,PhysicsChannel] = 
+    ZIO.environmentWithZIO(_.get.getPhysicsChannel)
+
   trait WorldBlockError
 
   case class GenericWorldBlockError(msg: String) extends WorldBlockError
@@ -81,7 +87,8 @@ case class WorldBlockInMem(
   coordsRef: Ref[Map[GLOBZ_ID, Vector[Double]]],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   terrain: TerrainManager with Terrain,
-  npc_handler: NPCHandler
+  npc_handler: NPCHandler,
+  physics_channel:PhysicsChannel
 ) extends WorldBlock.Block {
 
   override def spawnBlob(
