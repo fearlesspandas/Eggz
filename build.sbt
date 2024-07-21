@@ -26,7 +26,7 @@ libraryDependencies += compilerPlugin(
 //// https://mvnrepository.com/artifact/dev.zio/zio-streams
 //libraryDependencies += "dev.zio" %% "zio-streams" % "2.0.0-RC2"
 Compile / mainClass := Some("network.WebSocketAdvanced")
-
+//Compile / run / fork := true
 assembly / assemblyMergeStrategy := {
   case PathList("META-INF", xs @ _*) => MergeStrategy.discard
   case x                             => MergeStrategy.first

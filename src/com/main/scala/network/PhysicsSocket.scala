@@ -54,7 +54,8 @@ trait PhysicsSocket{
 }
 
 trait PhysicsChannel{
-  def get_channel():IO[PhysicsChannelError,WebSocketChannel]
+  def register(id:GlobzId):IO[PhysicsChannelError,Unit]
+  private def get_channel():IO[PhysicsChannelError,WebSocketChannel]
   def send(msg:String):IO[PhysicsChannelError,Unit] = 
     for{
       channel <- get_channel()
@@ -69,6 +70,24 @@ trait PhysicsChannel{
             .mapError(err => FailedSend(s"Error while sending to physics server : $err"))
     }yield()
 }
-
+case class BasicPhysicsChannel() extends PhysicsChannel{
+  val tracked_ids:Ref[Set[GlobzId]]
+  val id_queue:Ref[Seq[GlobzId]]
+  def register(id:GlobzId) = 
+    for{
+      _ <- tracked_ids.update(id +: _)
+    } yield ()
+  def loop = 
+    (for{
+      q <- id_queue.get
+      next_id <- ZIO.fromOption(q.headOption)
+        .flatMapError(err => for{
+          _ <- id_queue.update(tracked_ids)
+          n <- ZIO.fromOption(id_queue.headOption)
+        }yield n)
+      _ <- get_location(next_id) 
+      _ <- id_queue.update(_.tail)
+    } yield ()).repeat(Duration.Inf)
+}
 trait PhysicsChannelError
-case class FailedSend(msg:String) extends PhysicsChannelErrr
+case class FailedSend(msg:String) extends PhysicsChannelError
