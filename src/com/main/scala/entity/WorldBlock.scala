@@ -1,21 +1,25 @@
 package entity
 
 import entity.WorldBlock.GenericWorldBlockError
+import network.example.PhysicsChannel
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.network.PhysicsChannel
 import zio.Ref
 import zio.ZLayer
+import zio.http.ChannelEvent.UserEvent
+import zio.http.ChannelEvent.UserEventTriggered
+import zio.http.Client
+import zio.http.Handler
+import zio.http.WebSocketApp
 
 //import src.com.main.scala.entity.Globz
 import zio.ExitCode
 import zio._
 
 object WorldBlock {
-
 
   trait Block {
     def spawnBlob(
@@ -35,9 +39,9 @@ object WorldBlock {
     val terrain: TerrainManager with Terrain
     def getTerrain: IO[WorldBlockError, TerrainManager with Terrain] =
       ZIO.succeed(terrain)
-    val physics_channel:PhysicsChannel
-    def getPhysicsChannel:IO[WorldBlockError,PhysicsChannel] = 
-      ZIO.succeed(physics_channel)
+    // val physics_channel: PhysicsChannel
+//    def getPhysicsChannel: IO[WorldBlockError, PhysicsChannel] =
+//      ZIO.succeed(physics_channel)
   }
 
   trait Service {
@@ -73,9 +77,10 @@ object WorldBlock {
   def getTerrain
     : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
     ZIO.environmentWithZIO(_.get.getTerrain)
-  
-  def getPhysicsChannel:ZIO[WorldBlock.Block,WorldBlockError,PhysicsChannel] = 
-    ZIO.environmentWithZIO(_.get.getPhysicsChannel)
+
+//  def getPhysicsChannel
+//    : ZIO[WorldBlock.Block, WorldBlockError, PhysicsChannel] =
+//    ZIO.environmentWithZIO(_.get.getPhysicsChannel)
 
   trait WorldBlockError
 
@@ -87,9 +92,22 @@ case class WorldBlockInMem(
   coordsRef: Ref[Map[GLOBZ_ID, Vector[Double]]],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   terrain: TerrainManager with Terrain,
-  npc_handler: NPCHandler,
-  physics_channel:PhysicsChannel
+  npc_handler: NPCHandler
 ) extends WorldBlock.Block {
+
+  val physics_socket: WebSocketApp[Any] =
+    Handler.webSocket { channel =>
+      channel.receiveAll {
+        case UserEventTriggered(UserEvent.HandshakeComplete) =>
+          ZIO.log("Channel Connected")
+        case x => ZIO.log(s"other traffic $x")
+      }
+    }
+
+  val physics_app = physics_socket.connect(PhysicsChannel.url)
+
+  val start_socket =
+    physics_app.provide(Client.default, Scope.default) *> ZIO.never
 
   override def spawnBlob(
     blob: Globz,
@@ -182,7 +200,13 @@ object WorldBlockInMem extends WorldBlock.Service {
       res = WorldBlockInMem(s, t, terrain, npchandler)
 
       _ <- WorldBlockEnvironment.add_prowlers(res, 30, 200).mapError(_ => ???)
-
+      _ <- ZIO.log("Attempting to start physics socket")
+      _ <- res.start_socket
+        .mapError(err =>
+          GenericWorldBlockError(s"Error starting physics socket : $err")
+        )
+        .fork
+      _ <- ZIO.log("Physics Socket Started")
     } yield res
 }
 object WorldBlockEnvironment {

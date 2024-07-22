@@ -130,7 +130,7 @@ case class GlobzInMem(val id: GLOBZ_ID, dbref: EggMap, relationRef: RelationMap)
           _.map(eg => op.provide(ZLayer.succeed(egg)))
             .getOrElse(ZIO.succeed(ExitCode.failure))
         )
-        .flatMapError(err => ZIO.log(err))
+        .flatMapError(err => ZIO.unit)
     } yield ())
       .fold(
         err => (),

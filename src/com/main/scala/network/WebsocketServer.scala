@@ -31,7 +31,7 @@ object WebSocketServer {
   type PUB_KEY_MAP = Map[String, String]
 
   trait Service {
-    def make: IO[Nothing, WebSocketServer]
+    def make: IO[WebSocketError, WebSocketServer]
   }
 }
 
@@ -83,12 +83,14 @@ case class WebSocketServerBasic(
     ).toHttpApp
 
 }
+trait WebSocketError
+case class GenericWebsocketError(msg: String) extends WebSocketError
 object WebSocketServerBasic extends WebSocketServer.Service {
-  override def make: IO[Nothing, WebSocketServer] =
+  override def make: IO[WebSocketError, WebSocketServer] =
     for {
       controller <- BasicController.make
         .provide(ZLayer.succeed(Control))
-        .mapError(_ => ???)
+        .mapError(err => GenericWebsocketError(err.toString))
       sessionmap <- Ref.make(Map.empty[String, SECRET])
       pubkeyMap <- Ref.make(Map.empty[String, String])
     } yield WebSocketServerBasic(controller, sessionmap, pubkeyMap)

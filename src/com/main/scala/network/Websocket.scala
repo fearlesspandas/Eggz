@@ -57,12 +57,12 @@ object WebSocketAdvanced extends ZIOAppDefault {
       .map(x => ???)
 //      )
 //      .flatMap(_.renderToFile("profile.causal"))
-  def program(): ZIO[WebSocketServer.Service, Nothing, Unit] =
+  def program(): ZIO[WebSocketServer.Service, WebSocketError, Unit] =
     (for {
       _ <- ZIO.logInfo("server started")
       wss <- ZIO.service[WebSocketServer.Service].flatMap(_.make)
       _ <- Server.serve(wss.app).provide(config)
-    } yield ()).mapError(_ => ???)
+    } yield ()).mapError(err => GenericWebsocketError(err.toString))
 }
 
 case class BasicWebSocket(
