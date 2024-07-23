@@ -9,11 +9,14 @@ import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
 import zio.Ref
 import zio.ZLayer
+import zio.http.ChannelEvent.ExceptionCaught
+import zio.http.ChannelEvent.Read
 import zio.http.ChannelEvent.UserEvent
 import zio.http.ChannelEvent.UserEventTriggered
 import zio.http.Client
 import zio.http.Handler
 import zio.http.WebSocketApp
+import zio.http.WebSocketFrame
 
 //import src.com.main.scala.entity.Globz
 import zio.ExitCode
@@ -99,15 +102,21 @@ case class WorldBlockInMem(
     Handler.webSocket { channel =>
       channel.receiveAll {
         case UserEventTriggered(UserEvent.HandshakeComplete) =>
-          ZIO.log("Channel Connected")
+          channel
+            .send(Read(WebSocketFrame.text("TESty")))
+            .repeat(Schedule.spaced(Duration.fromMillis(3000)))
+        // ZIO.log("Channel Connected")
+        case ExceptionCaught(cause) =>
+          ZIO.logError(s"Error while handling physics socket $cause")
+
         case x => ZIO.log(s"other traffic $x")
       }
     }
 
-  val physics_app = physics_socket.connect(PhysicsChannel.url)
+  val physics_app = physics_socket.connect(PhysicsChannel.url) *> ZIO.never
 
   val start_socket =
-    physics_app.provide(Client.default, Scope.default) *> ZIO.never
+    physics_app.provide(Client.default, Scope.default)
 
   override def spawnBlob(
     blob: Globz,
@@ -176,7 +185,7 @@ object WorldBlockInMem extends WorldBlock.Service {
             y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
             z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
             _ <- terrain.add_terrain("6", Vector(x, y, z))
-            _ <- ZIO.log(s"Creating terrain: $x, $y, $z")
+            // _ <- ZIO.log(s"Creating terrain: $x, $y, $z")
 
           } yield ()
         }
@@ -191,7 +200,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       all <- terrain
         .get_terrain()
         .mapError(_ => GenericWorldBlockError("Error while gettng terrain"))
-      _ <- ZIO.log(s"Initializing with Terrain: $all")
+      // _ <- ZIO.log(s"Initializing with Terrain: $all")
 
       npchandler <- NPCHandler
         .make()
@@ -205,7 +214,8 @@ object WorldBlockInMem extends WorldBlock.Service {
         .mapError(err =>
           GenericWorldBlockError(s"Error starting physics socket : $err")
         )
-        .fork
+      // .flatMapError(err => ZIO.log(err.toString))
+      // .fork
       _ <- ZIO.log("Physics Socket Started")
     } yield res
 }
