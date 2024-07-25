@@ -1,6 +1,7 @@
 package entity
 
 import entity.WorldBlock.GenericWorldBlockError
+import network.example.BasicPhysicsChannel
 import network.example.PhysicsChannel
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -95,25 +96,39 @@ case class WorldBlockInMem(
   coordsRef: Ref[Map[GLOBZ_ID, Vector[Double]]],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   terrain: TerrainManager with Terrain,
-  npc_handler: NPCHandler
+  npc_handler: NPCHandler,
+  physics_channel: PhysicsChannel
 ) extends WorldBlock.Block {
 
-  val physics_socket: WebSocketApp[Any] =
-    Handler.webSocket { channel =>
-      channel.receiveAll {
-        case UserEventTriggered(UserEvent.HandshakeComplete) =>
-          channel
-            .send(Read(WebSocketFrame.text("TESty")))
-            .repeat(Schedule.spaced(Duration.fromMillis(3000)))
-        // ZIO.log("Channel Connected")
-        case ExceptionCaught(cause) =>
-          ZIO.logError(s"Error while handling physics socket $cause")
+  val physics_socket: PhysicsChannel => WebSocketApp[Any] =
+    (pc: PhysicsChannel) =>
+      Handler.webSocket { channel =>
+        channel.receiveAll {
+          case UserEventTriggered(UserEvent.HandshakeComplete) =>
+            (for {
+//              _ <- channel
+//                .send(Read(WebSocketFrame.text("Echo:hello")))
+//                .repeat(Schedule.spaced(Duration.fromMillis(3000)))
+//                .fork
+              _ <- pc.register("test").mapError(_ => ???)
+              _ <- pc
+                .loop(100)
+//                .flatMap(_ => ZIO.log("looping"))
+                .provide(ZLayer.succeed(channel))
+                .flatMapError(err =>
+                  ZIO.log(s"Error while processing loop ${err.toString}")
+                )
+                .fork
+            } yield ()) *> ZIO.log("Channel Connected")
+          case ExceptionCaught(cause) =>
+            ZIO.logError(s"Error while handling physics socket $cause")
 
-        case x => ZIO.log(s"other traffic $x")
+          case x => ZIO.log(s"other traffic $x")
+        }
       }
-    }
 
-  val physics_app = physics_socket.connect(PhysicsChannel.url) *> ZIO.never
+  val physics_app =
+    physics_socket(physics_channel).connect(PhysicsChannel.url) *> ZIO.never
 
   val start_socket =
     physics_app.provide(Client.default, Scope.default)
@@ -205,8 +220,14 @@ object WorldBlockInMem extends WorldBlock.Service {
       npchandler <- NPCHandler
         .make()
         .orElseFail(GenericWorldBlockError("Error while creating npchandler"))
-
-      res = WorldBlockInMem(s, t, terrain, npchandler)
+      pc <- Ref
+        .make(Seq.empty[GLOBZ_ID])
+        .flatMap(queue =>
+          Ref
+            .make(Set.empty[GLOBZ_ID])
+            .map(tracked_ids => BasicPhysicsChannel(tracked_ids, queue))
+        )
+      res = WorldBlockInMem(s, t, terrain, npchandler, pc)
 
       _ <- WorldBlockEnvironment.add_prowlers(res, 30, 200).mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
@@ -214,8 +235,8 @@ object WorldBlockInMem extends WorldBlock.Service {
         .mapError(err =>
           GenericWorldBlockError(s"Error starting physics socket : $err")
         )
-      // .flatMapError(err => ZIO.log(err.toString))
-      // .fork
+        .flatMapError(err => ZIO.log(err.toString))
+        .fork
       _ <- ZIO.log("Physics Socket Started")
     } yield res
 }

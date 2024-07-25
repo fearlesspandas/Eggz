@@ -10,10 +10,11 @@ import zio.http.ChannelEvent.UserEventTriggered
 import zio.http.*
 trait PhysicsChannel {
   def register(id: GLOBZ_ID): IO[PhysicsChannelError, Unit]
-  def get_channel(): IO[PhysicsChannelError, WebSocketChannel]
-  def send(msg: String): IO[PhysicsChannelError, Unit] =
+
+  def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long]
+  def send(msg: String): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
-      channel <- get_channel()
+      channel <- ZIO.service[WebSocketChannel]
       _ <- channel
         .send(Read(WebSocketFrame.text(msg)))
         .mapError(err =>
@@ -21,27 +22,21 @@ trait PhysicsChannel {
         )
     } yield ()
 
-  def get_location(id: String): IO[PhysicsChannelError, Unit] =
+  def get_location(
+    id: String
+  ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
-      channel <- get_channel()
-      _ <- channel
-        .send(
-          Read(
-            WebSocketFrame.text(
-              s""" "type":"GET_LOCATION", "body":{"id":$id} """
-            )
-          )
-        )
+      _ <- send(s""" {"type":"GET_GLOB_LOCATION", "body":{"id": "$id"}} """)
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
         )
+      _ <- ZIO.log(s"Trying to get coords for ${id}")
     } yield ()
 }
 object PhysicsChannel {
   val url = "ws://127.0.0.1:8081"
 }
 case class BasicPhysicsChannel(
-  channel: WebSocketChannel,
   tracked_ids: Ref[Set[GLOBZ_ID]],
   id_queue: Ref[Seq[GLOBZ_ID]]
 ) extends PhysicsChannel {
@@ -49,10 +44,13 @@ case class BasicPhysicsChannel(
   override def register(id: GLOBZ_ID): IO[PhysicsChannelError, Unit] =
     for {
       _ <- tracked_ids.update(_ + id)
+      _ <- id_queue.update(id +: _)
+      _ <- ZIO.log(s"Id registered $id")
     } yield ()
 
-  def loop =
+  def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
     (for {
+      _ <- ZIO.log("Looping through Physics ")
       q <- id_queue.get
       next_id <- ZIO
         .fromOption(q.headOption)
@@ -63,11 +61,20 @@ case class BasicPhysicsChannel(
             n <- ZIO.fromOption(ids.headOption).mapError(_ => ???)
           } yield n
         )
-      _ <- get_location(next_id)
-      _ <- id_queue.update(_.tail)
-    } yield ()).repeat(Schedule.spaced(Duration.fromMillis(10)))
-
-  override def get_channel(): IO[PhysicsChannelError, WebSocketChannel] = ???
+      _ <- send("Echo: hello")
+      _ <- send("""{
+          |"type":"SET_GLOB_LOCATION",
+          |"body":{
+          | "id" : "test",
+          | "location": [0.0,0.0,0.0]
+          |}
+          |}""".stripMargin)
+      _ <- get_location("test")
+//      _ <- id_queue.update(_.tail)
+    } yield ())
+      .repeat(Schedule.spaced(Duration.fromMillis(interval)))
+//      .map(_ => ())
+      .mapError(err => FailedSend(s"Error inside loop ${err.toString}"))
 }
 trait PhysicsChannelError
 case class FailedSend(msg: String) extends PhysicsChannelError
