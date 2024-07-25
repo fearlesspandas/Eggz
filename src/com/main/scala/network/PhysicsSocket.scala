@@ -30,7 +30,6 @@ trait PhysicsChannel {
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
         )
-      _ <- ZIO.log(s"Trying to get coords for ${id}")
     } yield ()
 }
 object PhysicsChannel {
@@ -50,30 +49,23 @@ case class BasicPhysicsChannel(
 
   def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
     (for {
-      _ <- ZIO.log("Looping through Physics ")
       q <- id_queue.get
       next_id <- ZIO
         .fromOption(q.headOption)
-        .flatMapError(err =>
-          for {
-            ids <- tracked_ids.get
-            _ <- id_queue.update(_ => ids.toSeq)
-            n <- ZIO.fromOption(ids.headOption).mapError(_ => ???)
-          } yield n
+        .foldZIO(
+          err =>
+            for {
+              ids <- tracked_ids.get
+              _ <- id_queue.update(_ => ids.toSeq)
+              n <- ZIO.fromOption(ids.headOption).mapError(_ => ???)
+            } yield n,
+          x => ZIO.succeed(x)
         )
       _ <- send("Echo: hello")
-      _ <- send("""{
-          |"type":"SET_GLOB_LOCATION",
-          |"body":{
-          | "id" : "test",
-          | "location": [0.0,0.0,0.0]
-          |}
-          |}""".stripMargin)
-      _ <- get_location("test")
-//      _ <- id_queue.update(_.tail)
+      _ <- get_location(next_id)
+      _ <- id_queue.update(_.tail)
     } yield ())
       .repeat(Schedule.spaced(Duration.fromMillis(interval)))
-//      .map(_ => ())
       .mapError(err => FailedSend(s"Error inside loop ${err.toString}"))
 }
 trait PhysicsChannelError

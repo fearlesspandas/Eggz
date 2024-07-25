@@ -1,6 +1,5 @@
 package network
 
-package example
 
 import zio.*
 import zio.http.ChannelEvent.ExceptionCaught

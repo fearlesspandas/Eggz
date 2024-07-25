@@ -3,6 +3,7 @@ package entity
 import entity.WorldBlock.GenericWorldBlockError
 import network.example.BasicPhysicsChannel
 import network.example.PhysicsChannel
+import physics.SendLocation
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz
@@ -18,7 +19,7 @@ import zio.http.Client
 import zio.http.Handler
 import zio.http.WebSocketApp
 import zio.http.WebSocketFrame
-
+import zio.json.*
 //import src.com.main.scala.entity.Globz
 import zio.ExitCode
 import zio._
@@ -30,6 +31,7 @@ object WorldBlock {
       blob: Globz,
       coords: Vector[Double]
     ): IO[WorldBlockError, ExitCode]
+    // deprecated
     def spawnFreshBlob(
       coords: Vector[Double]
     ): ZIO[Globz, WorldBlockError, ExitCode]
@@ -59,6 +61,7 @@ object WorldBlock {
     coords: Vector[Double]
   ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO(_.get.spawnBlob(blob, coords))
+    // deprecated
   def spawnFreshBlob(
     coords: Vector[Double]
   ): ZIO[WorldBlock.Block with Globz, WorldBlockError, ExitCode] =
@@ -104,16 +107,29 @@ case class WorldBlockInMem(
     (pc: PhysicsChannel) =>
       Handler.webSocket { channel =>
         channel.receiveAll {
+          case Read(WebSocketFrame.Text(txt)) =>
+            for {
+              r <- ZIO
+                .fromEither(txt.fromJson[SendLocation])
+                .flatMapError(err => ZIO.log(s"Could not map $txt due to $err"))
+                .fold(_ => (), x => x)
+              _ <- ZIO.log(s"Found Location $r")
+            } yield ()
           case UserEventTriggered(UserEvent.HandshakeComplete) =>
             (for {
-//              _ <- channel
-//                .send(Read(WebSocketFrame.text("Echo:hello")))
-//                .repeat(Schedule.spaced(Duration.fromMillis(3000)))
-//                .fork
               _ <- pc.register("test").mapError(_ => ???)
               _ <- pc
+                .send("""{
+                            |"type":"SET_GLOB_LOCATION",
+                            |"body":{
+                            | "id" : "test",
+                            | "location": [0.0,0.0,0.0]
+                            |}
+                            |}""".stripMargin)
+                .provide(ZLayer.succeed(channel))
+                .mapError(_ => ???)
+              _ <- pc
                 .loop(100)
-//                .flatMap(_ => ZIO.log("looping"))
                 .provide(ZLayer.succeed(channel))
                 .flatMapError(err =>
                   ZIO.log(s"Error while processing loop ${err.toString}")
@@ -137,11 +153,11 @@ case class WorldBlockInMem(
     blob: Globz,
     coords: Vector[Double]
   ): IO[WorldBlock.WorldBlockError, ExitCode] =
-    (for {
+    for {
       _ <- coordsRef.update(_.updated(blob.id, coords))
       _ <- dbRef.update(_.updated(blob.id, blob))
-    } yield ExitCode.success) // .mapError(_ => GenericWorldBlockError("error spawning blob"))
-  // .mapError(_ => GenericWorldBlockError("error spawning blob"))
+      _ <- physics_channel.register(blob.id).mapError(_ => ???)
+    } yield ExitCode.success
 
   override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
     for {
@@ -165,7 +181,7 @@ case class WorldBlockInMem(
     } yield ExitCode.apply(fail)).mapError(_ =>
       GenericWorldBlockError("error tick blobs")
     )
-
+  // deprecated
   override def spawnFreshBlob(
     coords: Vector[Double]
   ): ZIO[Globz, WorldBlock.WorldBlockError, ExitCode] =
