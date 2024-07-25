@@ -16,3 +16,22 @@ object SendLocation {
   implicit val decoder: JsonDecoder[SendLocation] =
     DeriveJsonDecoder.gen[SendLocation]
 }
+object serializationTest {
+
+  import zio.json._
+
+  def main(args: Array[String]): Unit = {
+    val str = SendLocation("test", Vector(0, 0, 0))
+    println(str.toJson)
+    val cmd =
+      """{
+        |"SendLocation":{
+        | "id":"test",
+        | "loc":[0.0,0.0,0.0]
+        |   }
+        |}""".stripMargin
+    val res = cmd.fromJson[PhysicsCommand]
+    if (res.isLeft) { println(res.left) }
+    assert(res.isRight)
+  }
+}

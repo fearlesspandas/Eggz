@@ -3,6 +3,7 @@ package entity
 import entity.WorldBlock.GenericWorldBlockError
 import network.example.BasicPhysicsChannel
 import network.example.PhysicsChannel
+import physics.PhysicsCommand
 import physics.SendLocation
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -108,26 +109,16 @@ case class WorldBlockInMem(
       Handler.webSocket { channel =>
         channel.receiveAll {
           case Read(WebSocketFrame.Text(txt)) =>
-            for {
+            (for {
               r <- ZIO
-                .fromEither(txt.fromJson[SendLocation])
+                .fromEither(txt.fromJson[PhysicsCommand])
                 .flatMapError(err => ZIO.log(s"Could not map $txt due to $err"))
-                .fold(_ => (), x => x)
+//                .map(x => x.asInstanceOf[SendLocation])
+//              _ <- this.getBlob(r.id).flatMap{ case pe:PhysicalEntity => pe.teleport(r.loc)}
               _ <- ZIO.log(s"Found Location $r")
-            } yield ()
+            } yield ()).fold(_ => (), x => x)
           case UserEventTriggered(UserEvent.HandshakeComplete) =>
             (for {
-              _ <- pc.register("test").mapError(_ => ???)
-              _ <- pc
-                .send("""{
-                            |"type":"SET_GLOB_LOCATION",
-                            |"body":{
-                            | "id" : "test",
-                            | "location": [0.0,0.0,0.0]
-                            |}
-                            |}""".stripMargin)
-                .provide(ZLayer.succeed(channel))
-                .mapError(_ => ???)
               _ <- pc
                 .loop(100)
                 .provide(ZLayer.succeed(channel))
