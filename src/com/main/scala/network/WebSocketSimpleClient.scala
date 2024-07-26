@@ -1,6 +1,5 @@
 package network
 
-
 import zio.*
 import zio.http.ChannelEvent.ExceptionCaught
 import zio.http.ChannelEvent.Read
@@ -48,7 +47,7 @@ object WebSocketSimpleClient extends ZIOAppDefault {
         channel.receiveAll {
 
           case UserEventTriggered(UserEvent.HandshakeComplete) =>
-            echo_test(channel)
+            physics_test(channel)
               .repeat(Schedule.spaced(Duration.fromMillis(1000)))
               .fork *> ZIO.log("channel connected")
           case ExceptionCaught(cause) => ZIO.log(cause.toString)

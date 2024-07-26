@@ -50,16 +50,12 @@ case class BasicPhysicsChannel(
   def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
     (for {
       q <- id_queue.get
-      _ <- if (q.size == 0) send("Echo: hello") else ZIO.unit
       next_id <- ZIO
         .fromOption(q.headOption)
         .foldZIO(
           err =>
             for {
               ids <- tracked_ids.get
-//              _ <-
-//                if (ids.size == 0) send("Echo: hello")
-//                else ZIO.unit
               _ <- id_queue.update(_ => ids.toSeq)
               n <- ZIO.fromOption(ids.headOption).mapError(_ => ???)
             } yield n,

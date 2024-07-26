@@ -113,12 +113,27 @@ case class WorldBlockInMem(
               r <- ZIO
                 .fromEither(txt.fromJson[PhysicsCommand])
                 .flatMapError(err => ZIO.log(s"Could not map $txt due to $err"))
-//                .map(x => x.asInstanceOf[SendLocation])
-//              _ <- this.getBlob(r.id).flatMap{ case pe:PhysicalEntity => pe.teleport(r.loc)}
+                .map(_.asInstanceOf[SendLocation])
+              _ <- getBlob(r.id).flatMap { case pe: PhysicalEntity =>
+                pe.teleport(r.loc) *> ZIO.log("teleporting")
+              }
               _ <- ZIO.log(s"Found Location $r")
-            } yield ()).fold(_ => (), x => x)
+            } yield ()).foldZIO(
+              err => ZIO.log(s"processing failed on $txt with err $err"),
+              x => ZIO.succeed(x)
+            )
           case UserEventTriggered(UserEvent.HandshakeComplete) =>
             (for {
+              _ <- pc
+                .send("""{
+                  |"type" : "SET_GLOB_LOCATION",
+                  |"body": {
+                  | "id": "Prowler_2",
+                  | "location" : [0.0,0,0,0,0]
+                  |}
+                  |}""".stripMargin)
+                .provide(ZLayer.succeed(channel))
+                .mapError(_ => ???)
               _ <- pc
                 .loop(100)
                 .provide(ZLayer.succeed(channel))
