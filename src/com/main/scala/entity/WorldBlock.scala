@@ -114,8 +114,9 @@ case class WorldBlockInMem(
                 .fromEither(txt.fromJson[PhysicsCommand])
                 .flatMapError(err => ZIO.log(s"Could not map $txt due to $err"))
                 .map(_.asInstanceOf[SendLocation])
-              _ <- getBlob(r.id).flatMap { case pe: PhysicalEntity =>
-                pe.teleport(r.loc) *> ZIO.log("teleporting")
+              _ <- getBlob(r.id).flatMap(ZIO.fromOption(_)).flatMap {
+                case pe: PhysicalEntity =>
+                  pe.teleport(r.loc)
               }
               _ <- ZIO.log(s"Found Location $r")
             } yield ()).foldZIO(
