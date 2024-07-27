@@ -118,25 +118,25 @@ case class WorldBlockInMem(
                 case pe: PhysicalEntity =>
                   pe.teleport(r.loc)
               }
-              _ <- ZIO.log(s"Found Location $r")
+//              _ <- ZIO.log(s"Found Location $r")
             } yield ()).foldZIO(
               err => ZIO.log(s"processing failed on $txt with err $err"),
               x => ZIO.succeed(x)
             )
           case UserEventTriggered(UserEvent.HandshakeComplete) =>
             (for {
+//              _ <- pc
+//                .send("""{
+//                  |"type" : "SET_GLOB_LOCATION",
+//                  |"body": {
+//                  | "id": "Prowler_2",
+//                  | "location" : [0.0,0,0,0,0]
+//                  |}
+//                  |}""".stripMargin)
+//                .provide(ZLayer.succeed(channel))
+//                .mapError(_ => ???)
               _ <- pc
-                .send("""{
-                  |"type" : "SET_GLOB_LOCATION",
-                  |"body": {
-                  | "id": "Prowler_2",
-                  | "location" : [0.0,0,0,0,0]
-                  |}
-                  |}""".stripMargin)
-                .provide(ZLayer.succeed(channel))
-                .mapError(_ => ???)
-              _ <- pc
-                .loop(100)
+                .loop(10)
                 .provide(ZLayer.succeed(channel))
                 .flatMapError(err =>
                   ZIO.log(s"Error while processing loop ${err.toString}")
@@ -216,30 +216,50 @@ object WorldBlockInMem extends WorldBlock.Service {
       ) // create terrain region for world block
       // condense output schema to increase payload size
       radius = 1000
+      num = 10000
+      groups = (0 to num).grouped(1000)
       _ <- ZIO
-        .foreach(0 to 10000) { _ =>
-          for {
-            x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-            y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-            z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-            _ <- terrain.add_terrain("6", Vector(x, y, z))
-            // _ <- ZIO.log(s"Creating terrain: $x, $y, $z")
-
-          } yield ()
-        }
-        .orElseFail(
-          GenericWorldBlockError("Error while adding randomized terrain")
-        )
+        .collectAllPar(groups.map { r =>
+          ZIO
+            .foreach(r) { i =>
+              for {
+                x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                _ <- terrain.add_terrain("6", Vector(x, y, z))
+//                _ <-
+//                  if (i % 1000 == 0)
+//                    Console.printLine(s"Generating terrain $i/$num")
+//                  else ZIO.unit
+                // _ <- Console.print("\0000b[2J")
+              } yield ()
+            }
+        }.toSeq)
+        .mapError(_ => ???)
+//      _ <- ZIO
+//        .foreach(0 to num) { i =>
+//          for {
+//            x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+//            y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+//            z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+//            _ <- terrain.add_terrain("6", Vector(x, y, z))
+//            _ <-
+//              if (i % 1000 == 0)
+//                Console.printLine(s"Generating terrain $i/$num")
+//              else ZIO.unit
+//          } yield ()
+//        }
+//        .orElseFail(
+//          GenericWorldBlockError("Error while adding randomized terrain")
+//        )
       _ <- terrain // add spawn block to terrain
         .add_terrain("9", Vector(0, -20, 0))
         .orElseFail(
           GenericWorldBlockError("Could not add spawn block to terrain block")
         )
-      all <- terrain
-        .get_terrain()
-        .mapError(_ => GenericWorldBlockError("Error while gettng terrain"))
-      // _ <- ZIO.log(s"Initializing with Terrain: $all")
-
+//      all <- terrain
+//        .get_terrain()
+//        .mapError(_ => GenericWorldBlockError("Error while gettng terrain"))
       npchandler <- NPCHandler
         .make()
         .orElseFail(GenericWorldBlockError("Error while creating npchandler"))
