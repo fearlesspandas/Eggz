@@ -163,23 +163,26 @@ case class TerrainRegion(
     )
   } yield res.flatMap(x => x).toSeq
 
-  def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] = for {
-    quads <- terrain.get.map(_.values)
-    thing <- terrain.get
-      .map(_.values)
-      .flatMap(quads =>
-        ZIO.collectAllPar(
-          quads.map(q =>
-            q match {
-              case tr: TerrainRegion if tr.radius <= size =>
-                ZIO.succeed(Chunk.succeed(tr))
-              case tr: TerrainRegion => tr.get_top_terrain(size)
-              case tu: TerrainUnit   => ZIO.succeed(Chunk.succeed(tu))
-            }
+  def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] =
+    if (radius <= size) { ZIO.succeed(Chunk.succeed(this)) }
+    else
+      for {
+        quads <- terrain.get.map(_.values)
+        thing <- terrain.get
+          .map(_.values)
+          .flatMap(quads =>
+            ZIO.collectAllPar(
+              quads.map(q =>
+                q match {
+                  case tr: TerrainRegion if tr.radius <= size =>
+                    ZIO.succeed(Chunk.succeed(tr))
+                  case tr: TerrainRegion => tr.get_top_terrain(size)
+                  case tu: TerrainUnit   => ZIO.succeed(Chunk.succeed(tu))
+                }
+              )
+            )
           )
-        )
-      )
-  } yield thing.foldLeft(Chunk.empty[Terrain])((acc, curr) => acc ++ curr)
+      } yield thing.foldLeft(Chunk.empty[Terrain])((acc, curr) => acc ++ curr)
 
   override def get_terrain_within_distance(
     location: Vector[Double],

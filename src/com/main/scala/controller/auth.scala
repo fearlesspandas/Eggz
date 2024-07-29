@@ -139,6 +139,20 @@ package object auth {
       } yield true
     case cmd => ZIO.fail(s"$cmd not relevant for ADD_TERRAIN")
   }
+  val get_top_level_terrain: AUTH[String] = {
+    case GET_TOP_LEVEL_TERRAIN() =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_TOP_LEVEL_TERRAIN")
+  }
+  val get_cached_terrain: AUTH[String] = {
+    case GET_CACHED_TERRAIN(_) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_CACHED_TERRAIN")
+  }
   val subscribe: AUTH[String] => AUTH[String] = masterAuth => {
     case SUBSCRIBE(query) => masterAuth(query)
     case cmd              => ZIO.fail(s"$cmd not relevant to SUBSCRIBE")
@@ -172,7 +186,9 @@ object AuthCommandService {
             get_all_terrain(server_keys)(op),
             get_terrain_within_distance(server_keys)(op),
             get_terrain_within_player_distance(server_keys)(op),
-            add_terrain(op)
+            add_terrain(op),
+            get_top_level_terrain(op),
+            get_cached_terrain(op)
           )
         ) { x =>
           x
@@ -201,7 +217,9 @@ object AuthCommandService {
             get_all_terrain(server_keys)(op),
             get_terrain_within_distance(server_keys)(op),
             get_terrain_within_player_distance(server_keys)(op),
-            add_terrain(op)
+            add_terrain(op),
+            get_top_level_terrain(op),
+            get_cached_terrain(op)
           )
         ) { x =>
           x

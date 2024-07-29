@@ -11,6 +11,7 @@ import entity.TerrainChunkM
 import entity.TerrainModel
 import entity.TerrainRegion
 import entity.TerrainRegionM
+import entity.TerrainUnit
 import entity.WorldBlock
 import physics.Destination
 import physics.DestinationModel
@@ -803,9 +804,26 @@ case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block]:
       top_terr <- terrain
         .get_top_terrain(1000)
         .mapError(_ => ???)
-      res = top_terr.map(t => TerrainChunkM(t.uuid))
+      _ <- ZIO.log("Found Top Terrain")
+      res_unit = top_terr.filter {
+        case t: TerrainUnit => true; case _ => false
+      }
+      _ <- ZIO.log(s"bad terrain $res_unit")
+      res = top_terr
+        .filter {
+          case t: TerrainRegion => true; case _ => false
+        }
+        .map { case t: TerrainRegion =>
+          TerrainChunkM(
+            t.uuid,
+            (t.center(0), t.center(1), t.center(2)),
+            t.radius
+          )
+        }
+
       _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
-    } yield TerrainSet(res.toSet)
+      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
+    } yield PaginatedResponse(ress.toSeq)
 
 object GET_TOP_LEVEL_TERRAIN {
   implicit val encoder: JsonEncoder[GET_TOP_LEVEL_TERRAIN] =
@@ -819,6 +837,7 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
 
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
+      _ <- ZIO.log(s"Retrieving cached terrain with id $id")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .mapError(_ => ???)
@@ -831,6 +850,7 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
         .grouped(100)
         .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
         .toSeq
+      _ <- ZIO.log("retrieved cached terrain")
     } yield PaginatedResponse(rr)
 
 object GET_CACHED_TERRAIN {

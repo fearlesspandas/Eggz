@@ -40,7 +40,11 @@ object TerrainRegionM {
   implicit val encoder: JsonEncoder[TerrainRegionM] =
     DeriveJsonEncoder.gen[TerrainRegionM]
 }
-case class TerrainChunkM(uuid: UUID) extends TerrainModel
+case class TerrainChunkM(
+  uuid: UUID,
+  location: (Double, Double, Double),
+  radius: Double
+) extends TerrainModel
 object TerrainChunkM {
   implicit val encoder: JsonEncoder[TerrainChunkM] =
     DeriveJsonEncoder.gen[TerrainChunkM]

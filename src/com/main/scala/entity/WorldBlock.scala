@@ -210,7 +210,7 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 30000
+      radius = 10000
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
