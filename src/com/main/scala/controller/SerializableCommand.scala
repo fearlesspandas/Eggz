@@ -837,7 +837,6 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
 
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
-      _ <- ZIO.log(s"Retrieving cached terrain with id $id")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .mapError(_ => ???)
@@ -850,7 +849,6 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
         .grouped(100)
         .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
         .toSeq
-      _ <- ZIO.log("retrieved cached terrain")
     } yield PaginatedResponse(rr)
 
 object GET_CACHED_TERRAIN {
