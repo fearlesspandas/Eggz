@@ -2,6 +2,7 @@ package entity
 
 import entity.Terrain.Quadrant
 import entity.Terrain.TerrainId
+import entity.Terrain.TerrainManagement
 import entity.Terrain.distance
 import entity.Terrain.get_quadrant
 import entity.Terrain.is_within_disance
@@ -12,6 +13,7 @@ import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz.*
 import src.com.main.scala.entity.EggzOps.*
+import zio.Chunk
 import zio.ExitCode
 import zio.IO
 import zio.Ref
@@ -26,7 +28,13 @@ import scala.math.abs
 import scala.util.Random
 
 trait TerrainManager {
+
+  def cacheTerrain(terr: Chunk[TerrainManagement]): IO[TerrainError, Unit]
+
+  def get_cached(UUID: UUID): IO[TerrainError, Option[TerrainManagement]]
+
   def get_count(): IO[TerrainError, Int]
+
   def add_terrain(
     id: TerrainId,
     location: Vector[Double]
@@ -54,6 +62,8 @@ trait TerrainManager {
 
 trait Terrain {
 
+  val uuid: UUID = UUID.randomUUID()
+
   def get_terrain(): IO[TerrainError, Seq[Terrain]]
 
   def get_terrain_within_distance(
@@ -74,7 +84,7 @@ object Terrain {
 
   type TerrainId = String
   type Quadrant = Vector[Int]
-
+  type TerrainManagement = Terrain with TerrainManager
   def is_within_disance(
     location: Vector[Double],
     center: Vector[Double],
@@ -94,6 +104,7 @@ object Terrain {
     diffs.forall(diff => diff <= distance)
   }
   def distance(a: Vector[Double], b: Vector[Double]): Double = ???
+
   def is_within_radius(
     location: Vector[Double],
     center: Vector[Double],
@@ -127,9 +138,11 @@ case class TerrainRegion(
   center: Vector[Double],
   radius: Double,
   terrain: Ref[Map[Quadrant, Terrain]],
-  count: Ref[Int]
+  count: Ref[Int],
+  cached: Ref[Map[UUID, TerrainManagement]]
 ) extends Terrain
     with TerrainManager {
+
   override def get_count(): IO[TerrainError, Int] = count.get
   // determine minimum boundary distances from location, then find distance from that boundary
   def get_boundaries_distance(location: Vector[Double]): Double = {
@@ -149,7 +162,59 @@ case class TerrainRegion(
     )
   } yield res.flatMap(x => x).toSeq
 
+  def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] = for {
+    quads <- terrain.get.map(_.values)
+    thing <- terrain.get
+      .map(_.values)
+      .flatMap(quads =>
+        ZIO.collectAllPar(
+          quads.map(q =>
+            q match {
+              case tr: TerrainRegion if tr.radius <= size =>
+                ZIO.succeed(Chunk.succeed(tr))
+              case tr: TerrainRegion => tr.get_top_terrain(size)
+              case tu: TerrainUnit   => ZIO.succeed(Chunk.succeed(tu))
+            }
+          )
+        )
+      )
+  } yield thing.foldLeft(Chunk.empty[Terrain])((acc, curr) => acc ++ curr)
+
   override def get_terrain_within_distance(
+    location: Vector[Double],
+    distance: Double
+  ): IO[TerrainError, Seq[Terrain]] = if (
+    !is_within_range(location, center, math.max(radius, distance))
+  ) ZIO.succeed(Seq())
+  else
+    for {
+      // check quadrants to see if their boundaries are within distance
+      quads <- terrain.get.map(m =>
+        m.values.filter(t =>
+          t match {
+            case q: TerrainRegion =>
+              val boundaryDist = q.get_boundaries_distance(location)
+              val isWithin = is_within_disance(
+                location,
+                q.center,
+                math.min(distance, q.radius)
+              ) || boundaryDist < distance
+              isWithin
+            case u: TerrainUnit => true // defer to terrain unit def
+          }
+        )
+      )
+      res <- ZIO.collectAll(
+        quads.map(t =>
+          t.get_terrain_within_distance(
+            location,
+            distance
+          )
+        )
+      )
+    } yield res.flatten.toSeq
+  // returns the first region that is below a certain size
+  def get_top_terrain_within_distance(
     location: Vector[Double],
     distance: Double
   ): IO[TerrainError, Seq[Terrain]] = if (
@@ -224,7 +289,14 @@ case class TerrainRegion(
                   .mapError(_ => TerrainAddError("whoops"))
                 _ <- tref.update(_.updated(newQuadLoc, u))
                 newCount <- Ref.make(0)
-                newQuad = TerrainRegion(newCenter, radius / 2, tref, newCount)
+                newcached <- Ref.make(Map.empty[UUID, TerrainManagement])
+                newQuad = TerrainRegion(
+                  newCenter,
+                  radius / 2,
+                  tref,
+                  newCount,
+                  newcached
+                )
                 _ <- newQuad.add_terrain(id, location)
                 _ <- terrain.update(_.updated(quad, newQuad))
                 _ <- count.update(_ + 1)
@@ -293,6 +365,19 @@ case class TerrainRegion(
       case None       => ZIO.succeed(Seq())
     }
   } yield res
+
+  override def cacheTerrain(
+    terr: Chunk[TerrainManagement]
+  ): IO[TerrainError, Unit] =
+    ZIO
+      .collectAllPar(
+        terr.map(tm => cached.update(_.updated(tm.uuid, tm)))
+      )
+      .map(_ => ())
+
+  override def get_cached(
+    uuid: UUID
+  ): IO[TerrainError, Option[TerrainManagement]] = cached.get.map(_.get(uuid))
 }
 
 object TerrainRegion {
@@ -302,7 +387,8 @@ object TerrainRegion {
   ): IO[Nothing, TerrainManager with Terrain] = for {
     t <- Ref.make(Map.empty[Quadrant, Terrain])
     c <- Ref.make(0)
-  } yield TerrainRegion(center, radius, t, c)
+    cached <- Ref.make(Map.empty[UUID, TerrainManagement])
+  } yield TerrainRegion(center, radius, t, c, cached)
 
   case class GetTerrainByQuadrantError(msg: String) extends TerrainError
 }
@@ -317,7 +403,7 @@ case class TerrainUnit(
   entitiesRef: Ref[Map[TerrainId, Int]],
   location: Vector[Double]
 ) extends Terrain {
-  val uuid: UUID = UUID.randomUUID()
+//  val uuid: UUID = UUID.randomUUID()
   def add_terrain_unit(id: TerrainId, units: Int): IO[TerrainError, Unit] =
     for {
       entityCount <- entitiesRef.get.map(_.getOrElse(id, 0))
@@ -373,7 +459,8 @@ object TerrainTests extends ZIOAppDefault {
     for {
       tref <- Ref.make(Map.empty[Quadrant, Terrain])
       c <- Ref.make(0)
-      quad = TerrainRegion(Vector(0, 0, 0), 20, tref, c)
+      cached <- Ref.make(Map.empty[UUID, TerrainManagement])
+      quad = TerrainRegion(Vector(0, 0, 0), 20, tref, c, cached)
       minRand = -100
       maxRand = 100
       testterrain = (0 to 100000).map(x => (s"testId$x", randomVec(-10, 10)))
@@ -393,15 +480,31 @@ object TerrainTests extends ZIOAppDefault {
       res3 <- quad.get_terrain_within_distance(Vector(0, 0, 0), 5)
       allterain <- quad.get_terrain()
 
-      _ <- ZIO.log(s"Terrain within Distance 3: ${res.toString}")
-//      _ <- ZIO.log(s"Terrain within Distance 4: ${res2.toString}")
-//      _ <- ZIO.log(s"Terrain within Distance 5: ${res3.toString}")
-      // _ <- ZIO.log(s"All Terrain: $allterain")
+      topTerr_0 <- quad.get_top_terrain(0)
+      topTerr_5 <- quad.get_top_terrain(5)
+      topTerr_8 <- quad.get_top_terrain(8)
+      topTerr_10 <- quad.get_top_terrain(10)
+      _ <- ZIO.log(
+        s"Top Terrain size ${topTerr_0.size}, all terrain size ${allterain.size}"
+      )
+      _ <- ZIO.log(s"Top Terrain 8: ${topTerr_8
+          .filter(x => x match { case t: TerrainRegion => true; case _ => false })
+          .map(_ match { case tr: TerrainRegion => (tr.center, tr.radius) })
+          .toString}")
     } yield {
-
-      val failed = res.filter {
+      val failed_dist_3 = res.filter {
         case tu: TerrainUnit =>
           tu.location.foldLeft(0.0)((a, c) => a + abs(c)) > 3
+        case _ => false
+      }
+      val failed_dist_4 = res.filter {
+        case tu: TerrainUnit =>
+          tu.location.foldLeft(0.0)((a, c) => a + abs(c)) > 4
+        case _ => false
+      }
+      val failed_dist_5 = res.filter {
+        case tu: TerrainUnit =>
+          tu.location.foldLeft(0.0)((a, c) => a + abs(c)) > 5
         case _ => false
       }
       assert(
@@ -410,9 +513,37 @@ object TerrainTests extends ZIOAppDefault {
             tu.location.foldLeft(0.0)((a, c) => a + abs(c)) <= 3
           case _ => true
         },
-        s"some locations are outside the range of 3: ${failed.map { case tu: TerrainUnit =>
+        s"some locations are outside the range of 3: ${failed_dist_3.map { case tu: TerrainUnit =>
             tu.location.foldLeft(0.0)((a, c) => a + abs(c))
           }}"
+      )
+      assert(
+        res2.forall {
+          case tu: TerrainUnit =>
+            tu.location.foldLeft(0.0)((a, c) => a + abs(c)) <= 4
+          case _ => true
+        },
+        s"some locations are outside the range of 4: ${failed_dist_4.map { case tu: TerrainUnit =>
+            tu.location.foldLeft(0.0)((a, c) => a + abs(c))
+          }}"
+      )
+      assert(
+        res3.forall {
+          case tu: TerrainUnit =>
+            tu.location.foldLeft(0.0)((a, c) => a + abs(c)) <= 5
+          case _ => true
+        },
+        s"some locations are outside the range of 4: ${failed_dist_5.map { case tu: TerrainUnit =>
+            tu.location.foldLeft(0.0)((a, c) => a + abs(c))
+          }}"
+      )
+      assert(
+        topTerr_0.size == allterain.size,
+        s"Size of get_top_terrain(0) do not match the size of all_terrain"
+      )
+      assert(
+        topTerr_0.size > topTerr_5.size && topTerr_5.size >= topTerr_8.size && topTerr_8.size >= topTerr_10.size,
+        s"Top Terrain return should be ordered inversely to input"
       )
     }
 }
