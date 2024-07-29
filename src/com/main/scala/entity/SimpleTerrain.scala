@@ -3,8 +3,10 @@ package entity
 import entity.SimpleTerrain.TerrainId
 import entity.Terrain.Quadrant
 import entity.Terrain.TerrainId
+import entity.Terrain.TerrainManagement
 import entity.Terrain.distance
 import entity.Terrain.is_within_radius
+import zio.Chunk
 import zio.IO
 import zio.Ref
 import zio.Scope
@@ -12,6 +14,7 @@ import zio.ZIO
 import zio.ZIOAppArgs
 import zio.ZIOAppDefault
 
+import java.util.UUID
 import scala.math.abs
 
 trait SimpleTerrain {
@@ -86,6 +89,13 @@ case class SimpleTerrainBlock(
   ): IO[TerrainError, TerrainRegionM] = ???
 
   override def get_count(): IO[TerrainError, Int] = ???
+
+  override def cacheTerrain(terr: Chunk[Terrain]): IO[TerrainError, Unit] = ???
+
+  override def get_cached(UUID: UUID): IO[TerrainError, Option[Terrain]] = ???
+
+  override def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] =
+    ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {

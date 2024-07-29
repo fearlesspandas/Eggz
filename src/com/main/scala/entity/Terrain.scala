@@ -23,15 +23,14 @@ import zio.ZIOAppArgs
 import zio.ZIOAppDefault
 
 import java.util.UUID
-import scala.math.Ordered.orderingToOrdered
 import scala.math.abs
 import scala.util.Random
 
 trait TerrainManager {
 
-  def cacheTerrain(terr: Chunk[TerrainManagement]): IO[TerrainError, Unit]
+  def cacheTerrain(terr: Chunk[Terrain]): IO[TerrainError, Unit]
 
-  def get_cached(UUID: UUID): IO[TerrainError, Option[TerrainManagement]]
+  def get_cached(uuid: UUID): IO[TerrainError, Option[Terrain]]
 
   def get_count(): IO[TerrainError, Int]
 
@@ -52,6 +51,8 @@ trait TerrainManager {
   def get_terrain_by_quadrant(
     quadrant: Quadrant
   ): IO[TerrainError, Seq[Terrain]]
+
+  def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]]
 
   def serializeMini(
     relative: Vector[Double] = Vector(0, 0, 0),
@@ -139,7 +140,7 @@ case class TerrainRegion(
   radius: Double,
   terrain: Ref[Map[Quadrant, Terrain]],
   count: Ref[Int],
-  cached: Ref[Map[UUID, TerrainManagement]]
+  cached: Ref[Map[UUID, Terrain]]
 ) extends Terrain
     with TerrainManager {
 
@@ -289,7 +290,7 @@ case class TerrainRegion(
                   .mapError(_ => TerrainAddError("whoops"))
                 _ <- tref.update(_.updated(newQuadLoc, u))
                 newCount <- Ref.make(0)
-                newcached <- Ref.make(Map.empty[UUID, TerrainManagement])
+                newcached <- Ref.make(Map.empty[UUID, Terrain])
                 newQuad = TerrainRegion(
                   newCenter,
                   radius / 2,
@@ -367,7 +368,7 @@ case class TerrainRegion(
   } yield res
 
   override def cacheTerrain(
-    terr: Chunk[TerrainManagement]
+    terr: Chunk[Terrain]
   ): IO[TerrainError, Unit] =
     ZIO
       .collectAllPar(
@@ -377,7 +378,7 @@ case class TerrainRegion(
 
   override def get_cached(
     uuid: UUID
-  ): IO[TerrainError, Option[TerrainManagement]] = cached.get.map(_.get(uuid))
+  ): IO[TerrainError, Option[Terrain]] = cached.get.map(_.get(uuid))
 }
 
 object TerrainRegion {
@@ -387,7 +388,7 @@ object TerrainRegion {
   ): IO[Nothing, TerrainManager with Terrain] = for {
     t <- Ref.make(Map.empty[Quadrant, Terrain])
     c <- Ref.make(0)
-    cached <- Ref.make(Map.empty[UUID, TerrainManagement])
+    cached <- Ref.make(Map.empty[UUID, Terrain])
   } yield TerrainRegion(center, radius, t, c, cached)
 
   case class GetTerrainByQuadrantError(msg: String) extends TerrainError
@@ -459,7 +460,7 @@ object TerrainTests extends ZIOAppDefault {
     for {
       tref <- Ref.make(Map.empty[Quadrant, Terrain])
       c <- Ref.make(0)
-      cached <- Ref.make(Map.empty[UUID, TerrainManagement])
+      cached <- Ref.make(Map.empty[UUID, Terrain])
       quad = TerrainRegion(Vector(0, 0, 0), 20, tref, c, cached)
       minRand = -100
       maxRand = 100

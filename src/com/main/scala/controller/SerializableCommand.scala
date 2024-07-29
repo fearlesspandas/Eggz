@@ -7,7 +7,9 @@ import controller.SerializableCommand.GenericCommandError
 import entity.GlobzModel
 import entity.PhysicalEntity
 import entity.Player
+import entity.TerrainChunkM
 import entity.TerrainModel
+import entity.TerrainRegion
 import entity.TerrainRegionM
 import entity.WorldBlock
 import physics.Destination
@@ -30,6 +32,8 @@ import zio.json.DeriveJsonEncoder
 import zio.json.EncoderOps
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
+
+import java.util.UUID
 
 sealed trait SerializableCommand[-Env, +Out] extends Command[Env, Out] {
   val REF_TYPE: Any
@@ -786,6 +790,54 @@ object GET_TERRAIN_WITHIN_PLAYER_DISTANCE {
     DeriveJsonEncoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
   implicit val decoder: JsonDecoder[GET_TERRAIN_WITHIN_PLAYER_DISTANCE] =
     DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
+}
+
+case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      terrain <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+        .mapError(_ => ???)
+      top_terr <- terrain
+        .get_top_terrain(1000)
+        .mapError(_ => ???)
+      res = top_terr.map(t => TerrainChunkM(t.uuid))
+      _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
+    } yield TerrainSet(res.toSet)
+
+object GET_TOP_LEVEL_TERRAIN {
+  implicit val encoder: JsonEncoder[GET_TOP_LEVEL_TERRAIN] =
+    DeriveJsonEncoder.gen[GET_TOP_LEVEL_TERRAIN]
+  implicit val decoder: JsonDecoder[GET_TOP_LEVEL_TERRAIN] =
+    DeriveJsonDecoder.gen[GET_TOP_LEVEL_TERRAIN]
+}
+
+case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = GET_CACHED_TERRAIN
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      terrain <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+        .mapError(_ => ???)
+      quad <- terrain
+        .get_cached(id)
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(_ => ???, { case tr: TerrainRegion => tr })
+      res <- quad.serializeMini(Vector(0), true, 0).mapError(_ => ???)
+      rr = res.terrain.toSeq
+        .grouped(100)
+        .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
+        .toSeq
+    } yield PaginatedResponse(rr)
+
+object GET_CACHED_TERRAIN {
+  implicit val encoder: JsonEncoder[GET_CACHED_TERRAIN] =
+    DeriveJsonEncoder.gen[GET_CACHED_TERRAIN]
+  implicit val decoder: JsonDecoder[GET_CACHED_TERRAIN] =
+    DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
 case class CONSOLE(
   execute_as: GLOBZ_ID,

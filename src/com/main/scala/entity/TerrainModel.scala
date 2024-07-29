@@ -1,5 +1,6 @@
 package entity
 
+import controller.QueryResponse
 import entity.Terrain.TerrainId
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
@@ -38,4 +39,11 @@ object TerrainRegionM {
     DeriveJsonDecoder.gen[TerrainRegionM]
   implicit val encoder: JsonEncoder[TerrainRegionM] =
     DeriveJsonEncoder.gen[TerrainRegionM]
+}
+case class TerrainChunkM(uuid: UUID) extends TerrainModel
+object TerrainChunkM {
+  implicit val encoder: JsonEncoder[TerrainChunkM] =
+    DeriveJsonEncoder.gen[TerrainChunkM]
+  implicit val decoder: JsonDecoder[TerrainChunkM] =
+    DeriveJsonDecoder.gen[TerrainChunkM]
 }
