@@ -26,6 +26,7 @@ import scala.math.abs
 import scala.util.Random
 
 trait TerrainManager {
+  def get_count(): IO[TerrainError, Int]
   def add_terrain(
     id: TerrainId,
     location: Vector[Double]
@@ -125,9 +126,11 @@ object Terrain {
 case class TerrainRegion(
   center: Vector[Double],
   radius: Double,
-  terrain: Ref[Map[Quadrant, Terrain]]
+  terrain: Ref[Map[Quadrant, Terrain]],
+  count: Ref[Int]
 ) extends Terrain
     with TerrainManager {
+  override def get_count(): IO[TerrainError, Int] = count.get
   // determine minimum boundary distances from location, then find distance from that boundary
   def get_boundaries_distance(location: Vector[Double]): Double = {
     val positive_bounds = center.map(_ + radius)
@@ -196,11 +199,18 @@ case class TerrainRegion(
           .map(t => t.get(quad))
         _ <- (subQuad match {
           // recurse to sub quad
-          case Some(q: TerrainRegion) => q.add_terrain(id, location)
+          case Some(q: TerrainRegion) =>
+            for {
+              _ <- q.add_terrain(id, location)
+              _ <- count.update(_ + 1)
+            } yield ()
           // create new sub-quad that contains both new and old terrain unit
           case Some(u: TerrainUnit) =>
             // if coords match, they share a 'cell'/TerrainUnit
-            if (u.location == location) u.add_terrain_unit(id, 1)
+            if (u.location == location) for {
+              _ <- u.add_terrain_unit(id, 1)
+              _ <- count.update(_ + 1)
+            } yield ()
             else
               for {
                 tref <- Ref.make(Map[Quadrant, Terrain]())
@@ -213,14 +223,17 @@ case class TerrainRegion(
                   .fromOption(newQuadLocOp)
                   .mapError(_ => TerrainAddError("whoops"))
                 _ <- tref.update(_.updated(newQuadLoc, u))
-                newQuad = TerrainRegion(newCenter, radius / 2, tref)
+                newCount <- Ref.make(0)
+                newQuad = TerrainRegion(newCenter, radius / 2, tref, newCount)
                 _ <- newQuad.add_terrain(id, location)
                 _ <- terrain.update(_.updated(quad, newQuad))
+                _ <- count.update(_ + 1)
               } yield ()
           case None =>
             for {
               tu <- TerrainUnit.make(id, location)
               _ <- terrain.update(_.updated(quad, tu))
+              _ <- count.update(_ + 1)
             } yield ()
 
         }).fold(
@@ -229,6 +242,7 @@ case class TerrainRegion(
             for {
               tu <- TerrainUnit.make(id, location)
               _ <- terrain.update(_.updated(quad, tu))
+              _ <- count.update(_ + 1)
             } yield ()
         )
       } yield ()
@@ -287,7 +301,8 @@ object TerrainRegion {
     radius: Double
   ): IO[Nothing, TerrainManager with Terrain] = for {
     t <- Ref.make(Map.empty[Quadrant, Terrain])
-  } yield TerrainRegion(center, radius, t)
+    c <- Ref.make(0)
+  } yield TerrainRegion(center, radius, t, c)
 
   case class GetTerrainByQuadrantError(msg: String) extends TerrainError
 }
@@ -357,7 +372,8 @@ object TerrainTests extends ZIOAppDefault {
   override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
     for {
       tref <- Ref.make(Map.empty[Quadrant, Terrain])
-      quad = TerrainRegion(Vector(0, 0, 0), 20, tref)
+      c <- Ref.make(0)
+      quad = TerrainRegion(Vector(0, 0, 0), 20, tref, c)
       minRand = -100
       maxRand = 100
       testterrain = (0 to 100000).map(x => (s"testId$x", randomVec(-10, 10)))

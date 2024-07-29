@@ -84,6 +84,8 @@ case class SimpleTerrainBlock(
     non_relative: Boolean,
     radius: Double
   ): IO[TerrainError, TerrainRegionM] = ???
+
+  override def get_count(): IO[TerrainError, Int] = ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {
