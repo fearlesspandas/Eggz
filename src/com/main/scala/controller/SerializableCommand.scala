@@ -832,17 +832,20 @@ object GET_TOP_LEVEL_TERRAIN {
     DeriveJsonDecoder.gen[GET_TOP_LEVEL_TERRAIN]
 }
 
-case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(loc:Vector[Double],distance:Double)
-    extends ResponseQuery[WorldBlock.Block] {
+case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
+  loc: Vector[Double],
+  distance: Double
+) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
 
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
+      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .mapError(_ => ???)
       top_terr <- terrain
-        .get_top_terrain_within_distance(loc,distance,1000)
+        .get_top_terrain_within_distance(loc, distance, 100)
         .mapError(_ => ???)
       _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {

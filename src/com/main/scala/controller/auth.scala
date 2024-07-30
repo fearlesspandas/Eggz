@@ -146,6 +146,14 @@ package object auth {
       } yield true
     case cmd => ZIO.fail(s"$cmd not relevant for GET_TOP_LEVEL_TERRAIN")
   }
+  val get_top_level_terrain_in_distance: AUTH[String] = {
+    case GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd =>
+      ZIO.fail(s"$cmd not relevant for GET_TOP_LEVEL_TERRAIN_IN_DISTANCE")
+  }
   val get_cached_terrain: AUTH[String] = {
     case GET_CACHED_TERRAIN(_) =>
       for {
@@ -188,6 +196,7 @@ object AuthCommandService {
             get_terrain_within_player_distance(server_keys)(op),
             add_terrain(op),
             get_top_level_terrain(op),
+            get_top_level_terrain_in_distance(op),
             get_cached_terrain(op)
           )
         ) { x =>
@@ -219,6 +228,7 @@ object AuthCommandService {
             get_terrain_within_player_distance(server_keys)(op),
             add_terrain(op),
             get_top_level_terrain(op),
+            get_top_level_terrain_in_distance(op),
             get_cached_terrain(op)
           )
         ) { x =>

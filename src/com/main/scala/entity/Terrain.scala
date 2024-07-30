@@ -196,25 +196,28 @@ case class TerrainRegion(
     distance: Double
   ): IO[TerrainError, Seq[Terrain]] = if (
     !is_within_range(location, center, math.max(radius, distance))
-  ) ZIO.succeed(Seq())
+  ) ZIO.log("found nothing") *> ZIO.succeed(Seq())
   else
     for {
+      // _ <- ZIO.log("checking terrain")
       // check quadrants to see if their boundaries are within distance
       quads <- terrain.get.map(m =>
         m.values.filter(t =>
           t match {
             case q: TerrainRegion =>
               val boundaryDist = q.get_boundaries_distance(location)
-              val isWithin = is_within_disance(
+              // println(s" boundary distance $boundaryDist with distance $distance")
+              val isWithin = is_within_range(
                 location,
                 q.center,
-                math.min(distance, q.radius)
+                math.max(distance, q.radius)
               ) || boundaryDist < distance
               isWithin
             case u: TerrainUnit => true // defer to terrain unit def
           }
         )
       )
+//      _ <- if (distance == 100) ZIO.log(s"quads $quads distance $distance location $location , radius $radius") else ZIO.unit
       res <- ZIO.collectAll(
         quads.map(t =>
           t.get_terrain_within_distance(
@@ -233,8 +236,9 @@ case class TerrainRegion(
     size: Double
   ): IO[TerrainError, Chunk[Terrain]] = if (
     !is_within_range(location, center, math.max(radius, distance))
-  ) ZIO.succeed(Chunk.empty[Terrain])
-  else
+  ) { ZIO.succeed(Chunk.empty[Terrain]) }
+  else if (radius < size) ZIO.succeed(Chunk.succeed(this))
+  else {
     for {
       // check quadrants to see if their boundaries are within distance
       quads <- terrain.get.map(m =>
@@ -242,13 +246,18 @@ case class TerrainRegion(
           t match {
             case q: TerrainRegion =>
               val boundaryDist = q.get_boundaries_distance(location)
-              val isWithin = is_within_disance(
+              val isWithin = is_within_range(
                 location,
                 q.center,
-                math.min(distance, q.radius)
+                math.max(distance, q.radius)
               ) || boundaryDist < distance
-              isWithin
-            case u: TerrainUnit => true // defer to terrain unit def
+              isWithin // || is_within_range(location, q.center, distance)
+            case u: TerrainUnit =>
+              is_within_range(
+                location,
+                u.location,
+                distance
+              ) // defer to terrain unit def
           }
         )
       )
@@ -268,7 +277,7 @@ case class TerrainRegion(
         )
       )
     } yield Chunk.from(res.flatMap(x => x))
-
+  }
   override def add_terrain(
     id: TerrainId,
     location: Vector[Double]
@@ -507,22 +516,27 @@ object TerrainTests extends ZIOAppDefault {
       res <- quad.get_terrain_within_distance(Vector(0, 0, 0), 3)
       res2 <- quad.get_terrain_within_distance(Vector(0, 0, 0), 4)
       res3 <- quad.get_terrain_within_distance(Vector(0, 0, 0), 5)
+      res4 <- quad.get_terrain_within_distance(
+        Vector(78.125, 78.125, 390.625),
+        100
+      )
       allterain <- quad.get_terrain()
 
       topTerr_0 <- quad.get_top_terrain(0)
       topTerr_5 <- quad.get_top_terrain(5)
       topTerr_8 <- quad.get_top_terrain(8)
       topTerr_10 <- quad.get_top_terrain(10)
+      topTerr_100 <- quad.get_top_terrain(100)
       _ <- ZIO.log(
         s"Top Terrain size ${topTerr_0.size}, all terrain size ${allterain.size}"
       )
-//      _ <- ZIO.log(s"Top Terrain 8: ${topTerr_8
+//      _ <- ZIO.log(s"Top Terrain 10: ${topTerr_10
 //          .filter(x => x match { case t: TerrainRegion => true; case _ => false })
 //          .map(_ match { case tr: TerrainRegion => (tr.center, tr.radius) })
 //          .toString}")
       // todo write a better test around this, but im willing to believe it works for now
       top_terr_within_100 <- quad.get_top_terrain_within_distance(
-        Vector(0, 0, 0),
+        Vector(78.125, 78.125, 390.625),
         100,
         10
       )
