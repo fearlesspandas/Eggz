@@ -216,7 +216,7 @@ object WorldBlockInMem extends WorldBlock.Service {
         radius
       ) // create terrain region for world block
       // condense output schema to increase payload size
-      num = 100000
+      num = 1000000
       groups = (0 to num).grouped(1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>

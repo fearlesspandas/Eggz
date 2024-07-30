@@ -96,6 +96,12 @@ case class SimpleTerrainBlock(
 
   override def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] =
     ???
+
+  override def get_top_terrain_within_distance(
+    location: Vector[Double],
+    distance: Double,
+    size: Double
+  ): IO[TerrainError, Chunk[Terrain]] = ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {

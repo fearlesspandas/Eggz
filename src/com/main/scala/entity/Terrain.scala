@@ -54,6 +54,12 @@ trait TerrainManager {
 
   def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]]
 
+  def get_top_terrain_within_distance(
+    location: Vector[Double],
+    distance: Double,
+    size: Double
+  ): IO[TerrainError, Chunk[Terrain]]
+
   def serializeMini(
     relative: Vector[Double] = Vector(0, 0, 0),
     non_relative: Boolean,
@@ -162,7 +168,8 @@ case class TerrainRegion(
       ZIO.collectAll(t.values.map(_.get_terrain()))
     )
   } yield res.flatMap(x => x).toSeq
-
+  // returns a collection of the first regions within each quadrant that are under
+  // a certain size. This is used for deferred terrain retrieval (cached chunking)
   def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] =
     if (radius <= size) { ZIO.succeed(Chunk.succeed(this)) }
     else
@@ -217,13 +224,16 @@ case class TerrainRegion(
         )
       )
     } yield res.flatten.toSeq
-  // returns the first region that is below a certain size
+  // returns the first region in each quadrant that's below a certain size
+  // and also within 'distance' of the specified location. This is used for
+  // deferred terrain retrieval (cached chunking)
   def get_top_terrain_within_distance(
     location: Vector[Double],
-    distance: Double
-  ): IO[TerrainError, Seq[Terrain]] = if (
+    distance: Double,
+    size: Double
+  ): IO[TerrainError, Chunk[Terrain]] = if (
     !is_within_range(location, center, math.max(radius, distance))
-  ) ZIO.succeed(Seq())
+  ) ZIO.succeed(Chunk.empty[Terrain])
   else
     for {
       // check quadrants to see if their boundaries are within distance
@@ -244,13 +254,20 @@ case class TerrainRegion(
       )
       res <- ZIO.collectAll(
         quads.map(t =>
-          t.get_terrain_within_distance(
-            location,
-            distance
-          )
+          t match {
+            case tr: TerrainRegion if tr.radius <= size =>
+              ZIO.succeed(Chunk.succeed(tr))
+            case tr: TerrainRegion =>
+              tr.get_top_terrain_within_distance(
+                location,
+                distance,
+                size
+              )
+            case tu: TerrainUnit => ZIO.succeed(Chunk.succeed(tu))
+          }
         )
       )
-    } yield res.flatten.toSeq
+    } yield Chunk.from(res.flatMap(x => x))
 
   override def add_terrain(
     id: TerrainId,
@@ -464,10 +481,18 @@ object TerrainTests extends ZIOAppDefault {
       tref <- Ref.make(Map.empty[Quadrant, Terrain])
       c <- Ref.make(0)
       cached <- Ref.make(Map.empty[UUID, Terrain])
-      quad = TerrainRegion(Vector(0, 0, 0), 20, tref, c, cached)
-      minRand = -100
-      maxRand = 100
-      testterrain = (0 to 100000).map(x => (s"testId$x", randomVec(-10, 10)))
+      maxRand = 1000
+      minRand = -1000
+      quad = TerrainRegion(
+        Vector(0, 0, 0),
+        math.max(abs(maxRand), abs(minRand)),
+        tref,
+        c,
+        cached
+      )
+      testterrain = (0 to 100000).map(x =>
+        (s"testId$x", randomVec(-minRand, maxRand))
+      )
       _ <- quad.add_terrain("testid", Vector(-1, 0, 2))
       _ <- quad.add_terrain("testid2", Vector(1, 1, 2))
       _ <- quad.add_terrain("testid3", Vector(1, 1, 2))
@@ -491,10 +516,20 @@ object TerrainTests extends ZIOAppDefault {
       _ <- ZIO.log(
         s"Top Terrain size ${topTerr_0.size}, all terrain size ${allterain.size}"
       )
-      _ <- ZIO.log(s"Top Terrain 8: ${topTerr_8
-          .filter(x => x match { case t: TerrainRegion => true; case _ => false })
-          .map(_ match { case tr: TerrainRegion => (tr.center, tr.radius) })
-          .toString}")
+//      _ <- ZIO.log(s"Top Terrain 8: ${topTerr_8
+//          .filter(x => x match { case t: TerrainRegion => true; case _ => false })
+//          .map(_ match { case tr: TerrainRegion => (tr.center, tr.radius) })
+//          .toString}")
+      // todo write a better test around this, but im willing to believe it works for now
+      top_terr_within_100 <- quad.get_top_terrain_within_distance(
+        Vector(0, 0, 0),
+        100,
+        10
+      )
+      fmtd = top_terr_within_100
+        .filter(x => x match { case t: TerrainRegion => true; case _ => false })
+        .map(_ match { case tr: TerrainRegion => (tr.center, tr.radius) })
+      _ <- ZIO.log(s"Top Terrain within 100, size 10 $fmtd")
     } yield {
       val failed_dist_3 = res.filter {
         case tu: TerrainUnit =>

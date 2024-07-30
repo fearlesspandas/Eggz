@@ -793,7 +793,7 @@ object GET_TERRAIN_WITHIN_PLAYER_DISTANCE {
     DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
 }
 
-case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block]:
+case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN
 
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -804,7 +804,7 @@ case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block]:
       top_terr <- terrain
         .get_top_terrain(1000)
         .mapError(_ => ???)
-      _ <- ZIO.log("Found Top Terrain")
+      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
         case t: TerrainUnit => true; case _ => false
       }
@@ -824,12 +824,54 @@ case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block]:
       _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
       ress = res.grouped(100).map(c => TerrainSet(c.toSet))
     } yield PaginatedResponse(ress.toSeq)
-
+}
 object GET_TOP_LEVEL_TERRAIN {
   implicit val encoder: JsonEncoder[GET_TOP_LEVEL_TERRAIN] =
     DeriveJsonEncoder.gen[GET_TOP_LEVEL_TERRAIN]
   implicit val decoder: JsonDecoder[GET_TOP_LEVEL_TERRAIN] =
     DeriveJsonDecoder.gen[GET_TOP_LEVEL_TERRAIN]
+}
+
+case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(loc:Vector[Double],distance:Double)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      terrain <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+        .mapError(_ => ???)
+      top_terr <- terrain
+        .get_top_terrain_within_distance(loc,distance,1000)
+        .mapError(_ => ???)
+      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
+      res_unit = top_terr.filter {
+        case t: TerrainUnit => true;
+        case _              => false
+      }
+      _ <- ZIO.log(s"bad terrain $res_unit")
+      res = top_terr
+        .filter {
+          case t: TerrainRegion => true;
+          case _                => false
+        }
+        .map { case t: TerrainRegion =>
+          TerrainChunkM(
+            t.uuid,
+            (t.center(0), t.center(1), t.center(2)),
+            t.radius
+          )
+        }
+
+      _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
+      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
+    } yield PaginatedResponse(ress.toSeq)
+}
+object GET_TOP_LEVEL_TERRAIN_IN_DISTANCE {
+  implicit val encoder: JsonEncoder[GET_TOP_LEVEL_TERRAIN_IN_DISTANCE] =
+    DeriveJsonEncoder.gen[GET_TOP_LEVEL_TERRAIN_IN_DISTANCE]
+  implicit val decoder: JsonDecoder[GET_TOP_LEVEL_TERRAIN_IN_DISTANCE] =
+    DeriveJsonDecoder.gen[GET_TOP_LEVEL_TERRAIN_IN_DISTANCE]
 }
 
 case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
