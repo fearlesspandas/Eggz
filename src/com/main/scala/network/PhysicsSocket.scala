@@ -33,7 +33,12 @@ trait PhysicsChannel {
     } yield ()
 }
 object PhysicsChannel {
-  val url = "ws://127.0.0.1:8081"
+//  val url = "ws://127.0.0.1:8081"
+  val get_url: IO[PhysicsChannelError, String] =
+    System
+      .env("PHYSICS_ADDR")
+      .flatMap(ZIO.fromOption(_))
+      .mapError(err => PhysicsAddrNotFound())
 }
 case class BasicPhysicsChannel(
   tracked_ids: Ref[Set[GLOBZ_ID]],
@@ -70,3 +75,4 @@ case class BasicPhysicsChannel(
 trait PhysicsChannelError
 case class FailedSend(msg: String) extends PhysicsChannelError
 case class NoIdsToTrack() extends PhysicsChannelError
+case class PhysicsAddrNotFound() extends PhysicsChannelError

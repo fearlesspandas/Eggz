@@ -149,7 +149,11 @@ case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
     (for {
       res <- WorldBlock.getAllBlobs()
       models <- ZIO.collectAllPar(res.map(_.serializeGlob))
-    } yield GlobSet(models.collect { case g: GlobzModel => g })).mapError(_ =>
+      ser_mods = models
+        .collect { case g: GlobzModel => g }
+        .grouped(50)
+        .map(globs => GlobSet(globs))
+    } yield PaginatedResponse(ser_mods.toSeq)).mapError(_ =>
       GenericCommandError("Error retrieving blobs")
     )
 }

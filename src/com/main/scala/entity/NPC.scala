@@ -82,7 +82,7 @@ case class Prowler(
             .mapError(_ => ???)
           ms <- physics.getMaxSpeed().mapError(_ => ???)
           _ <-
-            if (ms <= 0) physics.adjustMaxSpeed(10).mapError(_ => ???)
+            if (ms <= 0) physics.adjustMaxSpeed(1).mapError(_ => ???)
             else ZIO.unit
         } yield ()
     }

@@ -151,7 +151,9 @@ case class WorldBlockInMem(
       }
 
   val physics_app =
-    physics_socket(physics_channel).connect(PhysicsChannel.url) *> ZIO.never
+    PhysicsChannel.get_url.flatMap(
+      physics_socket(physics_channel).connect(_)
+    ) *> ZIO.never
 
   val start_socket =
     physics_app.provide(Client.default, Scope.default)
@@ -217,7 +219,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       ) // create terrain region for world block
       // condense output schema to increase payload size
       num = 1000000
-      groups = (0 to num).grouped(1000)
+      groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
           ZIO
@@ -255,7 +257,9 @@ object WorldBlockInMem extends WorldBlock.Service {
         )
       res = WorldBlockInMem(s, t, terrain, npchandler, pc)
 
-      _ <- WorldBlockEnvironment.add_prowlers(res, 30, 200).mapError(_ => ???)
+      _ <- WorldBlockEnvironment
+        .add_prowlers(res, 70, radius)
+        .mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- res.start_socket
         .mapError(err =>
