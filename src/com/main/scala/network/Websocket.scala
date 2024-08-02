@@ -39,6 +39,7 @@ import zio.json.EncoderOps
 import zio.prelude.AssociativeBothCovariantOps
 import zio.profiling.sampling.*
 import zio.profiling.causal.*
+import zio.stream.ZStream
 object WebSocketAdvanced extends ZIOAppDefault {
   // handles auth map and controller
 
@@ -72,8 +73,20 @@ case class BasicWebSocket(
   authenticated: Ref[Boolean],
   server_keys: Set[String],
   auth: AUTH[String],
+  response_queue: Queue[QueryResponse]
 ) extends WebSocketControlServer[Any] {
-
+  def handleStream(
+    stream: ZStream[WebSocketChannel, Nothing, QueryResponse]
+  ): ZIO[WebSocketChannel, Nothing, Unit] = for {
+    channel <- ZIO.service[WebSocketChannel]
+    _ <- stream
+      .foreach(cmd =>
+        cmd match {
+          case _ => response_queue.offer(cmd)
+        }
+      )
+      .fork
+  } yield ()
   def handleCommand(
     command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
   ): ZIO[Any, Nothing, Unit] =
@@ -149,7 +162,6 @@ case class BasicWebSocket(
           _ <- ZIO.foreach(res)(txt =>
             channel.send(Read(WebSocketFrame.text(txt)))
           )
-          // _ <- Console.printLine(s"Query results: $res")
         } yield ()
       case _ => ZIO.unit
     }
@@ -266,6 +278,7 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
       AuthenticationService(
         cachedAuth,
         AuthCommandService.all_non_par(Set("1"))
-      ).verify_with_caching
+      ).verify_with_caching,
+      ???
     )
 }

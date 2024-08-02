@@ -159,3 +159,4 @@ object ConsoleResponse {
   implicit val decoder: JsonDecoder[ConsoleResponse] =
     DeriveJsonDecoder.gen[ConsoleResponse]
 }
+case class Completed() extends QueryResponse
