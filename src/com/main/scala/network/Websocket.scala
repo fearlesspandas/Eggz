@@ -71,7 +71,7 @@ case class BasicWebSocket(
   controller: BasicController[Globz.Service with WorldBlock.Block],
   authenticated: Ref[Boolean],
   server_keys: Set[String],
-  auth: AUTH[String]
+  auth: AUTH[String],
 ) extends WebSocketControlServer[Any] {
 
   def handleCommand(
