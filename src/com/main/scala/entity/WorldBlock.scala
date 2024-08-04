@@ -212,13 +212,13 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 10000
+      radius = 1000
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
       ) // create terrain region for world block
       // condense output schema to increase payload size
-      num = 1000000
+      num = 10000
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
@@ -258,7 +258,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       res = WorldBlockInMem(s, t, terrain, npchandler, pc)
 
       _ <- WorldBlockEnvironment
-        .add_prowlers(res, 7, radius)
+        .add_prowlers(res, 100, radius)
         .mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- res.start_socket

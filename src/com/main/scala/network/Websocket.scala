@@ -20,6 +20,7 @@ import controller.SUBSCRIBE
 import controller.SerializableCommand
 import controller.SimpleCommandSerializable
 import controller.SocketSubscribe
+import controller.StartPagination
 import controller.Subscription
 import controller.auth.AUTH
 import entity.WorldBlock
@@ -178,29 +179,28 @@ case class BasicWebSocket(
           _ <-
             res match {
               case PaginatedResponse(responses) =>
-                ZIO.foreach(responses.tail)(x => response_queue.offer(x)) *>
-                  channel.send(
+                for {
+                  _ <- ZIO.foreach(responses.tail)(x => response_queue.offer(x))
+//                  r = StartPagination(
+//                    responses.head.toJson
+//                      .replace('{', ' ')
+//                      .stripMargin
+//                      .split(':')(0),
+//                    responses.size
+//                  ).asInstanceOf[QueryResponse]
+//                  _ <- channel.send(Read(WebSocketFrame.text(r.toJson)))
+                  _ <- channel.send(
                     Read(WebSocketFrame.text(responses.head.toJson))
                   )
-//                  *> ZIO.log(
-//                    s"PAGINATED size ; ${responses.size} raw:${responses.take(10).toString()}"
-//                  )
-//                  *> ZIO.foreach(responses.tail)(x =>
-//                    channel.send(
-//                      Read(
-//                        WebSocketFrame.continuation(
-//                          Chunk.from(x.toJson.getBytes(StandardCharsets.UTF_16))
-//                        )
-//                      )
-//                    )
-//                  )
+                } yield ()
               case x: Completed =>
                 for {
 //                  _ <- ZIO.log(s"sending next cmd for ${id}")
                   next <- response_queue.takeUpTo(1)
                   _ <- ZIO.foreach(next)(x =>
-                    channel.send(Read(WebSocketFrame.text(x.toJson))) *> ZIO
-                      .log(x.toJson)
+                    channel.send(Read(WebSocketFrame.text(x.toJson)))
+//                      *> ZIO
+//                      .log(x.toJson)
                   )
                 } yield ()
               case s: Seq[String] =>

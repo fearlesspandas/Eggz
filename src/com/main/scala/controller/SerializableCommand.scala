@@ -863,7 +863,7 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
           case _                => false
         }
         .map { case t: TerrainRegion =>
-          TerrainChunkM(
+          TerrainChunkm(
             t.uuid,
             (t.center(0), t.center(1), t.center(2)),
             t.radius
@@ -871,8 +871,8 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
         }
 
       _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
-      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
-    } yield PaginatedResponse(ress.toSeq)
+//      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
+    } yield PaginatedResponse(res)
 }
 object GET_TOP_LEVEL_TERRAIN_IN_DISTANCE {
   implicit val encoder: JsonEncoder[GET_TOP_LEVEL_TERRAIN_IN_DISTANCE] =
@@ -896,7 +896,7 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
       res <- quad.serializeMini(Vector(0), true, 0).mapError(_ => ???)
       rr = res.terrain.toSeq
         .grouped(100)
-        .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
+        .map(x => TerrainRegionm(x.toSet))
         .toSeq
     } yield PaginatedResponse(rr)
 

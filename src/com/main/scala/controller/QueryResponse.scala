@@ -151,6 +151,22 @@ object PaginatedResponse {
   implicit val decoder: JsonDecoder[PaginatedResponse] =
     DeriveJsonDecoder.gen[PaginatedResponse]
 }
+case class StartPagination(tpe: String, count: Int) extends QueryResponse
+
+object StartPagination {
+  implicit val encoder: JsonEncoder[StartPagination] =
+    DeriveJsonEncoder.gen[StartPagination]
+  implicit val decoder: JsonDecoder[StartPagination] =
+    DeriveJsonDecoder.gen[StartPagination]
+}
+case class EndPagination(tpe: String) extends QueryResponse
+
+object EndPagination {
+  implicit val encoder: JsonEncoder[EndPagination] =
+    DeriveJsonEncoder.gen[EndPagination]
+  implicit val decoder: JsonDecoder[EndPagination] =
+    DeriveJsonDecoder.gen[EndPagination]
+}
 
 case class ConsoleResponse(val msg: String) extends QueryResponse
 object ConsoleResponse {
@@ -160,3 +176,24 @@ object ConsoleResponse {
     DeriveJsonDecoder.gen[ConsoleResponse]
 }
 case class Completed() extends QueryResponse
+case class TerrainChunkm(
+  uuid: UUID,
+  location: (Double, Double, Double),
+  radius: Double
+) extends QueryResponse
+
+object TerrainChunkm {
+  implicit val encoder: JsonEncoder[TerrainChunkm] =
+    DeriveJsonEncoder.gen[TerrainChunkm]
+  implicit val decoder: JsonDecoder[TerrainChunkm] =
+    DeriveJsonDecoder.gen[TerrainChunkm]
+}
+case class TerrainRegionm(
+  terrain: Set[(Vector[Double], Map[TerrainId, Int], UUID)]
+) extends QueryResponse
+object TerrainRegionm {
+  implicit val decoder: JsonDecoder[TerrainRegionm] =
+    DeriveJsonDecoder.gen[TerrainRegionm]
+  implicit val encoder: JsonEncoder[TerrainRegionm] =
+    DeriveJsonEncoder.gen[TerrainRegionm]
+}
