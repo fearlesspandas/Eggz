@@ -113,10 +113,10 @@ case class BasicWebSocket(
     for {
       res <- controller.runQuery(query.run.mapError(_ => ???))
     } yield res match {
-      case x: PaginatedResponse => x
-      case x: Completed         => x
-//      case PaginatedResponse(responses) => responses.map(_.toJson)
-      case r => Seq(r.toJson)
+//      case x: PaginatedResponse => x
+      case x: Completed                 => x
+      case PaginatedResponse(responses) => responses.map(_.toJson)
+      case r                            => Seq(r.toJson)
     }
 
   val initialize_session: ZIO[Any, Object, Unit] =
