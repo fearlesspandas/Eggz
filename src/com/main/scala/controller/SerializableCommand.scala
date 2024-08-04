@@ -806,7 +806,7 @@ case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .mapError(_ => ???)
       top_terr <- terrain
-        .get_top_terrain(1000)
+        .get_top_terrain(1024)
         .mapError(_ => ???)
       _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
@@ -849,7 +849,7 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .mapError(_ => ???)
       top_terr <- terrain
-        .get_top_terrain_within_distance(loc, distance, 1000)
+        .get_top_terrain_within_distance(loc, distance, 1024)
         .mapError(_ => ???)
       _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
