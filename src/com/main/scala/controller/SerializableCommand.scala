@@ -906,6 +906,17 @@ object GET_CACHED_TERRAIN {
   implicit val decoder: JsonDecoder[GET_CACHED_TERRAIN] =
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
+case class NEXT_CMD() extends ResponseQuery[WorldBlock.Block] {
+
+  override val REF_TYPE: Any = NEXT_CMD
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    ZIO.succeed(Completed())
+}
+object NEXT_CMD {
+  implicit val encoder: JsonEncoder[NEXT_CMD] = DeriveJsonEncoder.gen[NEXT_CMD]
+  implicit val decoder: JsonDecoder[NEXT_CMD] = DeriveJsonDecoder.gen[NEXT_CMD]
+}
 case class CONSOLE(
   execute_as: GLOBZ_ID,
   cmd: SerializableCommand[CONSOLE_ENV, Any]

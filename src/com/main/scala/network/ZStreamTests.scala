@@ -6,6 +6,7 @@ import zio.Scope
 import zio.ZIO
 import zio.ZIOAppArgs
 import zio.ZIOAppDefault
+import zio.http.WebSocketChannel
 import zio.stream.ZChannel
 import zio.stream.ZSink
 import zio.stream.ZStream
@@ -19,8 +20,18 @@ object ZStreamTests extends ZIOAppDefault {
 //      _ <- queue.offer("hello")
       stream = ZStream.fromQueue(queue) // .run(ZSink.log("found")).fork
       stream2 = ZStream.fromQueue(in_queue)
-      _ <- stream2.foreach(s => queue.offer(s)).fork
-      _ <- stream.foreach(x => ZIO.log(x)).fork
+      _ <- stream2
+        .foreach(s =>
+          for {
+            // _ <- queue.takeUpTo(1)
+            _ <- queue.offer(s)
+          } yield ()
+        )
+        .fork
+      a = ZStream.service[WebSocketChannel]
+//      _ <- stream.take(1).runCollect.fork
+      _ <- stream.take(1).foreach(x => ZIO.log(x)).fork
+      _ <- stream.foreach(x => ZIO.log(s"dropped ${x}")).fork
 //      _ <- stream.take(2).foreach(s => queue.offer("queue " + s)).fork
       _ <- in_queue.offer("hello")
       _ <- in_queue.offer("world")

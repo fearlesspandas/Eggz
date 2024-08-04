@@ -258,7 +258,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       res = WorldBlockInMem(s, t, terrain, npchandler, pc)
 
       _ <- WorldBlockEnvironment
-        .add_prowlers(res, 70, radius)
+        .add_prowlers(res, 7, radius)
         .mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- res.start_socket

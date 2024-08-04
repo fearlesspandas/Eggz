@@ -7,6 +7,7 @@ import controller.BasicController
 import controller.Blob
 import controller.CONSOLE
 import controller.CREATE_GLOB
+import controller.Completed
 import controller.Control
 import controller.GET_ALL_GLOBS
 import controller.GET_BLOB
@@ -33,6 +34,8 @@ import zio.http.ChannelEvent.Read
 import zio.http.ChannelEvent.UserEvent
 import zio.http.ChannelEvent.UserEventTriggered
 import zio.http.*
+import zio.http.Status.Continue
+import zio.http.WebSocketFrame.Continuation
 import zio.http.codec.PathCodec.string
 import zio.json.DecoderOps
 import zio.json.EncoderOps
@@ -40,6 +43,8 @@ import zio.prelude.AssociativeBothCovariantOps
 import zio.profiling.sampling.*
 import zio.profiling.causal.*
 import zio.stream.ZStream
+
+import java.nio.charset.StandardCharsets
 object WebSocketAdvanced extends ZIOAppDefault {
   // handles auth map and controller
 
@@ -75,6 +80,7 @@ case class BasicWebSocket(
   auth: AUTH[String],
   response_queue: Queue[QueryResponse]
 ) extends WebSocketControlServer[Any] {
+
   def handleStream(
     stream: ZStream[WebSocketChannel, Nothing, QueryResponse]
   ): ZIO[WebSocketChannel, Nothing, Unit] = for {
@@ -82,11 +88,19 @@ case class BasicWebSocket(
     _ <- stream
       .foreach(cmd =>
         cmd match {
+          case Completed() =>
+            for {
+              n <- response_queue.takeUpTo(1)
+              _ = n.map(qr =>
+                channel.send(Read(WebSocketFrame.text(qr.toJson)))
+              )
+            } yield ()
           case _ => response_queue.offer(cmd)
         }
       )
       .fork
   } yield ()
+
   def handleCommand(
     command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
   ): ZIO[Any, Nothing, Unit] =
@@ -94,12 +108,14 @@ case class BasicWebSocket(
 
   def handleQuery(
     query: ResponseQuery[Globz.Service with WorldBlock.Block]
-  ): ZIO[Any, Nothing, Seq[String]] =
+  ): ZIO[Any, Nothing, Seq[String] | QueryResponse] =
     for {
       res <- controller.runQuery(query.run.mapError(_ => ???))
     } yield res match {
-      case PaginatedResponse(responses) => responses.map(_.toJson)
-      case r                            => Seq(r.toJson)
+      case x: PaginatedResponse => x
+      case x: Completed         => x
+//      case PaginatedResponse(responses) => responses.map(_.toJson)
+      case r => Seq(r.toJson)
     }
 
   val initialize_session: ZIO[Any, Object, Unit] =
@@ -159,9 +175,40 @@ case class BasicWebSocket(
         for {
           channel <- ZIO.service[WebSocketChannel]
           res <- handleQuery(rq)
-          _ <- ZIO.foreach(res)(txt =>
-            channel.send(Read(WebSocketFrame.text(txt)))
-          )
+          _ <-
+            res match {
+              case PaginatedResponse(responses) =>
+                ZIO.foreach(responses.tail)(x => response_queue.offer(x)) *>
+                  channel.send(
+                    Read(WebSocketFrame.text(responses.head.toJson))
+                  )
+//                  *> ZIO.log(
+//                    s"PAGINATED size ; ${responses.size} raw:${responses.take(10).toString()}"
+//                  )
+//                  *> ZIO.foreach(responses.tail)(x =>
+//                    channel.send(
+//                      Read(
+//                        WebSocketFrame.continuation(
+//                          Chunk.from(x.toJson.getBytes(StandardCharsets.UTF_16))
+//                        )
+//                      )
+//                    )
+//                  )
+              case x: Completed =>
+                for {
+//                  _ <- ZIO.log(s"sending next cmd for ${id}")
+                  next <- response_queue.takeUpTo(1)
+                  _ <- ZIO.foreach(next)(x =>
+                    channel.send(Read(WebSocketFrame.text(x.toJson))) *> ZIO
+                      .log(x.toJson)
+                  )
+                } yield ()
+              case s: Seq[String] =>
+                ZIO.foreach(s)(txt =>
+                  channel.send(Read(WebSocketFrame.text(txt)))
+                )
+            }
+
         } yield ()
       case _ => ZIO.unit
     }
@@ -217,6 +264,9 @@ case class BasicWebSocket(
             if (verified) for {
               _ <- Console.printLine("Verified succeeded")
               _ <- authenticated.update(_ => true)
+              // initialize response stream when first authenticating
+//              _ <- handleStream(ZStream.fromQueue(response_queue))
+//                .provide(ZLayer.succeed(channel))
               _ <- recieveAllText(
                 text,
                 channel,
@@ -269,6 +319,19 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
       sessions <- ZIO.service[Ref[SESSION_MAP]]
       authd <- Ref.make(false)
       cachedAuth <- Ref.make(Map.empty[Any, Boolean])
+      q <- Queue.unbounded[QueryResponse]
+      res = BasicWebSocket(
+        authID,
+        sessions,
+        controller,
+        authd,
+        Set("1"),
+        AuthenticationService(
+          cachedAuth,
+          AuthCommandService.all_non_par(Set("1"))
+        ).verify_with_caching,
+        q
+      )
     } yield BasicWebSocket(
       authID,
       sessions,
@@ -279,6 +342,6 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
         cachedAuth,
         AuthCommandService.all_non_par(Set("1"))
       ).verify_with_caching,
-      ???
+      q
     )
 }
