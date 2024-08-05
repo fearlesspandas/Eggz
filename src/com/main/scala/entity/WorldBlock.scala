@@ -218,16 +218,16 @@ object WorldBlockInMem extends WorldBlock.Service {
         radius
       ) // create terrain region for world block
       // condense output schema to increase payload size
-      num = 50000
+      num = 1000000
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
           ZIO
             .foreachPar(r) { i =>
               for {
-                x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-                y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
-                z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
+                x <- Random.nextDoubleBetween(-radius, radius)
+                y <- Random.nextDoubleBetween(-radius, radius)
+                z <- Random.nextDoubleBetween(-radius, radius)
                 _ <- terrain.add_terrain("6", Vector(x, y, z))
                 _ <-
                   if (i % 1000 == 0)
