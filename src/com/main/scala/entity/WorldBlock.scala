@@ -212,27 +212,27 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 30000
+      radius = 5000
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
       ) // create terrain region for world block
       // condense output schema to increase payload size
-      num = 5000000
+      num = 50000
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
           ZIO
-            .foreach(r) { i =>
+            .foreachPar(r) { i =>
               for {
                 x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
                 y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
                 z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
                 _ <- terrain.add_terrain("6", Vector(x, y, z))
-//                _ <-
-//                  if (i % 1000 == 0)
-//                    Console.printLine(s"Generating terrain $i/$num")
-//                  else ZIO.unit
+                _ <-
+                  if (i % 1000 == 0)
+                    ZIO.log(s"Generating terrain $i/$num")
+                  else ZIO.unit
                 // _ <- Console.print("\0000b[2J")
               } yield ()
             }
@@ -258,7 +258,7 @@ object WorldBlockInMem extends WorldBlock.Service {
       res = WorldBlockInMem(s, t, terrain, npchandler, pc)
 
       _ <- WorldBlockEnvironment
-        .add_prowlers(res, 150, radius)
+        .add_prowlers(res, 10, radius)
         .mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- res.start_socket

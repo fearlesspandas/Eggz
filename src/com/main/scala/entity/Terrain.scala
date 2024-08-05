@@ -165,9 +165,9 @@ case class TerrainRegion(
   }
   override def get_terrain(): IO[TerrainError, Seq[Terrain]] = for {
     res <- terrain.get.flatMap(t =>
-      ZIO.collectAll(t.values.map(_.get_terrain()))
+      ZIO.foreach(t.values)(_.get_terrain())
     )
-  } yield res.flatMap(x => x).toSeq
+  } yield res.flatten.toSeq
   // returns a collection of the first regions within each quadrant that are under
   // a certain size. This is used for deferred terrain retrieval (cached chunking)
   def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] =
@@ -178,16 +178,12 @@ case class TerrainRegion(
         thing <- terrain.get
           .map(_.values)
           .flatMap(quads =>
-            ZIO.collectAllPar(
-              quads.map(q =>
-                q match {
-                  case tr: TerrainRegion if tr.radius <= size =>
-                    ZIO.succeed(Chunk.succeed(tr))
-                  case tr: TerrainRegion => tr.get_top_terrain(size)
-                  case tu: TerrainUnit   => ZIO.succeed(Chunk.succeed(tu))
-                }
-              )
-            )
+            ZIO.foreachPar(quads) {
+              case tr: TerrainRegion if tr.radius <= size =>
+                ZIO.succeed(Chunk.succeed(tr))
+              case tr: TerrainRegion => tr.get_top_terrain(size)
+              case tu: TerrainUnit => ZIO.succeed(Chunk.succeed(tu))
+            }
           )
       } yield thing.foldLeft(Chunk.empty[Terrain])((acc, curr) => acc ++ curr)
 
@@ -196,7 +192,7 @@ case class TerrainRegion(
     distance: Double
   ): IO[TerrainError, Seq[Terrain]] = if (
     !is_within_range(location, center, math.max(radius, distance))
-  ) ZIO.log("found nothing") *> ZIO.succeed(Seq())
+  ) ZIO.log("found nothing").as(Seq())
   else
     for {
       // _ <- ZIO.log("checking terrain")
@@ -218,14 +214,13 @@ case class TerrainRegion(
         )
       )
 //      _ <- if (distance == 100) ZIO.log(s"quads $quads distance $distance location $location , radius $radius") else ZIO.unit
-      res <- ZIO.collectAll(
-        quads.map(t =>
+      res <- ZIO.foreach(quads) {
+        t =>
           t.get_terrain_within_distance(
             location,
             distance
           )
-        )
-      )
+      }
     } yield res.flatten.toSeq
   // returns the first region in each quadrant that's below a certain size
   // and also within 'distance' of the specified location. This is used for
@@ -261,93 +256,87 @@ case class TerrainRegion(
           }
         )
       )
-      res <- ZIO.collectAll(
-        quads.map(t =>
-          t match {
-            case tr: TerrainRegion if tr.radius <= size =>
-              ZIO.succeed(Chunk.succeed(tr))
-            case tr: TerrainRegion =>
-              tr.get_top_terrain_within_distance(
-                location,
-                distance,
-                size
-              )
-            case tu: TerrainUnit => ZIO.succeed(Chunk.succeed(tu))
-          }
-        )
-      )
-    } yield Chunk.from(res.flatMap(x => x))
+      res <- ZIO.foreach(quads) {
+        case tr: TerrainRegion if tr.radius <= size =>
+          ZIO.succeed(Chunk.succeed(tr))
+        case tr: TerrainRegion =>
+          tr.get_top_terrain_within_distance(
+            location,
+            distance,
+            size
+          )
+        case tu: TerrainUnit => ZIO.succeed(Chunk.succeed(tu))
+      }
+    } yield Chunk.from(res.flatten)
   }
   override def add_terrain(
     id: TerrainId,
     location: Vector[Double]
   ): IO[TerrainError, Unit] =
-    if (!Terrain.is_within_range(location, center, radius)) ZIO.unit
-    else
-      for {
-        // get quadrant of location
-        quad <- get_quadrant(location, center, radius)
-          .flatMap(
-            ZIO.fromOption(_).mapError(_ => ???)
-          )
-        subQuad <- terrain.get
-          .map(t => t.get(quad))
-        _ <- (subQuad match {
-          // recurse to sub quad
-          case Some(q: TerrainRegion) =>
-            for {
-              _ <- q.add_terrain(id, location)
-              _ <- count.update(_ + 1)
-            } yield ()
-          // create new sub-quad that contains both new and old terrain unit
-          case Some(u: TerrainUnit) =>
-            // if coords match, they share a 'cell'/TerrainUnit
-            if (u.location == location) for {
-              _ <- u.add_terrain_unit(id, 1)
-              _ <- count.update(_ + 1)
-            } yield ()
-            else
-              for {
-                tref <- Ref.make(Map[Quadrant, Terrain]())
-                newCenter = quad
-                  .map(i => i * radius / 2)
-                  .zip(center)
-                  .map(x => x._1 + x._2)
-                newQuadLocOp <- get_quadrant(u.location, newCenter, radius / 2)
-                newQuadLoc <- ZIO
-                  .fromOption(newQuadLocOp)
-                  .mapError(_ => TerrainAddError("whoops"))
-                _ <- tref.update(_.updated(newQuadLoc, u))
-                newCount <- Ref.make(0)
-                newcached <- Ref.make(Map.empty[UUID, Terrain])
-                newQuad = TerrainRegion(
-                  newCenter,
-                  radius / 2,
-                  tref,
-                  newCount,
-                  newcached
-                )
-                _ <- newQuad.add_terrain(id, location)
-                _ <- terrain.update(_.updated(quad, newQuad))
-                _ <- count.update(_ + 1)
-              } yield ()
-          case None =>
-            for {
-              tu <- TerrainUnit.make(id, location)
-              _ <- terrain.update(_.updated(quad, tu))
-              _ <- count.update(_ + 1)
-            } yield ()
-
-        }).fold(
-          x => x,
-          e =>
-            for {
-              tu <- TerrainUnit.make(id, location)
-              _ <- terrain.update(_.updated(quad, tu))
-              _ <- count.update(_ + 1)
-            } yield ()
+    (for {
+      // get quadrant of location
+      quad <- get_quadrant(location, center, radius)
+        .flatMap(
+          ZIO.fromOption(_).mapError(_ => ???)
         )
-      } yield ()
+      subQuad <- terrain.get
+        .map(t => t.get(quad))
+      _ <- (subQuad match {
+        // recurse to sub quad
+        case Some(q: TerrainRegion) =>
+          for {
+            _ <- q.add_terrain(id, location)
+            _ <- count.update(_ + 1)
+          } yield ()
+        // create new sub-quad that contains both new and old terrain unit
+        case Some(u: TerrainUnit) =>
+          // if coords match, they share a 'cell'/TerrainUnit
+          if (u.location == location) for {
+            _ <- u.add_terrain_unit(id, 1)
+            _ <- count.update(_ + 1)
+          } yield ()
+          else
+            for {
+              tref <- Ref.make(Map[Quadrant, Terrain]())
+              newCenter = quad
+                .map(i => i * radius / 2)
+                .zip(center)
+                .map(x => x._1 + x._2)
+              newQuadLocOp <- get_quadrant(u.location, newCenter, radius / 2)
+              newQuadLoc <- ZIO
+                .fromOption(newQuadLocOp)
+                .mapError(_ => TerrainAddError("whoops"))
+              _ <- tref.update(_.updated(newQuadLoc, u))
+              newCount <- Ref.make(0)
+              newcached <- Ref.make(Map.empty[UUID, Terrain])
+              newQuad = TerrainRegion(
+                newCenter,
+                radius / 2,
+                tref,
+                newCount,
+                newcached
+              )
+              _ <- newQuad.add_terrain(id, location)
+              _ <- terrain.update(_.updated(quad, newQuad))
+              _ <- count.update(_ + 1)
+            } yield ()
+        case None =>
+          for {
+            tu <- TerrainUnit.make(id, location)
+            _ <- terrain.update(_.updated(quad, tu))
+            _ <- count.update(_ + 1)
+          } yield ()
+
+      }).fold(
+        x => x,
+        e =>
+          for {
+            tu <- TerrainUnit.make(id, location)
+            _ <- terrain.update(_.updated(quad, tu))
+            _ <- count.update(_ + 1)
+          } yield ()
+      )
+    } yield ()).when(Terrain.is_within_range(location, center, radius)).unit
 
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
 
