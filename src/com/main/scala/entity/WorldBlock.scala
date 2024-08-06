@@ -156,7 +156,7 @@ case class WorldBlockInMem(
     ) *> ZIO.never
 
   val start_socket =
-    physics_app.provide(Client.default, Scope.default)
+    physics_app.provide(Client.default, Scope.default).retry(Schedule.once)
 
   override def spawnBlob(
     blob: Globz,
@@ -212,7 +212,7 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 5000
+      radius = 4096
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius

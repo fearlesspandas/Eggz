@@ -854,7 +854,8 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
       _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
         case t: TerrainUnit => true;
-        case _              => false
+//        case t: TerrainRegion if (t.center(1)) < 0 => true
+        case _ => false
       }
       _ <- ZIO.log(s"bad terrain $res_unit")
       res = top_terr
