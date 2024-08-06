@@ -871,7 +871,7 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
           )
         }
 
-      _ <- ZIO.log(s"Terrain $res")
+//      _ <- ZIO.log(s"Terrain $res")
       _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
 //      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
     } yield PaginatedResponse(res)

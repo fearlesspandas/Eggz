@@ -161,7 +161,8 @@ case class TerrainRegion(
       .map { case (l, (p, n)) =>
         if (abs(l - p) < abs(l - n)) abs(l - p) else abs(l - n)
       }
-      .foldLeft(0.0)((acc, curr) => acc + curr)
+      .reduce(math.max(_,_))
+//      .foldLeft(0.0)((acc, curr) => acc + curr)
   }
   override def get_terrain(): IO[TerrainError, Seq[Terrain]] = for {
     res <- terrain.get.flatMap(t => ZIO.foreach(t.values)(_.get_terrain()))
@@ -189,7 +190,8 @@ case class TerrainRegion(
     location: Vector[Double],
     distance: Double
   ): IO[TerrainError, Seq[Terrain]] = if (
-    !is_within_range(location, center, math.max(radius, distance))
+    !is_within_range(location, center, math.max(radius, distance)) && this
+      .get_boundaries_distance(location) > distance
   ) ZIO.log("found nothing").as(Seq())
   else
     for {
