@@ -212,18 +212,18 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 4096
+      radius = 4096 * 2
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
       ) // create terrain region for world block
       // condense output schema to increase payload size
-      num = 1000000
+      num = 5000000
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
           ZIO
-            .foreachPar(r) { i =>
+            .foreach(r) { i =>
               for {
                 x <- Random.nextDoubleBetween(-radius, radius)
                 y <- Random.nextDoubleBetween(-radius, radius)

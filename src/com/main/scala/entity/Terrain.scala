@@ -164,9 +164,7 @@ case class TerrainRegion(
       .foldLeft(0.0)((acc, curr) => acc + curr)
   }
   override def get_terrain(): IO[TerrainError, Seq[Terrain]] = for {
-    res <- terrain.get.flatMap(t =>
-      ZIO.foreach(t.values)(_.get_terrain())
-    )
+    res <- terrain.get.flatMap(t => ZIO.foreach(t.values)(_.get_terrain()))
   } yield res.flatten.toSeq
   // returns a collection of the first regions within each quadrant that are under
   // a certain size. This is used for deferred terrain retrieval (cached chunking)
@@ -182,7 +180,7 @@ case class TerrainRegion(
               case tr: TerrainRegion if tr.radius <= size =>
                 ZIO.succeed(Chunk.succeed(tr))
               case tr: TerrainRegion => tr.get_top_terrain(size)
-              case tu: TerrainUnit => ZIO.succeed(Chunk.succeed(tu))
+              case tu: TerrainUnit   => ZIO.succeed(Chunk.succeed(tu))
             }
           )
       } yield thing.foldLeft(Chunk.empty[Terrain])((acc, curr) => acc ++ curr)
@@ -214,12 +212,11 @@ case class TerrainRegion(
         )
       )
 //      _ <- if (distance == 100) ZIO.log(s"quads $quads distance $distance location $location , radius $radius") else ZIO.unit
-      res <- ZIO.foreach(quads) {
-        t =>
-          t.get_terrain_within_distance(
-            location,
-            distance
-          )
+      res <- ZIO.foreach(quads) { t =>
+        t.get_terrain_within_distance(
+          location,
+          distance
+        )
       }
     } yield res.flatten.toSeq
   // returns the first region in each quadrant that's below a certain size
@@ -230,7 +227,8 @@ case class TerrainRegion(
     distance: Double,
     size: Double
   ): IO[TerrainError, Chunk[Terrain]] = if (
-    !is_within_range(location, center, math.max(radius, distance))
+    !is_within_range(location, center, math.max(radius, distance)) && this
+      .get_boundaries_distance(location) > distance
   ) { ZIO.succeed(Chunk.empty[Terrain]) }
   else if (radius < size) ZIO.succeed(Chunk.succeed(this))
   else {
