@@ -127,14 +127,6 @@ trait LivingEntity
   def getLocation: IO[PhysicsError, Vector[Experience]] =
     physics.getLocation
 
-  def getDestination: IO[PhysicsError, Option[Vector[Experience]]] =
-    physics.getDestination
-
-  def setDestination(
-    dest: Vector[Experience]
-  ): IO[PhysicsError, Unit] =
-    physics.setDestination(dest)
-
   def getVelocity: IO[PhysicsError, Vector[Experience]] =
     physics.getVelocity
 
