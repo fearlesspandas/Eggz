@@ -1,5 +1,6 @@
 package physics
 
+import physics.DESTINATION_TYPE.TELEPORT
 import physics.DESTINATION_TYPE.WAYPOINT
 import zio.IO
 import zio.ZIO
@@ -35,6 +36,10 @@ case class WaypointDestination(location: Vector[Double], radius: Double)
     extends Destination {
   override val dest_type: DESTINATION_TYPE = WAYPOINT
 }
+case class TeleportDestination(location: Vector[Double], radius: Double)
+    extends Destination {
+  override val dest_type: DESTINATION_TYPE = TELEPORT
+}
 
 sealed trait DestinationModel {
   val dest_type: DESTINATION_TYPE
@@ -68,6 +73,10 @@ object DestinationModel {
         (
           WAYPOINT,
           (x => WaypointDestination(x._1, x._2), loc => Waypoint(loc))
+        ),
+        (
+          TELEPORT,
+          (x => TeleportDestination(x._1, x._2), loc => Teleport(loc))
         )
       )
     )
@@ -96,5 +105,17 @@ object Waypoint {
     .gen[Waypoint]
 }
 
+case class Teleport(location: (Double, Double, Double)) extends DestinationModel{
+  override val dest_type: DESTINATION_TYPE = TELEPORT
+  override val radius: Double = ???
+}
+
+object Teleport {
+  implicit val encoder: JsonEncoder[Teleport] =
+    DeriveJsonEncoder
+      .gen[Teleport]
+  implicit val decoder: JsonDecoder[Teleport] = DeriveJsonDecoder
+    .gen[Teleport]
+}
 trait DestinationError
 case class DestinationDecodingError(msg: String) extends DestinationError

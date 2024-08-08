@@ -1,9 +1,11 @@
 package physics
 
 import entity.PhysicsError
+import zio.Chunk
 import zio.IO
 import zio.Ref
 import zio.ZIO
+import zio.stream.SubscriptionRef
 
 trait Destinations {
   def addDestination(dest: Destination): IO[DestinationsError, Unit]
@@ -22,28 +24,32 @@ object Destinations {
 }
 
 case class BasicDestinations(
-  destinations: Ref[Seq[Destination]]
+  destinations: SubscriptionRef[Chunk[Destination]]
 ) extends Destinations {
   override def addDestination(dest: Destination): IO[DestinationsError, Unit] =
     destinations.update(_.appended(dest))
 
-  override def getNextDestination(): IO[DestinationsError, Option[Destination]] =
+  override def getNextDestination()
+    : IO[DestinationsError, Option[Destination]] =
     destinations.get
       .map(_.headOption)
 
-  override def getAllDestinations(): IO[DestinationsError, Seq[Destination]] = destinations.get
+  override def getAllDestinations(): IO[DestinationsError, Seq[Destination]] =
+    destinations.get
 
-  override def popNextDestination(): IO[DestinationsError, Option[Destination]] =
+  override def popNextDestination()
+    : IO[DestinationsError, Option[Destination]] =
     destinations.get.flatMap(dests =>
       for {
         _ <- destinations.update(_.tail)
       } yield dests.headOption
     )
-  override def clearDestinations(): IO[DestinationsError, Unit] = destinations.update(_ => Seq())
+  override def clearDestinations(): IO[DestinationsError, Unit] =
+    destinations.update(_ => Chunk.empty)
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =
     for {
-      ref <- Ref.make(Seq.empty[Destination])
+      ref <- SubscriptionRef.make(Chunk.empty[Destination])
     } yield BasicDestinations(ref)
 }

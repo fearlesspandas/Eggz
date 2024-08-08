@@ -13,6 +13,8 @@ import entity.TerrainRegion
 import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.WorldBlock
+import physics.DESTINATION_TYPE.TELEPORT
+import physics.DESTINATION_TYPE.WAYPOINT
 import physics.Destination
 import physics.DestinationModel
 import physics.Destinations
@@ -22,6 +24,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.RepairEgg
+import zio.Chunk
 import zio.ZIO
 import zio.ZLayer
 import zio.http.ChannelEvent.Read
@@ -149,11 +152,13 @@ case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
     (for {
       res <- WorldBlock.getAllBlobs()
       models <- ZIO.collectAllPar(res.map(_.serializeGlob))
-      ser_mods = models
-        .collect { case g: GlobzModel => g }
-        .grouped(5)
-        .map(globs => GlobSet(globs))
-    } yield PaginatedResponse(ser_mods.toSeq)).mapError(_ =>
+      ser_mods = Chunk.from(
+        models
+          .collect { case g: GlobzModel => g }
+          .grouped(5)
+          .map(globs => GlobSet(globs))
+      )
+    } yield PaginatedResponse(ser_mods)).mapError(_ =>
       GenericCommandError("Error retrieving blobs")
     )
 }
@@ -456,27 +461,42 @@ case class GET_NEXT_DESTINATION(id: ID)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
-      location <- ZIO
-        .fromOption(blob)
-        .flatMap { case entity: Destinations with PhysicalEntity =>
+      result <- ZIO.fromOption(blob).flatMap {
+        case entity: Destinations with PhysicalEntity =>
           for {
             next <- entity.getNextDestination().flatMap(ZIO.fromOption(_))
-            currentLoc <- entity.getLocation
-            dist = distance(next.location, currentLoc)
-            res <-
-              if (dist > next.radius) entity.getNextDestination()
-              else entity.popNextDestination()
-          } yield res
-        }
-        .mapError(_ =>
-          GenericCommandError(
-            "Entity is not of type Destination with PhysicalEntity"
-          )
-        )
-      dest <- ZIO
-        .fromOption(location)
-        .flatMap(_.serialize)
-    } yield MSG(id, NextDestination(id, dest)))
+            loc <- entity.getLocation
+            r: QueryResponse <-
+              if (distance(next.location, loc) > next.radius) for {
+                x <- next.serialize
+              } yield MSG(id, NextDestination(id, x))
+              else
+                for {
+                  ser_dest <- entity
+                    .popNextDestination()
+                    .flatMap(ZIO.fromOption(_))
+                    .flatMap(_.serialize)
+                  res <- next.dest_type match {
+                    case TELEPORT =>
+                      for {
+                        teleport_to <- entity
+                          .getNextDestination()
+                          .flatMap(ZIO.fromOption(_))
+                          .map(d =>
+                            (d.location(0), d.location(1), d.location(2))
+                          )
+                      } yield PaginatedResponse(
+                        Chunk(
+                          MSG(id, TeleportToNext(id, teleport_to))
+                        ) ++ Chunk(MSG(id, NextDestination(id, ser_dest)))
+                      )
+                    case WAYPOINT =>
+                      ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
+                  }
+                } yield res
+          } yield r
+      }
+    } yield result)
       .mapError(_ =>
         GenericCommandError(s"Error retrieving destination for id $id")
       )
@@ -715,10 +735,11 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
           _.serializeMini(loc, non_relative, 1000)
         )
         .mapError(_ => ???)
-      rr = r3.terrain.toSeq
-        .grouped(100)
-        .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
-        .toSeq
+      rr = Chunk.from(
+        r3.terrain.toSeq
+          .grouped(100)
+          .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
+      )
     } yield PaginatedResponse(rr)
 }
 
@@ -786,8 +807,8 @@ case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
         )
       )
     _ <- ZIO.log(s"terrain within distance $res")
-    rr = res.grouped(100).map(x => TerrainSet(x.toSet))
-  } yield PaginatedResponse(rr.toSeq)
+    rr = Chunk.from(res.grouped(100).map(x => TerrainSet(x.toSet)))
+  } yield PaginatedResponse(rr)
 }
 
 object GET_TERRAIN_WITHIN_PLAYER_DISTANCE {
@@ -896,10 +917,11 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
         .flatMap(ZIO.fromOption(_))
         .mapBoth(_ => ???, { case tr: TerrainRegion => tr })
       res <- quad.serializeMini(Vector(0), true, 0).mapError(_ => ???)
-      rr = res.terrain.toSeq
-        .grouped(100)
-        .map(x => TerrainRegionm(x.toSet))
-        .toSeq
+      rr = Chunk.from(
+        res.terrain
+          .grouped(100)
+          .map(x => TerrainRegionm(x))
+      )
     } yield PaginatedResponse(rr)
 
 object GET_CACHED_TERRAIN {

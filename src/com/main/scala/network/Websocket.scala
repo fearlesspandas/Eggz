@@ -105,18 +105,35 @@ case class BasicWebSocket(
   def handleCommand(
     command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
   ): ZIO[Any, Nothing, Unit] =
-    controller.runCommand(command.run.mapError(_ => ???)).map(_ => ())
+    controller
+      .runCommand(
+        command.run.foldZIO(
+          err =>
+            ZIO.log(s"Error while processing command $err") *> ZIO.succeed(()),
+          x => ZIO.succeed(x)
+        )
+      )
+      .unit
 
   def handleQuery(
     query: ResponseQuery[Globz.Service with WorldBlock.Block]
   ): ZIO[Any, Nothing, Seq[String] | QueryResponse] =
     for {
-      res <- controller.runQuery(query.run.mapError(_ => ???))
+      res <- controller.runQuery(
+        query.run.foldZIO(
+          err =>
+            ZIO.log(s"Error while performing query $err") *> ZIO.succeed(
+              QueryResponse.Empty
+            ),
+          x => ZIO.succeed(x)
+        )
+      )
     } yield res match {
 //      case x: PaginatedResponse => x
       case x: Completed                 => x
       case PaginatedResponse(responses) => responses.map(_.toJson)
       case r                            => Seq(r.toJson)
+      case _                            => Seq()
     }
 
   val initialize_session: ZIO[Any, Object, Unit] =

@@ -14,6 +14,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
+import zio.Chunk
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
 import zio.json.JsonDecoder
@@ -24,6 +25,7 @@ import java.util.UUID
 sealed trait QueryResponse {}
 
 object QueryResponse {
+  case object Empty extends QueryResponse
   implicit val encoder: JsonEncoder[QueryResponse] =
     DeriveJsonEncoder.gen[QueryResponse]
   implicit val decoder: JsonDecoder[QueryResponse] =
@@ -72,6 +74,15 @@ object NextDestination {
     DeriveJsonEncoder.gen[NextDestination]
   implicit val decoder: JsonDecoder[NextDestination] =
     DeriveJsonDecoder.gen[NextDestination]
+}
+case class TeleportToNext(id: ID, location: (Double, Double, Double))
+    extends QueryResponse
+
+object TeleportToNext {
+  implicit val encoder: JsonEncoder[TeleportToNext] =
+    DeriveJsonEncoder.gen[TeleportToNext]
+  implicit val decoder: JsonDecoder[TeleportToNext] =
+    DeriveJsonDecoder.gen[TeleportToNext]
 }
 case class AllDestinations(id: ID, destinations: Seq[destination])
     extends QueryResponse
@@ -142,7 +153,7 @@ object TerrainRegionSet {
     DeriveJsonDecoder.gen[TerrainRegionSet]
 }
 
-case class PaginatedResponse(responses: Seq[QueryResponse])
+case class PaginatedResponse(responses: Chunk[QueryResponse])
     extends QueryResponse
 
 object PaginatedResponse {

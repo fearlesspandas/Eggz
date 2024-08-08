@@ -1,5 +1,6 @@
 package controller
 
+import implicits._
 import entity.BasicPlayer
 import entity.WorldBlock
 import entity.WorldBlockInMem
@@ -8,7 +9,12 @@ import zio.IO
 import zio.Ref
 import zio.ZIO
 import zio.ZLayer
+object implicits {
 
+  implicit def tupleToEnv(
+    x: (WorldBlock.Block, Globz.Service)
+  ): Globz.Service with WorldBlock.Block = ???
+}
 trait BasicController[Env] {
   def runCommand[E](comm: ZIO[Env, E, Unit]): ZIO[Any, E, BasicController[Env]]
   def runQuery[Q, E](query: ZIO[Env, E, Q]): ZIO[Any, E, Q]
@@ -16,7 +22,6 @@ trait BasicController[Env] {
   def runProcess[Q, E](
     query: ZIO[Env, E, ZIO[Env, E, Q]]
   ): ZIO[Any, E, BasicController[Env]]
-
 }
 
 trait ControllerError
@@ -31,7 +36,6 @@ object BasicController {
   type DEFINED = Globz.Service with WorldBlock.Block
   def make: ZIO[Service[DEFINED], ControllerError, BasicController[DEFINED]] =
     ZIO.service[Service[DEFINED]].flatMap(_.make)
-
 }
 
 case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Block])
@@ -67,6 +71,7 @@ case class Control(glob: Globz.Service, worldBlock: Ref[WorldBlock.Block])
       op <- query.provide(ZLayer.succeed(world) ++ ZLayer.succeed(glob))
       _ <- op.provide(ZLayer.succeed(world) ++ ZLayer.succeed(glob))
     } yield this
+
 }
 
 object Control
