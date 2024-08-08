@@ -156,7 +156,7 @@ case class WorldBlockInMem(
     ) *> ZIO.never
 
   val start_socket =
-    physics_app.provide(Client.default, Scope.default).retry(Schedule.once)
+    physics_app.provide(Client.default, Scope.default)
 
   override def spawnBlob(
     blob: Globz,
@@ -212,13 +212,13 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 4096 * 4
+      radius = 4096
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
       ) // create terrain region for world block
       // condense output schema to increase payload size
-      num = 1000000
+      num = 500000
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
@@ -266,6 +266,7 @@ object WorldBlockInMem extends WorldBlock.Service {
           GenericWorldBlockError(s"Error starting physics socket : $err")
         )
         .flatMapError(err => ZIO.log(err.toString))
+        .retry(Schedule.spaced(Duration.fromMillis(1000)))
         .fork
       _ <- ZIO.log("Physics Socket Started")
     } yield res
