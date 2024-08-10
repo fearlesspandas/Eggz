@@ -13,8 +13,10 @@ trait Destinations {
   def getAllDestinations(): IO[DestinationsError, Seq[Destination]]
   def popNextDestination(): IO[DestinationsError, Option[Destination]]
   def clearDestinations(): IO[DestinationsError, Unit]
-  def toggleDestinations(): IO[Destinations, Unit]
+  def toggleDestinations(): IO[DestinationsError, Unit]
   def isActive(): IO[DestinationsError, Boolean]
+  def toggleGravitate(): IO[DestinationsError, Unit]
+  def isGravitating(): IO[DestinationsError, Boolean]
 }
 trait DestinationsError extends PhysicsError
 object Destinations {
@@ -27,7 +29,8 @@ object Destinations {
 
 case class BasicDestinations(
   destinations: SubscriptionRef[Chunk[Destination]],
-  active: Ref[Boolean]
+  active: Ref[Boolean],
+  gravitating: Ref[Boolean]
 ) extends Destinations {
   override def addDestination(dest: Destination): IO[DestinationsError, Unit] =
     destinations.update(_.appended(dest))
@@ -50,14 +53,22 @@ case class BasicDestinations(
   override def clearDestinations(): IO[DestinationsError, Unit] =
     destinations.update(_ => Chunk.empty)
 
-  override def toggleDestinations(): IO[Destinations, Unit] = active.update(!_)
+  override def toggleDestinations(): IO[DestinationsError, Unit] =
+    active.update(!_)
 
   override def isActive(): IO[DestinationsError, Boolean] = active.get
+
+  override def toggleGravitate(): IO[DestinationsError, Unit] =
+    gravitating.update(!_)
+
+  override def isGravitating(): IO[DestinationsError, Boolean] = gravitating.get
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =
     for {
       ref <- SubscriptionRef.make(Chunk.empty[Destination])
       isactive <- Ref.make(false)
-    } yield BasicDestinations(ref, isactive)
+
+      gravitating <- Ref.make(false)
+    } yield BasicDestinations(ref, isactive, gravitating)
 }

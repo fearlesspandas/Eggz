@@ -116,6 +116,14 @@ object NoInput {
   implicit val encoder: JsonEncoder[NoInput] = DeriveJsonEncoder.gen[NoInput]
   implicit val decoder: JsonDecoder[NoInput] = DeriveJsonDecoder.gen[NoInput]
 }
+
+case class GravityActive(id: GLOBZ_ID, is_active: Boolean) extends QueryResponse
+object GravityActive {
+  implicit val encoder: JsonEncoder[GravityActive] =
+    DeriveJsonEncoder.gen[GravityActive]
+  implicit val decoder: JsonDecoder[GravityActive] =
+    DeriveJsonDecoder.gen[GravityActive]
+}
 case class DestinationsActive(id: GLOBZ_ID, is_active: Boolean)
     extends QueryResponse
 object DestinationsActive {

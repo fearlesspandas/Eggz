@@ -415,6 +415,30 @@ object START_EGG {
   implicit val decoder: JsonDecoder[START_EGG] =
     DeriveJsonDecoder.gen[START_EGG]
 }
+case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (TOGGLE_GRAVITATE, id)
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      wb <- ZIO.service[WorldBlock.Block]
+      blob <- wb
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case destinations: Destinations => destinations }
+        .mapError(_ => ???)
+      res <- blob
+        .toggleGravitate()
+        .flatMap(_ => blob.isGravitating())
+        .mapError(_ => ???)
+    } yield Queued(Chunk(MSG(id, GravityActive(id, res))))
+}
+
+object TOGGLE_GRAVITATE {
+  implicit val encoder: JsonEncoder[TOGGLE_GRAVITATE] =
+    DeriveJsonEncoder.gen[TOGGLE_GRAVITATE]
+  implicit val decoder: JsonDecoder[TOGGLE_GRAVITATE] =
+    DeriveJsonDecoder.gen[TOGGLE_GRAVITATE]
+}
 case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
 
   override val REF_TYPE: Any = (TOGGLE_DESTINATIONS, id)
