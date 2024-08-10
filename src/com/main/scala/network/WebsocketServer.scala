@@ -1,18 +1,14 @@
 package network
 
-import controller.BasicController
-import controller.Control
+import controller.{BasicController, Control, QueryResponse}
 import entity.WorldBlock
 import network.WebSocketServer.PUB_KEY_MAP
 import network.WebSocketServer.SECRET
+import network.WebSocketServer.SERVER_IDS
 import network.WebSocketServer.SESSION_MAP
 import src.com.main.scala.entity.Globz
 import zio.http.codec.PathCodec.string
-import zio.Console
-import zio.IO
-import zio.Ref
-import zio.ZIO
-import zio.ZLayer
+import zio.{Chunk, Console, IO, Queue, Ref, ZIO, ZLayer}
 import zio.http.HttpApp
 import zio.http.Method
 import zio.http.Request
@@ -20,6 +16,7 @@ import zio.http.Response
 import zio.http.Routes
 import zio.http.handler
 import zio.json.*
+import zio.stream.ZStream
 
 trait WebSocketServer {
   val app: HttpApp[Any]
@@ -28,6 +25,7 @@ object WebSocketServer {
   type AUTH_ID = String
   type SECRET = Session
   type SESSION_MAP = Map[String, SECRET]
+  type SERVER_IDS = Chunk[String]
   type PUB_KEY_MAP = Map[String, String]
 
   trait Service {
@@ -36,13 +34,15 @@ object WebSocketServer {
 }
 
 case class WebSocketServerBasic(
-  controller: BasicController[Globz.Service with WorldBlock.Block],
+  controller: BasicController[Globz.Service with WorldBlock.Block,Queue[QueryResponse]],
   authMap: Ref[
     SESSION_MAP
   ], // maps id to secret that's expected on first connection
+  server_ids: Ref[SERVER_IDS],
   pubKeys: Ref[PUB_KEY_MAP]
 ) extends WebSocketServer {
 
+//  def handleStream(stream:ZStream[Any,Nothing,Any]) = stream.foreach{case response:QueryResponse => ZIO.foreach(controller.getQueue(0))()}
   val app =
     Routes(
       Method.GET / "authenticate" / string("id") -> handler {
@@ -78,7 +78,11 @@ case class WebSocketServerBasic(
           BasicWebSocket
             .make(id)
             .flatMap(sockerApp => sockerApp.socket(false).toResponse)
-            .provide(ZLayer.succeed(controller) ++ ZLayer.succeed(authMap))
+            .provide(
+              ZLayer.succeed(controller)
+                ++ ZLayer.succeed(authMap)
+                ++ ZLayer.succeed(server_ids)
+            )
       }
     ).toHttpApp
 
@@ -93,5 +97,6 @@ object WebSocketServerBasic extends WebSocketServer.Service {
         .mapError(err => GenericWebsocketError(err.toString))
       sessionmap <- Ref.make(Map.empty[String, SECRET])
       pubkeyMap <- Ref.make(Map.empty[String, String])
-    } yield WebSocketServerBasic(controller, sessionmap, pubkeyMap)
+      server_ids <- Ref.make(Chunk("1"))
+    } yield WebSocketServerBasic(controller, sessionmap, server_ids, pubkeyMap)
 }

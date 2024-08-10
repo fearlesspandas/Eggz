@@ -187,6 +187,7 @@ object ConsoleResponse {
     DeriveJsonDecoder.gen[ConsoleResponse]
 }
 case class Completed() extends QueryResponse
+case class Queued(responses: Chunk[QueryResponse]) extends QueryResponse
 case class TerrainChunkm(
   uuid: UUID,
   location: (Double, Double, Double),

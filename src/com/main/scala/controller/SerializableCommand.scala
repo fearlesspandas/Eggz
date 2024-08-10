@@ -13,6 +13,7 @@ import entity.TerrainRegion
 import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.WorldBlock
+import physics.DESTINATION_TYPE.GRAVITY
 import physics.DESTINATION_TYPE.TELEPORT
 import physics.DESTINATION_TYPE.WAYPOINT
 import physics.Destination
@@ -414,7 +415,9 @@ object START_EGG {
   implicit val decoder: JsonDecoder[START_EGG] =
     DeriveJsonDecoder.gen[START_EGG]
 }
-
+//case class TOGGLE_DESTINATIONS(id:ID) extends {
+//
+//}
 case class ADD_DESTINATION(id: ID, dest: destination)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (ADD_DESTINATION, 2)
@@ -490,6 +493,8 @@ case class GET_NEXT_DESTINATION(id: ID)
                           MSG(id, TeleportToNext(id, teleport_to))
                         ) ++ Chunk(MSG(id, NextDestination(id, ser_dest)))
                       )
+                    case GRAVITY =>
+                      ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
                     case WAYPOINT =>
                       ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
                   }

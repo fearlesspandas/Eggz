@@ -104,59 +104,70 @@ case class WorldBlockInMem(
   physics_channel: PhysicsChannel
 ) extends WorldBlock.Block {
 
+  // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
+  // todo remove interval on loop and see how unthrottled processing handles
   val physics_socket: PhysicsChannel => WebSocketApp[Any] =
     (pc: PhysicsChannel) =>
-      Handler.webSocket { channel =>
-        channel.receiveAll {
-          case Read(WebSocketFrame.Text(txt)) =>
-            (for {
-              r <- ZIO
-                .fromEither(txt.fromJson[PhysicsCommand])
-                .flatMapError(err => ZIO.log(s"Could not map $txt due to $err"))
-                .map(_.asInstanceOf[SendLocation])
-              _ <- getBlob(r.id).flatMap(ZIO.fromOption(_)).flatMap {
-                case pe: PhysicalEntity =>
-                  pe.teleport(r.loc)
-              }
-//              _ <- ZIO.log(s"Found Location $r")
-            } yield ()).foldZIO(
-              err => ZIO.log(s"processing failed on $txt with err $err"),
-              x => ZIO.succeed(x)
-            )
-          case UserEventTriggered(UserEvent.HandshakeComplete) =>
-            (for {
-//              _ <- pc
-//                .send("""{
-//                  |"type" : "SET_GLOB_LOCATION",
-//                  |"body": {
-//                  | "id": "Prowler_2",
-//                  | "location" : [0.0,0,0,0,0]
-//                  |}
-//                  |}""".stripMargin)
-//                .provide(ZLayer.succeed(channel))
-//                .mapError(_ => ???)
-              _ <- pc
-                .loop(10)
-                .provide(ZLayer.succeed(channel))
-                .flatMapError(err =>
-                  ZIO.log(s"Error while processing loop ${err.toString}")
-                )
-                .fork
-            } yield ()) *> ZIO.log("Channel Connected")
-          case ExceptionCaught(cause) =>
-            ZIO.logError(s"Error while handling physics socket $cause")
-
-          case x => ZIO.log(s"other traffic $x")
+      Handler
+        .webSocket { channel =>
+//          val pc_app = pc
+//            .loop(10)
+//            .provide(ZLayer.succeed(channel))
+//            .flatMapError(err =>
+//              ZIO.log(s"Error while processing loop ${err.toString}")
+//            )
+//            .fork
+          channel.receiveAll {
+            case Read(WebSocketFrame.Text(txt)) =>
+              (for {
+                r <- ZIO
+                  .fromEither(txt.fromJson[PhysicsCommand])
+                  .flatMapError(err =>
+                    ZIO.log(s"Could not map $txt due to $err")
+                  )
+                  .map(_.asInstanceOf[SendLocation])
+                _ <- getBlob(r.id).flatMap(ZIO.fromOption(_)).flatMap {
+                  case pe: PhysicalEntity =>
+                    pe.teleport(r.loc)
+                }
+                //              _ <- ZIO.log(s"Found Location $r")
+              } yield ()).foldZIO(
+                err => ZIO.log(s"processing failed on $txt with err $err"),
+                x => ZIO.succeed(x)
+              )
+            case UserEventTriggered(UserEvent.HandshakeComplete) =>
+              (for {
+                xx <- pc
+                  .loop(10)
+                  .provide(ZLayer.succeed(channel))
+                  .flatMapError(err =>
+                    ZIO.log(s"Error while processing loop ${err.toString}")
+                  )
+                  .fork
+              } yield ()) *> ZIO.log("Channel Connected")
+            case ExceptionCaught(cause) =>
+              ZIO.logError(s"Error while handling physics socket $cause")
+                *> ZIO.fail(cause)
+//                *> channel.shutdown
+                *> start_socket.fork
+            case x => ZIO.log(s"other traffic $x")
+          }
         }
-      }
+        .tapErrorZIO(err => ZIO.log("Found Error") *> start_socket.fork)
 
   val physics_app =
     PhysicsChannel.get_url.flatMap(
       physics_socket(physics_channel).connect(_)
     ) *> ZIO.never
 
-  val start_socket =
+  val start_socket = ZIO.log("Starting physics socket app") *>
     physics_app.provide(Client.default, Scope.default)
+      .mapError(err =>
+        GenericWorldBlockError(s"Error starting physics socket : $err")
+      )
+      .flatMapError(err => ZIO.log(err.toString))
+      .retry(Schedule.spaced(Duration.fromMillis(1000)))
+      .fork
 
   override def spawnBlob(
     blob: Globz,
@@ -262,12 +273,6 @@ object WorldBlockInMem extends WorldBlock.Service {
         .mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- res.start_socket
-        .mapError(err =>
-          GenericWorldBlockError(s"Error starting physics socket : $err")
-        )
-        .flatMapError(err => ZIO.log(err.toString))
-        .retry(Schedule.spaced(Duration.fromMillis(1000)))
-        .fork
       _ <- ZIO.log("Physics Socket Started")
     } yield res
 }

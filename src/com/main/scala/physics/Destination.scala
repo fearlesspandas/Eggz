@@ -1,5 +1,6 @@
 package physics
 
+import physics.DESTINATION_TYPE.GRAVITY
 import physics.DESTINATION_TYPE.TELEPORT
 import physics.DESTINATION_TYPE.WAYPOINT
 import zio.IO
@@ -14,6 +15,7 @@ sealed trait DESTINATION_TYPE
 object DESTINATION_TYPE {
   case object WAYPOINT extends DESTINATION_TYPE
   case object TELEPORT extends DESTINATION_TYPE
+  case object GRAVITY extends DESTINATION_TYPE
   implicit val encoder: JsonEncoder[DESTINATION_TYPE] =
     DeriveJsonEncoder.gen[DESTINATION_TYPE]
   implicit val decoder: JsonDecoder[DESTINATION_TYPE] =
@@ -39,6 +41,10 @@ case class WaypointDestination(location: Vector[Double], radius: Double)
 case class TeleportDestination(location: Vector[Double], radius: Double)
     extends Destination {
   override val dest_type: DESTINATION_TYPE = TELEPORT
+}
+case class GravityDestination(location: Vector[Double], radius: Double)
+    extends Destination {
+  override val dest_type: DESTINATION_TYPE = GRAVITY
 }
 
 sealed trait DestinationModel {
@@ -77,6 +83,10 @@ object DestinationModel {
         (
           TELEPORT,
           (x => TeleportDestination(x._1, x._2), loc => Teleport(loc))
+        ),
+        (
+          GRAVITY,
+          (x => GravityDestination(x._1, x._2), loc => Gravity(loc))
         )
       )
     )
@@ -105,7 +115,8 @@ object Waypoint {
     .gen[Waypoint]
 }
 
-case class Teleport(location: (Double, Double, Double)) extends DestinationModel{
+case class Teleport(location: (Double, Double, Double))
+    extends DestinationModel {
   override val dest_type: DESTINATION_TYPE = TELEPORT
   override val radius: Double = ???
 }
@@ -116,6 +127,19 @@ object Teleport {
       .gen[Teleport]
   implicit val decoder: JsonDecoder[Teleport] = DeriveJsonDecoder
     .gen[Teleport]
+}
+case class Gravity(location: (Double, Double, Double))
+    extends DestinationModel {
+  override val dest_type: DESTINATION_TYPE = GRAVITY
+  override val radius: Double = ???
+}
+
+object Gravity {
+  implicit val encoder: JsonEncoder[Gravity] =
+    DeriveJsonEncoder
+      .gen[Gravity]
+  implicit val decoder: JsonDecoder[Gravity] = DeriveJsonDecoder
+    .gen[Gravity]
 }
 trait DestinationError
 case class DestinationDecodingError(msg: String) extends DestinationError
