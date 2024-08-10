@@ -72,6 +72,13 @@ package object auth {
       } yield server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to GET_INPUT_VECTOR")
   }
+  val toggle_destinations: AUTH[String] = {
+    case TOGGLE_DESTINATIONS(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant to TOGGLE_DESTINATIONSF")
+  }
   val clear_destinations: AUTH[String] = {
     case CLEAR_DESTINATIONS(id) =>
       for {
@@ -205,7 +212,8 @@ object AuthCommandService {
             get_top_level_terrain(op),
             get_top_level_terrain_in_distance(op),
             get_cached_terrain(op),
-            next_cmd(op)
+            next_cmd(op),
+            toggle_destinations(op)
           )
         ) { x =>
           x
@@ -238,7 +246,8 @@ object AuthCommandService {
             get_top_level_terrain(op),
             get_top_level_terrain_in_distance(op),
             get_cached_terrain(op),
-            next_cmd(op)
+            next_cmd(op),
+            toggle_destinations(op)
           )
         ) { x =>
           x

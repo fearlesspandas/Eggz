@@ -415,9 +415,45 @@ object START_EGG {
   implicit val decoder: JsonDecoder[START_EGG] =
     DeriveJsonDecoder.gen[START_EGG]
 }
-//case class TOGGLE_DESTINATIONS(id:ID) extends {
-//
-//}
+case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
+
+  override val REF_TYPE: Any = (TOGGLE_DESTINATIONS, id)
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    wb <- ZIO.service[WorldBlock.Block]
+    blob <- wb
+      .getBlob(id)
+      .flatMap(ZIO.fromOption(_))
+      .mapBoth(
+        err =>
+          GenericCommandError(
+            s"Error while attemtping to toggle destinations for $id due to $err"
+          ),
+        { case pe: Destinations => pe }
+      )
+    _ <- blob
+      .toggleDestinations()
+      .mapError(err =>
+        GenericCommandError(
+          s"Error while toggling destinations for $id due to $err"
+        )
+      )
+    isactive <- blob
+      .isActive()
+      .mapError(err =>
+        GenericCommandError(
+          s"Error while retrieving active for $id due to $err"
+        )
+      )
+  } yield Queued(Chunk(MSG(id, DestinationsActive(id, isactive))))
+}
+
+object TOGGLE_DESTINATIONS {
+  implicit val encoder: JsonEncoder[TOGGLE_DESTINATIONS] =
+    DeriveJsonEncoder.gen[TOGGLE_DESTINATIONS]
+  implicit val decoder: JsonDecoder[TOGGLE_DESTINATIONS] =
+    DeriveJsonDecoder.gen[TOGGLE_DESTINATIONS]
+}
 case class ADD_DESTINATION(id: ID, dest: destination)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (ADD_DESTINATION, 2)

@@ -86,6 +86,12 @@ case class BasicPlayer(
   ): ZIO[LivingEntity, E, B] = ???
 
   override def op: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] = ???
+
+  override def toggleDestinations(): IO[Destinations, Unit] =
+    destinations.toggleDestinations()
+
+  override def isActive(): IO[DestinationsError, Boolean] =
+    destinations.isActive()
 }
 
 object BasicPlayer extends Globz.Service {

@@ -5,6 +5,7 @@ import entity.LivingEntity.LivingEntityEnv
 import entity.Player.Item
 import physics.BasicDestinations
 import physics.Destinations
+import physics.DestinationsError
 import physics.WaypointDestination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
@@ -91,6 +92,12 @@ case class Prowler(
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
   override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
+
+  override def toggleDestinations(): IO[Destinations, Unit] =
+    destinations.toggleDestinations()
+
+  override def isActive(): IO[DestinationsError, Boolean] =
+    destinations.isActive()
 }
 
 object Prowler extends Globz.Service {
