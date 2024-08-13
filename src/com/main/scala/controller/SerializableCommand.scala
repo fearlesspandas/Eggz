@@ -19,6 +19,7 @@ import physics.DESTINATION_TYPE.WAYPOINT
 import physics.Destination
 import physics.DestinationModel
 import physics.Destinations
+import physics.Mode
 import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -621,6 +622,36 @@ object CLEAR_DESTINATIONS {
     DeriveJsonDecoder.gen[CLEAR_DESTINATIONS]
 }
 
+case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
+    extends SimpleCommandSerializable[WorldBlock.Block]:
+  override val REF_TYPE: Any = (SET_MODE_DESTINATIONS, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    for {
+      wb <- ZIO.service[WorldBlock.Block]
+      glob <- wb
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case d: Destinations => d }
+        .mapError(err =>
+          GenericCommandError(
+            s"Could not update destination mode for $id due to $err "
+          )
+        )
+      _ <- glob
+        .setMode(mode)
+        .mapError(err =>
+          GenericCommandError(
+            s"failed while updating destinations mode for $id due to $err"
+          )
+        )
+    } yield ()
+
+object SET_MODE_DESTINATIONS {
+  implicit val encoder: JsonEncoder[SET_MODE_DESTINATIONS] =
+    DeriveJsonEncoder.gen[SET_MODE_DESTINATIONS]
+  implicit val decoder: JsonDecoder[SET_MODE_DESTINATIONS] =
+    DeriveJsonDecoder.gen[SET_MODE_DESTINATIONS]
+}
 case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (APPLY_VECTOR, id)

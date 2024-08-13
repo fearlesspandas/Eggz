@@ -93,6 +93,13 @@ package object auth {
       } yield senderId == id
     case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATIONS")
   }
+  val set_mode_destinations: AUTH[String] = {
+    case SET_MODE_DESTINATIONS(id, mode) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for SET_MODE_DESTINATIONS")
+  }
   val set_lv: Set[String] => AUTH[String] = server_keys => {
     case SET_LV(id, _) =>
       for {
@@ -221,7 +228,8 @@ object AuthCommandService {
             get_cached_terrain(op),
             next_cmd(op),
             toggle_destinations(op),
-            toggle_gravity(op)
+            toggle_gravity(op),
+            set_mode_destinations(op)
           )
         ) { x =>
           x
@@ -256,7 +264,8 @@ object AuthCommandService {
             get_cached_terrain(op),
             next_cmd(op),
             toggle_destinations(op),
-            toggle_gravity(op)
+            toggle_gravity(op),
+            set_mode_destinations(op)
           )
         ) { x =>
           x

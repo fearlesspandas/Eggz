@@ -7,11 +7,12 @@ import entity.Player.PlayerError
 import entity.Skill.Experience
 import entity.Skill.Level
 import entity.SkillSet.SkillId
-import entity.LivingEntity._
+import entity.LivingEntity.*
 import physics.BasicDestinations
 import physics.Destination
 import physics.Destinations
 import physics.DestinationsError
+import physics.Mode
 import src.com.main.scala
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
@@ -98,6 +99,23 @@ case class BasicPlayer(
 
   override def isGravitating(): IO[DestinationsError, Boolean] =
     destinations.isGravitating()
+
+  override def setMode(mode: Mode): IO[DestinationsError, Unit] =
+    destinations.setMode(mode)
+
+  override def getMode(): IO[DestinationsError, Mode] = destinations.getMode()
+
+  override def getIndex(): IO[DestinationsError, Level] =
+    destinations.getIndex()
+
+  override def getDestAtIndex(): IO[DestinationsError, Option[Destination]] =
+    destinations.getDestAtIndex()
+
+  override def increment(): IO[DestinationsError, Unit] =
+    destinations.increment()
+
+  override def decrement(): IO[DestinationsError, Unit] =
+    destinations.decrement()
 }
 
 object BasicPlayer extends Globz.Service {

@@ -4,8 +4,10 @@ import controller.Stats
 import entity.LivingEntity.LivingEntityEnv
 import entity.Player.Item
 import physics.BasicDestinations
+import physics.Destination
 import physics.Destinations
 import physics.DestinationsError
+import physics.Mode
 import physics.WaypointDestination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
@@ -104,6 +106,23 @@ case class Prowler(
 
   override def isGravitating(): IO[DestinationsError, Boolean] =
     destinations.isGravitating()
+
+  override def setMode(mode: Mode): IO[DestinationsError, Unit] =
+    destinations.setMode(mode)
+
+  override def getMode(): IO[DestinationsError, Mode] = destinations.getMode()
+
+  override def getIndex(): IO[DestinationsError, Int] =
+    destinations.getIndex()
+
+  override def getDestAtIndex(): IO[DestinationsError, Option[Destination]] =
+    destinations.getDestAtIndex()
+
+  override def increment(): IO[DestinationsError, Unit] =
+    destinations.increment()
+
+  override def decrement(): IO[DestinationsError, Unit] =
+    destinations.decrement()
 }
 
 object Prowler extends Globz.Service {
