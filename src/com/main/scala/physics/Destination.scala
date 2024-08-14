@@ -10,6 +10,8 @@ import zio.json.DeriveJsonEncoder
 import zio.json.JsonDecoder
 import zio.json.JsonEncoder
 
+import java.util.UUID
+
 sealed trait DESTINATION_TYPE
 
 object DESTINATION_TYPE {
@@ -23,6 +25,7 @@ object DESTINATION_TYPE {
 }
 
 trait Destination {
+  val uuid: UUID = UUID.randomUUID()
   val dest_type: DESTINATION_TYPE
   val location: Vector[Double]
   val radius: Double
@@ -105,7 +108,7 @@ object destination {
 case class Waypoint(location: (Double, Double, Double))
     extends DestinationModel {
   override val dest_type: DESTINATION_TYPE = WAYPOINT
-  val radius = 10
+  val radius = ???
 }
 object Waypoint {
   implicit val encoder: JsonEncoder[Waypoint] =

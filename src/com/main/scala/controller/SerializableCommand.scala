@@ -480,20 +480,20 @@ object TOGGLE_DESTINATIONS {
     DeriveJsonDecoder.gen[TOGGLE_DESTINATIONS]
 }
 case class ADD_DESTINATION(id: ID, dest: destination)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
-  override val REF_TYPE: Any = (ADD_DESTINATION, 2)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (ADD_DESTINATION, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
-      _ <- ZIO
+      res <- ZIO
         .fromOption(blob)
         .flatMap { case entity: Destinations =>
           for {
-            res <- dest.deserialize
-            _ <- entity.addDestination(res)
-          } yield ()
+            newDest <- dest.deserialize
+            _ <- entity.addDestination(newDest)
+          } yield dest
         }
-    } yield ()).mapError(_ =>
+    } yield NewDestination(id, res)).mapError(_ =>
       GenericCommandError(s"Error adding destination to entity $id")
     )
 }
