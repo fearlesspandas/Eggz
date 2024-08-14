@@ -603,16 +603,16 @@ object GET_ALL_DESTINATIONS {
 }
 
 case class CLEAR_DESTINATIONS(id: GLOBZ_ID)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
+    extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (CLEAR_DESTINATIONS, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
       _ <- glob match {
         case pe: Destinations => pe.clearDestinations()
         case _                => ZIO.unit
       }
-    } yield ())
+    } yield ClearDestinations())
       .orElseFail(GenericCommandError(s"Error clearing destinations for $id"))
 }
 object CLEAR_DESTINATIONS {

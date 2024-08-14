@@ -100,6 +100,15 @@ object NewDestination {
   implicit val decoder: JsonDecoder[NewDestination] =
     DeriveJsonDecoder.gen[NewDestination]
 }
+
+case class ClearDestinations()
+  extends QueryResponse
+object ClearDestinations{
+  implicit val encoder: JsonEncoder[ClearDestinations] =
+    DeriveJsonEncoder.gen[ClearDestinations]
+  implicit val decoder: JsonDecoder[ClearDestinations] =
+    DeriveJsonDecoder.gen[ClearDestinations]
+}
 case class Location(id: GLOBZ_ID, location: (Double, Double, Double))
     extends QueryResponse
 object Location {
