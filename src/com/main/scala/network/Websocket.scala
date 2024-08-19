@@ -16,7 +16,8 @@ import controller.MultiResponse
 import controller.PaginatedResponse
 import controller.Query
 import controller.QueryResponse
-import controller.Queued
+import controller.QueuedClientMessage
+import controller.QueuedServerMessage
 import controller.ResponseQuery
 import controller.SUBSCRIBE
 import controller.SerializableCommand
@@ -87,16 +88,35 @@ case class BasicWebSocket(
   response_queue: Queue[QueryResponse]
 ) extends WebSocketControlServer[Any] {
 
-  def linkController(channel: WebSocketChannel) = (for {
-    q <-
-      controller.getQueue
-    _ <- ZStream
-      .fromQueue(q)
-      .foreach(response =>
-        channel.send(Read(WebSocketFrame.text(response.toJson)))
-      )
-      .fork
-  } yield ()).when(server_keys.contains(id))
+  def linkControllerServer(channel: WebSocketChannel) =
+    (for {
+      q <-
+        controller.getQueue
+      _ <- ZStream
+        .fromQueue(q)
+        .foreach {
+          case x: QueuedClientMessage => q.offer(x)
+          case response =>
+            channel.send(Read(WebSocketFrame.text(response.toJson)))
+        }
+        .fork
+    } yield ()).when(server_keys.contains(id))
+
+  def linkControllerClient(channel: WebSocketChannel) =
+    (for {
+      q <-
+        controller.getQueue
+      _ <- ZStream
+        .fromQueue(q)
+        .foreach {
+          case QueuedClientMessage(id, responses) if id == this.id =>
+            ZIO.foreach(responses)(response =>
+              channel.send(Read(WebSocketFrame.text(response.toJson)))
+            )
+          case x => q.offer(x)
+        }
+        .fork
+    } yield ()).when(!server_keys.contains(id))
 
   def sendResponses(
     stream: ZStream[WebSocketChannel, Nothing, QueryResponse]
@@ -143,13 +163,14 @@ case class BasicWebSocket(
           x => ZIO.succeed(x)
         )
       )
-    } yield res match {
-      case x: Queued                    => x
-      case x: Completed                 => x
-      case PaginatedResponse(responses) => responses.map(_.toJson)
-      case r                            => Seq(r.toJson)
-      case _                            => Seq()
-    }
+    } yield res
+//    match {
+//      case x: QueuedServerMessage       => x
+//      case x: Completed                 => x
+//      case PaginatedResponse(responses) => responses.map(_.toJson)
+//      case r                            => Seq(r.toJson)
+//      case _                            => Seq()
+//    }
 
   val initialize_session: ZIO[Any, Object, Unit] =
     for {
@@ -201,10 +222,17 @@ case class BasicWebSocket(
             handle_query_response(channel, response)
           )
           .unit
-      case Queued(responses) =>
+      case PaginatedResponse(responses) =>
+        ZIO
+          .foreach(responses)(response =>
+            channel.send(Read(WebSocketFrame.text(response.toJson)))
+          )
+          .unit
+      case QueuedServerMessage(responses) =>
         ZIO
           .foreach(responses)(resp => controller.queueQuery(ZIO.succeed(resp)))
           .unit
+      case x: QueuedClientMessage => controller.queueQuery(ZIO.succeed(x))
       case x: Completed =>
         for {
           next <- response_queue.takeUpTo(1)
@@ -212,7 +240,7 @@ case class BasicWebSocket(
             channel.send(Read(WebSocketFrame.text(x.toJson)))
           )
         } yield ()
-      case _ => ZIO.unit
+      case response => channel.send(Read(WebSocketFrame.text(response.toJson)))
     }
 
   def handle_request(
@@ -300,7 +328,8 @@ case class BasicWebSocket(
               // initialize response stream when first authenticating
               _ <- sendResponses(ZStream.fromQueue(response_queue))
                 .provide(ZLayer.succeed(channel))
-              _ <- linkController(channel)
+              _ <- linkControllerServer(channel)
+              _ <- linkControllerClient(channel)
               _ <- recieveAllText(
                 text,
                 channel,

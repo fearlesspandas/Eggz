@@ -431,7 +431,7 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
         .toggleGravitate()
         .flatMap(_ => blob.isGravitating())
         .mapError(_ => ???)
-    } yield Queued(Chunk(MSG(id, GravityActive(id, res))))
+    } yield QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res))))
 }
 
 object TOGGLE_GRAVITATE {
@@ -470,7 +470,7 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
           s"Error while retrieving active for $id due to $err"
         )
       )
-  } yield Queued(Chunk(MSG(id, DestinationsActive(id, isactive))))
+  } yield QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
 }
 
 object TOGGLE_DESTINATIONS {
@@ -505,7 +505,32 @@ object ADD_DESTINATION {
     DeriveJsonDecoder.gen[ADD_DESTINATION]
 
 }
+case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_NEXT_INDEX, id)
 
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      blob <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err => GenericCommandError(s"Error getting blob $id, because $err"),
+          { case d: Destinations => d }
+        )
+      res <- blob
+        .getIndex()
+        .orElseFail(GenericCommandError("Error while trying to get index"))
+    } yield NextIndex(id, res)
+}
+
+object GET_NEXT_INDEX {
+  implicit val encoder: JsonEncoder[GET_NEXT_INDEX] =
+    DeriveJsonEncoder.gen[GET_NEXT_INDEX]
+  implicit val decoder: JsonDecoder[GET_NEXT_INDEX] =
+    DeriveJsonDecoder.gen[GET_NEXT_INDEX]
+
+  case class ADDED_DESTINATION(id: ID, location: String)
+}
 case class GET_NEXT_DESTINATION(id: ID)
     extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)
@@ -550,16 +575,24 @@ case class GET_NEXT_DESTINATION(id: ID)
                             (d.location(0), d.location(1), d.location(2))
                           )
                       } yield PaginatedResponse(
-                        Chunk(
-                          MSG(id, TeleportToNext(id, teleport_to))
-                        ) ++ Chunk(MSG(id, NextDestination(id, ser_dest)))
+                        Chunk(MSG(id, TeleportToNext(id, teleport_to)))
+                          ++ Chunk(MSG(id, NextDestination(id, ser_dest)))
                       )
                     case GRAVITY =>
-                      ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
+                      for {
+                        index <- entity.getIndex()
+                      } yield MSG(id, NextDestination(id, ser_dest))
                     case WAYPOINT =>
                       ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
                   }
-                } yield res
+                  index <- entity.getIndex()
+                } yield MultiResponse(
+                  Chunk(
+                    res,
+                    QueuedClientMessage(id, Chunk(NextIndex(id, index)))
+                  )
+                )
+
           } yield r
       }
     } yield result)

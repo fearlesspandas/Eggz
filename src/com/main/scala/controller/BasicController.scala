@@ -26,6 +26,9 @@ trait BasicController[Env, Queued] {
   def queueQuery[Q, E](query: ZIO[Env, E, Q]): ZIO[Any, E, Unit]
 
   def getQueue[E]: ZIO[Any, E, Queued]
+
+//  def broadcast[E]: ZIO[Any, E, Queued]
+
   def runProcess[Q, E](
     query: ZIO[Env, E, ZIO[Env, E, Q]]
   ): ZIO[Any, E, BasicController[Env, Queued]]

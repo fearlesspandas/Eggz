@@ -2,6 +2,8 @@ package network
 
 import zio.Duration
 import zio.Queue
+import zio.Ref
+import zio.Schedule
 import zio.Scope
 import zio.ZIO
 import zio.ZIOAppArgs
@@ -17,29 +19,31 @@ object ZStreamTests extends ZIOAppDefault {
     for {
       queue: Queue[String] <- Queue.unbounded[String]
       in_queue: Queue[String] <- Queue.unbounded[String]
-//      _ <- queue.offer("hello")
-      stream = ZStream.fromQueue(queue) // .run(ZSink.log("found")).fork
-      stream2 = ZStream.fromQueue(in_queue)
-      _ <- stream2
-        .foreach(s =>
-          for {
-            // _ <- queue.takeUpTo(1)
-            _ <- queue.offer(s)
-          } yield ()
-        )
+      queue2: Queue[String] <- Queue.unbounded[String]
+
+      _ <- ZStream
+        .fromQueue(queue2)
+        .filter(_.toInt % 2 == 1)
+        .foreach(s => ZIO.log(s"test 1 $s"))
         .fork
-      a = ZStream.service[WebSocketChannel]
-//      _ <- stream.take(1).runCollect.fork
-      _ <- stream.take(1).foreach(x => ZIO.log(x)).fork
-      _ <- stream.foreach(x => ZIO.log(s"dropped ${x}")).fork
-//      _ <- stream.take(2).foreach(s => queue.offer("queue " + s)).fork
-      _ <- in_queue.offer("hello")
-      _ <- in_queue.offer("world")
-      _ <- in_queue.offer("thing")
-      _ <- in_queue.offer("other")
-//      x = stream.concat(ZStream.succeed("stuff"))
-//      f <- stream.find(_ == "other").foreach(s => ZIO.log(s"Take $s")).fork
-      _ <- ZIO.sleep(Duration.fromMillis(3000))
+
+      _ <- ZStream
+        .fromQueue(queue2)
+        .filter(_.toInt % 2 == 0)
+        .foreach(s => ZIO.log(s"test 2 $s"))
+        .fork
+
+      n <- Ref.make(0)
+      _ <- n.get
+        .flatMap(ind =>
+          queue2
+            .offer(ind.toString)
+            .flatMap(x => n.update(_ + 1))
+            .flatMap(res => ZIO.log(s"sent ${ind}"))
+        )
+        .repeat(Schedule.spaced(Duration.fromMillis(1000)))
+        .fork
+      _ <- ZIO.sleep(Duration.fromMillis(30000))
 //      _ <- f.join
     } yield ()
 }

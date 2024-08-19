@@ -74,6 +74,14 @@ object NextDestination {
   implicit val decoder: JsonDecoder[NextDestination] =
     DeriveJsonDecoder.gen[NextDestination]
 }
+
+case class NextIndex(id: ID, index: Int) extends QueryResponse
+object NextIndex {
+  implicit val encoder: JsonEncoder[NextIndex] =
+    DeriveJsonEncoder.gen[NextIndex]
+  implicit val decoder: JsonDecoder[NextIndex] =
+    DeriveJsonDecoder.gen[NextIndex]
+}
 case class TeleportToNext(id: ID, location: (Double, Double, Double))
     extends QueryResponse
 object TeleportToNext {
@@ -220,7 +228,12 @@ object ConsoleResponse {
     DeriveJsonDecoder.gen[ConsoleResponse]
 }
 case class Completed() extends QueryResponse
-case class Queued(responses: Chunk[QueryResponse]) extends QueryResponse
+case class QueuedServerMessage(responses: Chunk[QueryResponse])
+    extends QueryResponse
+
+case class QueuedClientMessage(id: ID, responses: Chunk[QueryResponse])
+    extends QueryResponse
+
 case class TerrainChunkm(
   uuid: UUID,
   location: (Double, Double, Double),

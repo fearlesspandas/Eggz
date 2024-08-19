@@ -51,6 +51,13 @@ package object auth {
       } yield server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION")
   }
+  val get_next_index: AUTH[String] = {
+    case GET_NEXT_INDEX(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_INDEX")
+  }
   val get_all_destinations: AUTH[String] = {
     case GET_ALL_DESTINATIONS(id) =>
       for {
@@ -211,6 +218,7 @@ object AuthCommandService {
             get_all_globs(op),
             add_destination(op),
             get_next_destination(server_keys)(op),
+            get_next_index(op),
             get_all_destinations(op),
             apply_vector(op),
             get_input_vector(server_keys)(op),
@@ -247,6 +255,7 @@ object AuthCommandService {
             get_all_globs(op),
             add_destination(op),
             get_next_destination(server_keys)(op),
+            get_next_index(op),
             get_all_destinations(op),
             apply_vector(op),
             get_input_vector(server_keys)(op),
