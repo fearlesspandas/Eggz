@@ -12,6 +12,7 @@ import controller.Control
 import controller.GET_ALL_GLOBS
 import controller.GET_BLOB
 import controller.GET_GLOB_LOCATION
+import controller.MultiResponse
 import controller.PaginatedResponse
 import controller.Query
 import controller.QueryResponse
@@ -143,7 +144,6 @@ case class BasicWebSocket(
         )
       )
     } yield res match {
-//      case x: PaginatedResponse => x
       case x: Queued                    => x
       case x: Completed                 => x
       case PaginatedResponse(responses) => responses.map(_.toJson)
@@ -190,6 +190,31 @@ case class BasicWebSocket(
         )
         .fold(_ => false, x => x)
 
+  def handle_query_response(
+    channel: WebSocketChannel,
+    res: QueryResponse
+  ): ZIO[Any, Throwable, Unit] =
+    res match {
+      case MultiResponse(responses) =>
+        ZIO
+          .foreach(responses)(response =>
+            handle_query_response(channel, response)
+          )
+          .unit
+      case Queued(responses) =>
+        ZIO
+          .foreach(responses)(resp => controller.queueQuery(ZIO.succeed(resp)))
+          .unit
+      case x: Completed =>
+        for {
+          next <- response_queue.takeUpTo(1)
+          _ <- ZIO.foreach(next)(x =>
+            channel.send(Read(WebSocketFrame.text(x.toJson)))
+          )
+        } yield ()
+      case _ => ZIO.unit
+    }
+
   def handle_request(
     command: SerializableCommand[_, _]
   ): ZIO[WebSocketChannel, Object, Unit] =
@@ -210,27 +235,7 @@ case class BasicWebSocket(
           res <- handleQuery(rq)
           _ <-
             res match {
-              case PaginatedResponse(responses) =>
-                for {
-                  _ <- ZIO.foreach(responses.tail)(x => response_queue.offer(x))
-                  _ <- channel.send(
-                    Read(WebSocketFrame.text(responses.head.toJson))
-                  )
-                } yield ()
-              case Queued(responses) =>
-                ZIO.foreach(responses)(resp =>
-                  controller.queueQuery(ZIO.succeed(resp))
-                )
-              case x: Completed =>
-                for {
-//                  _ <- ZIO.log(s"sending next cmd for ${id}")
-                  next <- response_queue.takeUpTo(1)
-                  _ <- ZIO.foreach(next)(x =>
-                    channel.send(Read(WebSocketFrame.text(x.toJson)))
-//                      *> ZIO
-//                      .log(x.toJson)
-                  )
-                } yield ()
+              case q: QueryResponse => handle_query_response(channel, q)
               case s: Seq[String] =>
                 ZIO.foreach(s)(txt =>
                   channel.send(Read(WebSocketFrame.text(txt)))

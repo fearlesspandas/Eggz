@@ -623,9 +623,9 @@ object CLEAR_DESTINATIONS {
 }
 
 case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
-    extends SimpleCommandSerializable[WorldBlock.Block]:
+    extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = (SET_MODE_DESTINATIONS, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       wb <- ZIO.service[WorldBlock.Block]
       glob <- wb
@@ -644,7 +644,7 @@ case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
             s"failed while updating destinations mode for $id due to $err"
           )
         )
-    } yield ()
+    } yield ModeSet(mode)
 
 object SET_MODE_DESTINATIONS {
   implicit val encoder: JsonEncoder[SET_MODE_DESTINATIONS] =
@@ -1027,9 +1027,7 @@ object GET_CACHED_TERRAIN {
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
 case class NEXT_CMD() extends ResponseQuery[WorldBlock.Block] {
-
   override val REF_TYPE: Any = NEXT_CMD
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     ZIO.succeed(Completed())
 }

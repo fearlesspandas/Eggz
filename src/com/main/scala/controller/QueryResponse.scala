@@ -8,6 +8,7 @@ import entity.TerrainUnitM
 import entity.Terrain.TerrainId
 import physics.DESTINATION_TYPE
 import physics.DestinationModel
+import physics.Mode
 import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -38,7 +39,6 @@ object MSG {
   implicit val encoder: JsonEncoder[MSG] = DeriveJsonEncoder.gen[MSG]
   implicit val decoder: JsonDecoder[MSG] = DeriveJsonDecoder.gen[MSG]
 }
-
 case class GlobSet(globs: Set[GlobzModel]) extends QueryResponse
 object GlobSet {
   implicit val encoder: JsonEncoder[GlobSet] = DeriveJsonEncoder.gen[GlobSet]
@@ -66,7 +66,6 @@ object AllStats {
   implicit val encoder: JsonEncoder[AllStats] = DeriveJsonEncoder.gen[AllStats]
   implicit val decoder: JsonDecoder[AllStats] = DeriveJsonDecoder.gen[AllStats]
 }
-
 case class NextDestination(id: ID, destination: destination)
     extends QueryResponse
 object NextDestination {
@@ -77,7 +76,6 @@ object NextDestination {
 }
 case class TeleportToNext(id: ID, location: (Double, Double, Double))
     extends QueryResponse
-
 object TeleportToNext {
   implicit val encoder: JsonEncoder[TeleportToNext] =
     DeriveJsonEncoder.gen[TeleportToNext]
@@ -100,10 +98,15 @@ object NewDestination {
   implicit val decoder: JsonDecoder[NewDestination] =
     DeriveJsonDecoder.gen[NewDestination]
 }
-
-case class ClearDestinations()
-  extends QueryResponse
-object ClearDestinations{
+case class ModeSet(mode: Mode) extends QueryResponse
+object ModeSet {
+  implicit val encoder: JsonEncoder[ModeSet] =
+    DeriveJsonEncoder.gen[ModeSet]
+  implicit val decoder: JsonDecoder[ModeSet] =
+    DeriveJsonDecoder.gen[ModeSet]
+}
+case class ClearDestinations() extends QueryResponse
+object ClearDestinations {
   implicit val encoder: JsonEncoder[ClearDestinations] =
     DeriveJsonEncoder.gen[ClearDestinations]
   implicit val decoder: JsonDecoder[ClearDestinations] =
@@ -133,7 +136,6 @@ object NoInput {
   implicit val encoder: JsonEncoder[NoInput] = DeriveJsonEncoder.gen[NoInput]
   implicit val decoder: JsonDecoder[NoInput] = DeriveJsonDecoder.gen[NoInput]
 }
-
 case class GravityActive(id: GLOBZ_ID, is_active: Boolean) extends QueryResponse
 object GravityActive {
   implicit val encoder: JsonEncoder[GravityActive] =
@@ -165,7 +167,6 @@ object PhysStat {
     DeriveJsonEncoder.gen[PhysStat]
   implicit val decoder: JsonDecoder[PhysStat] = DeriveJsonDecoder.gen[PhysStat]
 }
-
 case class TerrainSet(terrain: Set[TerrainModel]) extends QueryResponse
 object Terrainset {
   implicit val encoder: JsonEncoder[TerrainSet] =
@@ -173,29 +174,31 @@ object Terrainset {
   implicit val decoder: JsonDecoder[TerrainSet] =
     DeriveJsonDecoder.gen[TerrainSet]
 }
-
 case class TerrainRegionSet(
   terrain: TerrainRegionM
 ) extends QueryResponse
-
 object TerrainRegionSet {
   implicit val encoder: JsonEncoder[TerrainRegionSet] =
     DeriveJsonEncoder.gen[TerrainRegionSet]
   implicit val decoder: JsonDecoder[TerrainRegionSet] =
     DeriveJsonDecoder.gen[TerrainRegionSet]
 }
-
 case class PaginatedResponse(responses: Chunk[QueryResponse])
     extends QueryResponse
-
 object PaginatedResponse {
   implicit val encoder: JsonEncoder[PaginatedResponse] =
     DeriveJsonEncoder.gen[PaginatedResponse]
   implicit val decoder: JsonDecoder[PaginatedResponse] =
     DeriveJsonDecoder.gen[PaginatedResponse]
 }
+case class MultiResponse(responses: Chunk[QueryResponse]) extends QueryResponse
+object MultiResponse { // todo should maybe remove this serialization logic as we should never actually use it
+  implicit val encoder: JsonEncoder[MultiResponse] =
+    DeriveJsonEncoder.gen[MultiResponse]
+  implicit val decoder: JsonDecoder[MultiResponse] =
+    DeriveJsonDecoder.gen[MultiResponse]
+}
 case class StartPagination(tpe: String, count: Int) extends QueryResponse
-
 object StartPagination {
   implicit val encoder: JsonEncoder[StartPagination] =
     DeriveJsonEncoder.gen[StartPagination]
@@ -203,14 +206,12 @@ object StartPagination {
     DeriveJsonDecoder.gen[StartPagination]
 }
 case class EndPagination(tpe: String) extends QueryResponse
-
 object EndPagination {
   implicit val encoder: JsonEncoder[EndPagination] =
     DeriveJsonEncoder.gen[EndPagination]
   implicit val decoder: JsonDecoder[EndPagination] =
     DeriveJsonDecoder.gen[EndPagination]
 }
-
 case class ConsoleResponse(val msg: String) extends QueryResponse
 object ConsoleResponse {
   implicit val encoder: JsonEncoder[ConsoleResponse] =
@@ -225,7 +226,6 @@ case class TerrainChunkm(
   location: (Double, Double, Double),
   radius: Double
 ) extends QueryResponse
-
 object TerrainChunkm {
   implicit val encoder: JsonEncoder[TerrainChunkm] =
     DeriveJsonEncoder.gen[TerrainChunkm]
