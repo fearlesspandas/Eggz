@@ -144,6 +144,13 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_PHYSICAL_STATS")
   }
+  val adjust_max_speed: Set[String] => AUTH[String] = server_keys => {
+    case ADJUST_MAX_SPEED(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_MAX_SPEED")
+  }
   val get_physical_stats: Set[String] => AUTH[String] = server_keys => {
     case GET_PHYSICAL_STATS(id) =>
       for {
@@ -244,6 +251,7 @@ object AuthCommandService {
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
+            adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
             get_terrain_within_distance(server_keys)(op),
@@ -283,6 +291,7 @@ object AuthCommandService {
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
+            adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
             get_terrain_within_distance(server_keys)(op),
@@ -338,15 +347,18 @@ case class AuthenticationService(
     cmd match {
       case command: SerializableCommand[_, _] =>
         for {
-          cached <- cachedAuth.get.map(_.get(command.REF_TYPE))
+          sender <- ZIO.service[String]
+          cached <- cachedAuth.get.map(_.get((command.REF_TYPE, sender)))
           res <- cached match {
             case Some(r) =>
               ZIO.succeed(r)
             case None =>
               for {
-                _ <- ZIO.log("creating cached")
+                _ <- ZIO.log(s"creating cached for $command , $sender")
                 rres <- authorizer(cmd)
-                _ <- cachedAuth.update(_.updated(command.REF_TYPE, rres))
+                _ <- cachedAuth.update(
+                  _.updated((command.REF_TYPE, sender), rres)
+                )
               } yield rres
           }
         } yield res

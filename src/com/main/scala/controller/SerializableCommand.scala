@@ -862,6 +862,36 @@ object ADJUST_PHYSICAL_STATS {
     DeriveJsonDecoder.gen[ADJUST_PHYSICAL_STATS]
 }
 
+case class ADJUST_MAX_SPEED(id: GLOBZ_ID, delta: Double)
+    extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = (ADJUST_MAX_SPEED, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      glob <- WorldBlock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case pe: PhysicalEntity => pe }
+        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+      _ <- glob.adjustMaxSpeed(delta)
+      ms <- glob.getMaxSpeed
+        .mapError(_ => GenericCommandError("Could not retrieve max speed"))
+      speed <- glob.getSpeed.mapError(_ =>
+        GenericCommandError("Could not retrieve speed")
+      )
+    } yield MultiResponse(
+      Chunk(
+        PhysStat(id, ms, speed),
+        QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
+      )
+    ))
+      .orElseFail(GenericCommandError(s"Error adjusting speed for $id"))
+}
+object ADJUST_MAX_SPEED {
+  implicit val encoder: JsonEncoder[ADJUST_MAX_SPEED] =
+    DeriveJsonEncoder.gen[ADJUST_MAX_SPEED]
+  implicit val decoder: JsonDecoder[ADJUST_MAX_SPEED] =
+    DeriveJsonDecoder.gen[ADJUST_MAX_SPEED]
+}
 case class GET_PHYSICAL_STATS(id: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = GET_PHYSICAL_STATS
