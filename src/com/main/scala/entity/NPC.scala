@@ -66,13 +66,11 @@ case class Prowler(
     } yield PROWLER_EGG(id, stats, location)
 
   def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
-    // _ <- ZIO.log(s"Following player $id")
     worldblock <- ZIO.service[WorldBlock.Block]
     player <- worldblock
       .getBlob(id)
       .flatMap { l =>
         ZIO.fromOption(l)
-      // case _ => ZIO.fail(GenericNPCError("No Player found"))
       }
       .mapError(_ => GenericNPCError(s"Player not found for $id"))
     _ <- player match {
@@ -83,7 +81,7 @@ case class Prowler(
           _ <- destinations
             .addDestination(WaypointDestination(loc, 0))
             .mapError(_ => ???)
-          ms <- physics.getMaxSpeed().mapError(_ => ???)
+          ms <- physics.getMaxSpeed.mapError(_ => ???)
           _ <-
             if (ms <= 0) physics.adjustMaxSpeed(1).mapError(_ => ???)
             else ZIO.unit

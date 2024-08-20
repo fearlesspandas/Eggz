@@ -264,6 +264,7 @@ object ADD_HEALTH {
   implicit val decoder: JsonDecoder[ADD_HEALTH] =
     DeriveJsonDecoder.gen[ADD_HEALTH]
 }
+
 case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
     extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = REMOVE_HEALTH
@@ -291,6 +292,7 @@ object REMOVE_HEALTH {
   implicit val decoder: JsonDecoder[REMOVE_HEALTH] =
     DeriveJsonDecoder.gen[REMOVE_HEALTH]
 }
+
 case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (CREATE_REPAIR_EGG, globId)
@@ -323,6 +325,7 @@ object GET_BLOB {
   implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
 }
 
+@deprecated
 case class GET_GLOB_LOCATION(id: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_GLOB_LOCATION, id)
@@ -342,6 +345,7 @@ object GET_GLOB_LOCATION {
     DeriveJsonDecoder.gen[GET_GLOB_LOCATION]
 }
 
+@deprecated
 case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
     extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
   override val REF_TYPE: Any = (SET_GLOB_LOCATION, id)
@@ -425,7 +429,7 @@ object UNRELATE_ALL {
   implicit val decoder: JsonDecoder[UNRELATE_ALL] =
     DeriveJsonDecoder.gen[UNRELATE_ALL]
 }
-
+@deprecated
 case class TICK_WORLD() extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = TICK_WORLD
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
@@ -473,7 +477,6 @@ object START_EGG {
 }
 case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (TOGGLE_GRAVITATE, id)
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       wb <- ZIO.service[WorldBlock.Block]
@@ -488,17 +491,15 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
         .mapError(_ => ???)
     } yield QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res))))
 }
-
 object TOGGLE_GRAVITATE {
   implicit val encoder: JsonEncoder[TOGGLE_GRAVITATE] =
     DeriveJsonEncoder.gen[TOGGLE_GRAVITATE]
   implicit val decoder: JsonDecoder[TOGGLE_GRAVITATE] =
     DeriveJsonDecoder.gen[TOGGLE_GRAVITATE]
 }
+
 case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
-
   override val REF_TYPE: Any = (TOGGLE_DESTINATIONS, id)
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     wb <- ZIO.service[WorldBlock.Block]
     blob <- wb
@@ -527,13 +528,13 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
       )
   } yield QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
 }
-
 object TOGGLE_DESTINATIONS {
   implicit val encoder: JsonEncoder[TOGGLE_DESTINATIONS] =
     DeriveJsonEncoder.gen[TOGGLE_DESTINATIONS]
   implicit val decoder: JsonDecoder[TOGGLE_DESTINATIONS] =
     DeriveJsonDecoder.gen[TOGGLE_DESTINATIONS]
 }
+
 case class ADD_DESTINATION(id: ID, dest: destination)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ADD_DESTINATION, id)
@@ -555,14 +556,12 @@ case class ADD_DESTINATION(id: ID, dest: destination)
 object ADD_DESTINATION {
   implicit val encoder: JsonEncoder[ADD_DESTINATION] = DeriveJsonEncoder
     .gen[ADD_DESTINATION]
-
   implicit val decoder: JsonDecoder[ADD_DESTINATION] =
     DeriveJsonDecoder.gen[ADD_DESTINATION]
-
 }
+
 case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_INDEX, id)
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       blob <- ZIO
@@ -577,15 +576,13 @@ case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
         .orElseFail(GenericCommandError("Error while trying to get index"))
     } yield NextIndex(id, res)
 }
-
 object GET_NEXT_INDEX {
   implicit val encoder: JsonEncoder[GET_NEXT_INDEX] =
     DeriveJsonEncoder.gen[GET_NEXT_INDEX]
   implicit val decoder: JsonDecoder[GET_NEXT_INDEX] =
     DeriveJsonDecoder.gen[GET_NEXT_INDEX]
-
-  case class ADDED_DESTINATION(id: ID, location: String)
 }
+
 case class GET_NEXT_DESTINATION(id: ID)
     extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)
@@ -661,8 +658,6 @@ object GET_NEXT_DESTINATION {
     DeriveJsonEncoder.gen[GET_NEXT_DESTINATION]
   implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION] =
     DeriveJsonDecoder.gen[GET_NEXT_DESTINATION]
-
-  case class ADDED_DESTINATION(id: ID, location: String)
 }
 
 case class GET_ALL_DESTINATIONS(id: ID)
@@ -740,6 +735,7 @@ object SET_MODE_DESTINATIONS {
   implicit val decoder: JsonDecoder[SET_MODE_DESTINATIONS] =
     DeriveJsonDecoder.gen[SET_MODE_DESTINATIONS]
 }
+@deprecated
 case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (APPLY_VECTOR, id)
@@ -759,14 +755,14 @@ object APPLY_VECTOR {
   implicit val decoder: JsonDecoder[APPLY_VECTOR] =
     DeriveJsonDecoder.gen[APPLY_VECTOR]
 }
-
+@deprecated
 case class GET_INPUT_VECTOR(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_INPUT_VECTOR, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
       resraw <- glob match {
-        case physicalEntity: PhysicalEntity => physicalEntity.getInputVec()
+        case physicalEntity: PhysicalEntity => physicalEntity.getInputVec
       }
       res <- ZIO
         .fromOption(resraw)
@@ -827,7 +823,7 @@ object LAZY_LV {
     DeriveJsonDecoder.gen[LAZY_LV]
 }
 
-case class PhysicalStats(speed_delta: Double)
+case class PhysicalStats(max_speed_delta: Double, speed_delta: Double)
 object PhysicalStats {
   implicit val encoder: JsonEncoder[PhysicalStats] =
     DeriveJsonEncoder.gen[PhysicalStats]
@@ -835,15 +831,28 @@ object PhysicalStats {
     DeriveJsonDecoder.gen[PhysicalStats]
 }
 case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
+    extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = (ADJUST_PHYSICAL_STATS, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
-      _ <- glob match {
-        case pe: PhysicalEntity => pe.adjustMaxSpeed(delta.speed_delta)
-      }
-    } yield ())
+      glob <- WorldBlock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case pe: PhysicalEntity => pe }
+        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+      _ <- glob.adjustMaxSpeed(delta.max_speed_delta)
+      _ <- glob.adjustSpeed(delta.speed_delta)
+      ms <- glob.getMaxSpeed
+        .mapError(_ => GenericCommandError("Could not retrieve max speed"))
+      speed <- glob.getSpeed.mapError(_ =>
+        GenericCommandError("Could not retrieve speed")
+      )
+    } yield MultiResponse(
+      Chunk(
+        PhysStat(id, ms, speed),
+        QueuedServerMessage(Chunk(PhysStat(id, ms, speed)))
+      )
+    ))
       .orElseFail(GenericCommandError(s"Error adjusting speed for $id"))
 }
 object ADJUST_PHYSICAL_STATS {
@@ -858,11 +867,14 @@ case class GET_PHYSICAL_STATS(id: GLOBZ_ID)
   val REF_TYPE: Any = GET_PHYSICAL_STATS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
-      res <- glob match {
-        case pe: PhysicalEntity => pe.getMaxSpeed()
-      }
-    } yield PhysStat(id, res))
+      glob <- WorldBlock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case pe: PhysicalEntity => pe }
+        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+      maxspeed <- glob.getMaxSpeed
+      speed <- glob.getSpeed
+    } yield PhysStat(id, maxspeed, speed))
       .orElseFail(GenericCommandError(s"Error getting phys_stats for $id "))
 }
 object GET_PHYSICAL_STATS {

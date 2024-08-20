@@ -10,12 +10,15 @@ trait PhysicalEntity {
   def getLocation: IO[PhysicsError, Vector[Double]]
   def getVelocity: IO[PhysicsError, Vector[Double]]
   def setVelocity(velocity: Vector[Double]): IO[PhysicsError, Unit]
-  def move(location: Vector[Double]): IO[PhysicsError, Unit]
   def teleport(location: Vector[Double]): IO[PhysicsError, Unit]
+  @deprecated
   def setInputVec(vec: Vector[Double]): IO[PhysicsError, Unit]
-  def getInputVec(): IO[PhysicsError, Option[Vector[Double]]]
+  @deprecated
+  def getInputVec: IO[PhysicsError, Option[Vector[Double]]]
   def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit]
-  def getMaxSpeed(): IO[PhysicsError, Double]
+  def getMaxSpeed: IO[PhysicsError, Double]
+  def adjustSpeed(delta: Double): IO[PhysicsError, Unit]
+  def getSpeed: IO[PhysicsError, Double]
 }
 trait PhysicsError
 object PhysicalEntity {
@@ -28,7 +31,8 @@ case class BasicPhysicalEntity(
   location: Ref[Vector[Double]],
   velocity: Ref[Vector[Double]],
   input: Ref[Option[Vector[Double]]],
-  max_speed: Ref[Double]
+  max_speed: Ref[Double],
+  speed: Ref[Double]
 ) extends PhysicalEntity {
   override def getLocation: IO[PhysicsError, Vector[Double]] = location.get
 
@@ -36,8 +40,6 @@ case class BasicPhysicalEntity(
 
   override def setVelocity(vel: Vector[Double]): IO[PhysicsError, Unit] =
     velocity.update(_ => vel)
-
-  override def move(location: Vector[Double]): IO[PhysicsError, Unit] = ???
 
   override def teleport(loc: Vector[Double]): IO[PhysicsError, Unit] =
     location.update(_ => loc)
@@ -47,13 +49,21 @@ case class BasicPhysicalEntity(
       case _ if vec.find(_ != 0).nonEmpty => Some(vec); case _ => None
     }
 
-  override def getInputVec(): IO[PhysicsError, Option[Vector[Double]]] =
+  override def getInputVec: IO[PhysicsError, Option[Vector[Double]]] =
     input.get
 
   override def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit] =
     max_speed.update(curr => Math.max(curr + delta, 0))
 
-  override def getMaxSpeed(): IO[PhysicsError, Double] = max_speed.get
+  override def getMaxSpeed: IO[PhysicsError, Double] = max_speed.get
+
+  override def adjustSpeed(delta: Double): IO[PhysicsError, Unit] =
+    for {
+      ms <- max_speed.get
+      _ <- speed.update(s => math.max(0, math.min(s + delta, ms)))
+    } yield ()
+
+  override def getSpeed: IO[PhysicsError, Double] = speed.get
 }
 
 object BasicPhysicalEntity extends PhysicalEntity.Service {
@@ -63,5 +73,6 @@ object BasicPhysicalEntity extends PhysicalEntity.Service {
       vel <- Ref.make(Vector(0.0, 0, 0))
       inpt <- Ref.make[Option[Vector[Double]]](None)
       max_speed <- Ref.make(0.0)
-    } yield BasicPhysicalEntity(loc, vel, inpt, max_speed)
+      speed <- Ref.make(0.0)
+    } yield BasicPhysicalEntity(loc, vel, inpt, max_speed, speed)
 }

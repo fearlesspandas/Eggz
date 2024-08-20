@@ -131,9 +131,6 @@ trait LivingEntity
   def getVelocity: IO[PhysicsError, Vector[Experience]] =
     physics.getVelocity
 
-  def move(location: Vector[Experience]): IO[PhysicsError, Unit] =
-    physics.move(location)
-
   def teleport(location: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.teleport(location)
 
@@ -197,8 +194,8 @@ trait LivingEntity
   def setInputVec(vec: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.setInputVec(vec)
 
-  def getInputVec(): IO[PhysicsError, Option[Vector[Experience]]] =
-    physics.getInputVec()
+  def getInputVec: IO[PhysicsError, Option[Vector[Experience]]] =
+    physics.getInputVec
 
   def clearDestinations(): IO[DestinationsError, Unit] =
     destinations.clearDestinations()
@@ -206,8 +203,13 @@ trait LivingEntity
   def adjustMaxSpeed(delta: Experience): IO[PhysicsError, Unit] =
     physics.adjustMaxSpeed(delta)
 
-  def getMaxSpeed(): IO[PhysicsError, Experience] =
-    physics.getMaxSpeed()
+  def getMaxSpeed: IO[PhysicsError, Experience] =
+    physics.getMaxSpeed
+
+  def adjustSpeed(delta: Double): IO[PhysicsError, Unit] =
+    physics.adjustSpeed(delta)
+
+  def getSpeed: IO[PhysicsError, Experience] = physics.getSpeed
 }
 
 object LivingEntity {

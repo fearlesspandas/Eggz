@@ -176,7 +176,8 @@ object LV {
   implicit val encoder: JsonEncoder[LV] = DeriveJsonEncoder.gen[LV]
   implicit val decoder: JsonDecoder[LV] = DeriveJsonDecoder.gen[LV]
 }
-case class PhysStat(id: GLOBZ_ID, max_speed: Double) extends QueryResponse
+case class PhysStat(id: GLOBZ_ID, max_speed: Double, speed: Double)
+    extends QueryResponse
 object PhysStat {
   implicit val encoder: JsonEncoder[PhysStat] =
     DeriveJsonEncoder.gen[PhysStat]
