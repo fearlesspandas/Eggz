@@ -11,6 +11,7 @@ import physics.BasicDestinations
 import physics.Destination
 import physics.Destinations
 import physics.DestinationsError
+import physics.Mode
 import src.com.main
 import src.com.main.scala
 import src.com.main.scala.entity
@@ -152,6 +153,35 @@ trait LivingEntity
 
   def popNextDestination(): IO[DestinationsError, Option[Destination]] =
     destinations.popNextDestination()
+
+  def toggleDestinations(): IO[DestinationsError, Unit] =
+    destinations.toggleDestinations()
+
+  def isActive(): IO[DestinationsError, Boolean] =
+    destinations.isActive()
+
+  def toggleGravitate(): IO[DestinationsError, Unit] =
+    destinations.toggleGravitate()
+
+  def isGravitating(): IO[DestinationsError, Boolean] =
+    destinations.isGravitating()
+
+  def setMode(mode: Mode): IO[DestinationsError, Unit] =
+    destinations.setMode(mode)
+
+  def getMode(): IO[DestinationsError, Mode] = destinations.getMode()
+
+  def getIndex(): IO[DestinationsError, Level] =
+    destinations.getIndex()
+
+  def getDestAtIndex(): IO[DestinationsError, Option[Destination]] =
+    destinations.getDestAtIndex()
+
+  def increment(): IO[DestinationsError, Unit] =
+    destinations.increment()
+
+  def decrement(): IO[DestinationsError, Unit] =
+    destinations.decrement()
 
   def unrelate(
     egg1: scala.entity.Globz.GLOBZ_IN,

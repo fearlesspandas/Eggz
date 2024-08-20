@@ -66,6 +66,13 @@ object AllStats {
   implicit val encoder: JsonEncoder[AllStats] = DeriveJsonEncoder.gen[AllStats]
   implicit val decoder: JsonDecoder[AllStats] = DeriveJsonDecoder.gen[AllStats]
 }
+case class HealthSet(id: GLOBZ_ID, value: Double) extends QueryResponse
+object HealthSet {
+  implicit val encoder: JsonEncoder[HealthSet] =
+    DeriveJsonEncoder.gen[HealthSet]
+  implicit val decoder: JsonDecoder[HealthSet] =
+    DeriveJsonDecoder.gen[HealthSet]
+}
 case class NextDestination(id: ID, destination: destination)
     extends QueryResponse
 object NextDestination {

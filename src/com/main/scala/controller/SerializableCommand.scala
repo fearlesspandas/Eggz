@@ -5,6 +5,7 @@ import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
 import entity.GlobzModel
+import entity.LivingEntity
 import entity.PhysicalEntity
 import entity.Player
 import entity.TerrainChunkM
@@ -236,6 +237,60 @@ object GET_ALL_STATS {
     DeriveJsonDecoder.gen[GET_ALL_STATS]
 }
 
+case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = ADD_HEALTH
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .service[WorldBlock.Block]
+        .flatMap(_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .map { case li: LivingEntity => li }
+        .mapError(_ => GenericCommandError(""))
+      _ <- glob.health
+        .flatMap(h => glob.setHealth(h + value))
+        .mapError(_ => GenericCommandError(""))
+      h <- glob.health.mapError(_ => GenericCommandError(""))
+    } yield MultiResponse(
+      Chunk(
+        HealthSet(id, h),
+        QueuedClientMessage(id, Chunk(MSG(id, HealthSet(id, h))))
+      )
+    )
+object ADD_HEALTH {
+  implicit val encoder: JsonEncoder[ADD_HEALTH] =
+    DeriveJsonEncoder.gen[ADD_HEALTH]
+  implicit val decoder: JsonDecoder[ADD_HEALTH] =
+    DeriveJsonDecoder.gen[ADD_HEALTH]
+}
+case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = REMOVE_HEALTH
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .service[WorldBlock.Block]
+        .flatMap(_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .map { case li: LivingEntity => li }
+        .mapError(_ => GenericCommandError(""))
+      _ <- glob.health
+        .flatMap(h => glob.setHealth(h - value))
+        .mapError(_ => GenericCommandError(""))
+      h <- glob.health.mapError(_ => GenericCommandError(""))
+    } yield MultiResponse(
+      Chunk(
+        HealthSet(id, h),
+        QueuedClientMessage(id, Chunk(MSG(id, HealthSet(id, h))))
+      )
+    )
+object REMOVE_HEALTH {
+  implicit val encoder: JsonEncoder[REMOVE_HEALTH] =
+    DeriveJsonEncoder.gen[REMOVE_HEALTH]
+  implicit val decoder: JsonDecoder[REMOVE_HEALTH] =
+    DeriveJsonDecoder.gen[REMOVE_HEALTH]
+}
 case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (CREATE_REPAIR_EGG, globId)

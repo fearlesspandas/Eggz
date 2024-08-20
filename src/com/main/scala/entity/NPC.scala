@@ -94,35 +94,6 @@ case class Prowler(
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
   override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
-
-  override def toggleDestinations(): IO[DestinationsError, Unit] =
-    destinations.toggleDestinations()
-
-  override def isActive(): IO[DestinationsError, Boolean] =
-    destinations.isActive()
-
-  override def toggleGravitate(): IO[DestinationsError, Unit] =
-    destinations.toggleGravitate()
-
-  override def isGravitating(): IO[DestinationsError, Boolean] =
-    destinations.isGravitating()
-
-  override def setMode(mode: Mode): IO[DestinationsError, Unit] =
-    destinations.setMode(mode)
-
-  override def getMode(): IO[DestinationsError, Mode] = destinations.getMode()
-
-  override def getIndex(): IO[DestinationsError, Int] =
-    destinations.getIndex()
-
-  override def getDestAtIndex(): IO[DestinationsError, Option[Destination]] =
-    destinations.getDestAtIndex()
-
-  override def increment(): IO[DestinationsError, Unit] =
-    destinations.increment()
-
-  override def decrement(): IO[DestinationsError, Unit] =
-    destinations.decrement()
 }
 
 object Prowler extends Globz.Service {
