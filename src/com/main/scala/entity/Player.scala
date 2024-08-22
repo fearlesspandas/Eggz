@@ -88,6 +88,8 @@ case class BasicPlayer(
 
   override def op: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] = ???
 
+  override def setIndex(value: Level): IO[DestinationsError, Unit] =
+    destinations.setIndex(value)
 }
 
 object BasicPlayer extends Globz.Service {

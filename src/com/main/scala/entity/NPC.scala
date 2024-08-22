@@ -81,10 +81,6 @@ case class Prowler(
           _ <- destinations
             .addDestination(WaypointDestination(loc, 0))
             .mapError(_ => ???)
-          ms <- physics.getMaxSpeed.mapError(_ => ???)
-          _ <-
-            if (ms <= 0) physics.adjustMaxSpeed(1).mapError(_ => ???)
-            else ZIO.unit
         } yield ()
     }
   } yield ()
@@ -92,6 +88,9 @@ case class Prowler(
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
   override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
+
+  override def setIndex(value: Int): IO[DestinationsError, Unit] =
+    destinations.setIndex(value)
 }
 
 object Prowler extends Globz.Service {

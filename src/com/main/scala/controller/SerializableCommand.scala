@@ -692,7 +692,7 @@ case class CLEAR_DESTINATIONS(id: GLOBZ_ID)
     (for {
       glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
       _ <- glob match {
-        case pe: Destinations => pe.clearDestinations()
+        case pe: Destinations => pe.setIndex(0) *> pe.clearDestinations()
         case _                => ZIO.unit
       }
     } yield ClearDestinations())
@@ -840,7 +840,7 @@ case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
         .flatMap(ZIO.fromOption(_))
         .map { case pe: PhysicalEntity => pe }
         .mapError(_ => GenericCommandError(s"Could not find entity $id"))
-      _ <- glob.adjustMaxSpeed(delta.max_speed_delta)
+//      _ <- glob.adjustMaxSpeed(delta.max_speed_delta)
       _ <- glob.adjustSpeed(delta.speed_delta)
       ms <- glob.getMaxSpeed
         .mapError(_ => GenericCommandError("Could not retrieve max speed"))

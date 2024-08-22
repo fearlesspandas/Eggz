@@ -161,7 +161,8 @@ case class WorldBlockInMem(
     ) *> ZIO.never
 
   val start_socket = ZIO.log("Starting physics socket app") *>
-    physics_app.provide(Client.default, Scope.default)
+    physics_app
+      .provide(Client.default, Scope.default)
       .mapError(err =>
         GenericWorldBlockError(s"Error starting physics socket : $err")
       )
@@ -287,6 +288,9 @@ object WorldBlockEnvironment {
               .create(s"Prowler_$i")
               .provide(ZLayer.succeed(Prowler))
               .map { case p: Prowler => p }
+            maxspeed <- prowler.getMaxSpeed
+            _ <- prowler.adjustMaxSpeed(-maxspeed + 5)
+            - <- prowler.adjustSpeed(1)
           } yield prowler
         )
       }

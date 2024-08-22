@@ -27,6 +27,7 @@ trait Destinations {
   def setMode(mode: Mode): IO[DestinationsError, Unit]
   def getMode(): IO[DestinationsError, Mode]
   def getIndex(): IO[DestinationsError, Int]
+  def setIndex(value: Int): IO[DestinationsError, Unit]
   def getDestAtIndex(): IO[DestinationsError, Option[Destination]]
   def increment(): IO[DestinationsError, Unit]
   def decrement(): IO[DestinationsError, Unit]
@@ -121,6 +122,11 @@ case class BasicDestinations(
       ind <- index.get
       res = dest_ch.lift(ind)
     } yield res
+
+  override def setIndex(value: Int): IO[DestinationsError, Unit] =
+    destinations.get.flatMap(dests =>
+      index.update(_ => value).when(value < dests.size).unit
+    )
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =
