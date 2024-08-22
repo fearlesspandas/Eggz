@@ -654,13 +654,13 @@ case class GET_NEXT_DESTINATION(id: ID)
                             (d.location(0), d.location(1), d.location(2))
                           )
                       } yield PaginatedResponse(
-                        Chunk(MSG(id, TeleportToNext(id, teleport_to)))
-                          ++ Chunk(MSG(id, NextDestination(id, ser_dest)))
+                        Chunk(
+                          MSG(id, TeleportToNext(id, teleport_to)),
+                          MSG(id, NextDestination(id, ser_dest))
+                        )
                       )
                     case GRAVITY =>
-                      for {
-                        index <- entity.getIndex()
-                      } yield MSG(id, NextDestination(id, ser_dest))
+                      ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
                     case WAYPOINT =>
                       ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
                   }
@@ -675,7 +675,7 @@ case class GET_NEXT_DESTINATION(id: ID)
           } yield r
       }
     } yield result)
-      .mapError(_ =>
+      .orElseFail(
         GenericCommandError(s"Error retrieving destination for id $id")
       )
       .fold(err => NoLocation(id), x => x)
@@ -706,15 +706,20 @@ case class GET_ALL_DESTINATIONS(id: ID)
   override val REF_TYPE: Any = (GET_ALL_DESTINATIONS, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      blob <- WorldBlock.getBlob(id)
-      allDestinations <- ZIO
-        .fromOption(blob)
-        .flatMap { case entity: Destinations => entity.getAllDestinations() }
-        .orElseFail(
-          GenericCommandError(s"entity $id does not support destinations")
-        )
+      blob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_)).map {
+        case de: Destinations => de
+      }
+      allDestinations <-
+        blob
+          .getAllDestinations()
+          .orElseFail(
+            GenericCommandError(s"entity $id does not support destinations")
+          )
       dests <- ZIO.foreachPar(allDestinations)(dest => dest.serialize)
-    } yield AllDestinations(id, dests))
+      index <- blob.getIndex()
+    } yield PaginatedResponse(
+      Chunk(AllDestinations(id, dests), NextIndex(id, index))
+    ))
       .orElseFail(
         GenericCommandError(s"Error retrieving destination for id $id")
       )
