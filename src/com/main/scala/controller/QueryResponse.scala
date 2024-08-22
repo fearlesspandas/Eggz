@@ -6,6 +6,7 @@ import entity.TerrainModel
 import entity.TerrainRegionM
 import entity.TerrainUnitM
 import entity.Terrain.TerrainId
+import physics.DEST
 import physics.DESTINATION_TYPE
 import physics.DestinationModel
 import physics.Mode
@@ -73,8 +74,7 @@ object HealthSet {
   implicit val decoder: JsonDecoder[HealthSet] =
     DeriveJsonDecoder.gen[HealthSet]
 }
-case class NextDestination(id: ID, destination: destination)
-    extends QueryResponse
+case class NextDestination(id: ID, destination: DEST) extends QueryResponse
 object NextDestination {
   implicit val encoder: JsonEncoder[NextDestination] =
     DeriveJsonEncoder.gen[NextDestination]
@@ -97,7 +97,7 @@ object TeleportToNext {
   implicit val decoder: JsonDecoder[TeleportToNext] =
     DeriveJsonDecoder.gen[TeleportToNext]
 }
-case class AllDestinations(id: ID, destinations: Seq[destination])
+case class AllDestinations(id: ID, destinations: Seq[DEST])
     extends QueryResponse
 object AllDestinations {
   implicit val encoder: JsonEncoder[AllDestinations] =
@@ -105,13 +105,20 @@ object AllDestinations {
   implicit val decoder: JsonDecoder[AllDestinations] =
     DeriveJsonDecoder.gen[AllDestinations]
 }
-case class NewDestination(id: ID, destination: destination)
-    extends QueryResponse
+case class NewDestination(id: ID, destination: DEST) extends QueryResponse
 object NewDestination {
   implicit val encoder: JsonEncoder[NewDestination] =
     DeriveJsonEncoder.gen[NewDestination]
   implicit val decoder: JsonDecoder[NewDestination] =
     DeriveJsonDecoder.gen[NewDestination]
+}
+
+case class DeleteDestination(id: ID, uuid: UUID) extends QueryResponse
+object DeleteDestination {
+  implicit val encoder: JsonEncoder[DeleteDestination] =
+    DeriveJsonEncoder.gen[DeleteDestination]
+  implicit val decoder: JsonDecoder[DeleteDestination] =
+    DeriveJsonDecoder.gen[DeleteDestination]
 }
 case class ModeSet(mode: Mode) extends QueryResponse
 object ModeSet {

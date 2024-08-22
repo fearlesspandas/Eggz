@@ -29,13 +29,13 @@ trait Destination {
   val dest_type: DESTINATION_TYPE
   val location: Vector[Double]
   val radius: Double
-  def serialize: IO[DestinationError, destination] =
+  def serialize: IO[DestinationError, DEST] =
     for {
       loc <- ZIO
         .succeed(location(0))
         .zip(ZIO.succeed(location(1)))
         .zip(ZIO.succeed(location(2)))
-    } yield destination(dest_type, loc, radius)
+    } yield DEST(uuid, dest_type, loc, radius)
 }
 case class WaypointDestination(location: Vector[Double], radius: Double)
     extends Destination {
@@ -58,7 +58,12 @@ sealed trait DestinationModel {
     (for {
       conf <- DestinationModel.config
       f <- ZIO.fromOption(conf.get(dest_type))
-    } yield f._1(Vector(location._1, location._2, location._3), radius))
+      func: ((Vector[Double], Double) => Destination) = f._1
+      res: Destination = func(
+        Vector(location._1, location._2, location._3),
+        radius
+      )
+    } yield res)
       .orElseFail(
         DestinationDecodingError(
           s"failed to decode destination $dest_type , $location"
@@ -68,8 +73,8 @@ sealed trait DestinationModel {
 object DestinationModel {
   type DestinationMapper =
     (
-      ((Vector[Double], Double)) => Destination,
-      ((Double, Double, Double)) => DestinationModel
+      (Vector[Double], Double) => Destination,
+      (Double, Double, Double) => DestinationModel
     )
   implicit val encoder: JsonEncoder[DestinationModel] =
     DeriveJsonEncoder.gen[DestinationModel]
@@ -81,15 +86,27 @@ object DestinationModel {
       Map(
         (
           WAYPOINT,
-          (x => WaypointDestination(x._1, x._2), loc => Waypoint(loc))
+          (
+            (loc: Vector[Double], radius: Double) =>
+              WaypointDestination(loc, radius),
+            (x, y, z) => Waypoint((x, y, z))
+          )
         ),
         (
           TELEPORT,
-          (x => TeleportDestination(x._1, x._2), loc => Teleport(loc))
+          (
+            (loc: Vector[Double], radius: Double) =>
+              TeleportDestination(loc, radius),
+            (x, y, z) => Teleport((x, y, z))
+          )
         ),
         (
           GRAVITY,
-          (x => GravityDestination(x._1, x._2), loc => Gravity(loc))
+          (
+            (loc: Vector[Double], radius: Double) =>
+              GravityDestination(loc, radius),
+            (x, y, z) => Gravity((x, y, z))
+          )
         )
       )
     )
@@ -104,6 +121,19 @@ object destination {
     DeriveJsonEncoder.gen[destination]
   implicit val decoder: JsonDecoder[destination] =
     DeriveJsonDecoder.gen[destination]
+}
+
+case class DEST(
+  uuid: UUID,
+  dest_type: DESTINATION_TYPE,
+  location: (Double, Double, Double),
+  radius: Double
+) extends DestinationModel
+object DEST {
+  implicit val encoder: JsonEncoder[DEST] =
+    DeriveJsonEncoder.gen[DEST]
+  implicit val decoder: JsonDecoder[DEST] =
+    DeriveJsonDecoder.gen[DEST]
 }
 case class Waypoint(location: (Double, Double, Double))
     extends DestinationModel {

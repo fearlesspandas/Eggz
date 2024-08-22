@@ -14,6 +14,8 @@ import zio.json.JsonDecoder
 import zio.json.JsonEncoder
 import zio.stream.SubscriptionRef
 
+import java.util.UUID
+
 trait Destinations {
   def addDestination(dest: Destination): IO[DestinationsError, Unit]
   def getNextDestination(): IO[DestinationsError, Option[Destination]]
@@ -28,7 +30,9 @@ trait Destinations {
   def getMode(): IO[DestinationsError, Mode]
   def getIndex(): IO[DestinationsError, Int]
   def setIndex(value: Int): IO[DestinationsError, Unit]
-  def getDestAtIndex(): IO[DestinationsError, Option[Destination]]
+  def getDestAtIndex(ind: Int): IO[DestinationsError, Option[Destination]]
+  def getDestAtCurrentIndex(): IO[DestinationsError, Option[Destination]]
+  def deleteDest(uuid: UUID): IO[DestinationsError, Unit]
   def increment(): IO[DestinationsError, Unit]
   def decrement(): IO[DestinationsError, Unit]
 }
@@ -66,9 +70,9 @@ case class BasicDestinations(
         destinations.get
           .map(_.headOption)
       case FORWARD =>
-        getDestAtIndex()
+        getDestAtCurrentIndex()
       case REVERSE =>
-        getDestAtIndex()
+        getDestAtCurrentIndex()
     }
 
   override def getAllDestinations(): IO[DestinationsError, Seq[Destination]] =
@@ -84,9 +88,9 @@ case class BasicDestinations(
           } yield dests.headOption
         )
       case FORWARD =>
-        increment() *> getDestAtIndex()
+        increment() *> getDestAtCurrentIndex()
       case REVERSE =>
-        decrement() *> getDestAtIndex()
+        decrement() *> getDestAtCurrentIndex()
     }
   override def clearDestinations(): IO[DestinationsError, Unit] =
     destinations.update(_ => Chunk.empty)
@@ -116,17 +120,26 @@ case class BasicDestinations(
       index.update(x => if (x == 0) dests.size - 1 else x - 1)
     )
 
-  override def getDestAtIndex(): IO[DestinationsError, Option[Destination]] =
+  override def getDestAtIndex(
+    ind: Int
+  ): IO[DestinationsError, Option[Destination]] =
+    destinations.get.map(_.lift(ind))
+  override def getDestAtCurrentIndex()
+    : IO[DestinationsError, Option[Destination]] =
     for {
       dest_ch <- destinations.get
       ind <- index.get
-      res = dest_ch.lift(ind)
-    } yield res
+    } yield dest_ch.lift(ind)
 
   override def setIndex(value: Int): IO[DestinationsError, Unit] =
     destinations.get.flatMap(dests =>
       index.update(_ => value).when(value < dests.size).unit
     )
+
+  override def deleteDest(uuid: UUID): IO[DestinationsError, Unit] =
+    for {
+      _ <- destinations.update(ch => ch.filterNot(_.uuid == uuid))
+    } yield ()
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =

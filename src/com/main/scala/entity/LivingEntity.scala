@@ -32,6 +32,8 @@ import zio.Ref
 import zio.ZIO
 import zio.ZLayer
 
+import java.util.UUID
+
 trait LivingEntity
     extends StorageEgg[Item]
     with Globz
@@ -171,8 +173,15 @@ trait LivingEntity
   def getIndex(): IO[DestinationsError, Level] =
     destinations.getIndex()
 
-  def getDestAtIndex(): IO[DestinationsError, Option[Destination]] =
-    destinations.getDestAtIndex()
+  def getDestAtIndex(ind: Int): IO[DestinationsError, Option[Destination]] =
+    destinations.getDestAtIndex(ind)
+
+  override def getDestAtCurrentIndex()
+    : IO[DestinationsError, Option[Destination]] =
+    destinations.getDestAtCurrentIndex()
+
+  override def deleteDest(uuid: UUID): IO[DestinationsError, Unit] =
+    destinations.deleteDest(uuid)
 
   def increment(): IO[DestinationsError, Unit] =
     destinations.increment()

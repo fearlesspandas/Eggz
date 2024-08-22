@@ -483,13 +483,17 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
       blob <- wb
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .map { case destinations: Destinations => destinations }
-        .mapError(_ => ???)
+        .mapBoth(_ => ???, { case destinations: Destinations => destinations })
       res <- blob
         .toggleGravitate()
-        .flatMap(_ => blob.isGravitating())
-        .mapError(_ => ???)
-    } yield QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res))))
+        .zipRight(blob.isGravitating())
+        .orElseFail(???)
+    } yield MultiResponse(
+      Chunk(
+        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res)))),
+        QueuedClientMessage(id, Chunk(GravityActive(id, res)))
+      )
+    )
 }
 object TOGGLE_GRAVITATE {
   implicit val encoder: JsonEncoder[TOGGLE_GRAVITATE] =
@@ -526,7 +530,12 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
           s"Error while retrieving active for $id due to $err"
         )
       )
-  } yield QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+  } yield MultiResponse(
+    Chunk(
+      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive)))),
+      QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
+    )
+  )
 }
 object TOGGLE_DESTINATIONS {
   implicit val encoder: JsonEncoder[TOGGLE_DESTINATIONS] =
@@ -547,9 +556,10 @@ case class ADD_DESTINATION(id: ID, dest: destination)
           for {
             newDest <- dest.deserialize
             _ <- entity.addDestination(newDest)
-          } yield dest
+            ret <- newDest.serialize
+          } yield ret
         }
-    } yield NewDestination(id, res)).mapError(_ =>
+    } yield NewDestination(id, res)).orElseFail(
       GenericCommandError(s"Error adding destination to entity $id")
     )
 }
@@ -559,7 +569,35 @@ object ADD_DESTINATION {
   implicit val decoder: JsonDecoder[ADD_DESTINATION] =
     DeriveJsonDecoder.gen[ADD_DESTINATION]
 }
+case class DELETE_DESTINATION(id: ID, uuid: UUID)
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = (DELETE_DESTINATION, id)
 
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          _ =>
+            GenericCommandError(
+              s"Could not find $id while deleting destination"
+            ),
+          { case de: Destinations => de }
+        )
+      _ <- glob
+        .deleteDest(uuid)
+        .orElseFail(
+          GenericCommandError(s"Error while deleting destination with id $uuid")
+        )
+    } yield ???
+
+object DELETE_DESTINATION {
+  implicit val encoder: JsonEncoder[DELETE_DESTINATION] = DeriveJsonEncoder
+    .gen[DELETE_DESTINATION]
+  implicit val decoder: JsonDecoder[DELETE_DESTINATION] =
+    DeriveJsonDecoder.gen[DELETE_DESTINATION]
+}
 case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_INDEX, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -586,19 +624,6 @@ object GET_NEXT_INDEX {
 case class GET_NEXT_DESTINATION(id: ID)
     extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)
-  def distance(v1: Vector[Double], v2: Vector[Double]): Double = {
-    val minDist = v1.length min v2.length
-    val v1_trunc = v1.take(minDist)
-    val v2_trun = v2.take(minDist)
-    // performance of this might not be great
-    math.sqrt(
-      v1_trunc
-        .zip(v2_trun)
-        .foldLeft(0.0)((acc, curr) =>
-          acc + (curr._1 - curr._2) * (curr._1 - curr._2)
-        )
-    )
-  }
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
@@ -608,7 +633,9 @@ case class GET_NEXT_DESTINATION(id: ID)
             next <- entity.getNextDestination().flatMap(ZIO.fromOption(_))
             loc <- entity.getLocation
             r: QueryResponse <-
-              if (distance(next.location, loc) > next.radius) for {
+              if (
+                GET_NEXT_DESTINATION.distance(next.location, loc) > next.radius
+              ) for {
                 x <- next.serialize
               } yield MSG(id, NextDestination(id, x))
               else
@@ -658,6 +685,20 @@ object GET_NEXT_DESTINATION {
     DeriveJsonEncoder.gen[GET_NEXT_DESTINATION]
   implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION] =
     DeriveJsonDecoder.gen[GET_NEXT_DESTINATION]
+
+  def distance(v1: Vector[Double], v2: Vector[Double]): Double = {
+    val minDist = v1.length min v2.length
+    val v1_trunc = v1.take(minDist)
+    val v2_trun = v2.take(minDist)
+    // performance of this might not be great
+    math.sqrt(
+      v1_trunc
+        .zip(v2_trun)
+        .foldLeft(0.0)((acc, curr) =>
+          acc + (curr._1 - curr._2) * (curr._1 - curr._2)
+        )
+    )
+  }
 }
 
 case class GET_ALL_DESTINATIONS(id: ID)
@@ -862,6 +903,37 @@ object ADJUST_PHYSICAL_STATS {
     DeriveJsonDecoder.gen[ADJUST_PHYSICAL_STATS]
 }
 
+case class SET_SPEED(id: GLOBZ_ID, value: Double)
+    extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = (SET_SPEED, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      glob <- WorldBlock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case pe: PhysicalEntity => pe }
+        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+      speed <- glob.getSpeed
+      _ <- glob.adjustSpeed(-speed + value)
+      ms <- glob.getMaxSpeed
+        .mapError(_ => GenericCommandError("Could not retrieve max speed"))
+      speed <- glob.getSpeed.mapError(_ =>
+        GenericCommandError("Could not retrieve speed")
+      )
+    } yield MultiResponse(
+      Chunk(
+        PhysStat(id, ms, speed),
+        QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
+      )
+    ))
+      .orElseFail(GenericCommandError(s"Error adjusting speed for $id"))
+}
+object SET_SPEED {
+  implicit val encoder: JsonEncoder[SET_SPEED] =
+    DeriveJsonEncoder.gen[SET_SPEED]
+  implicit val decoder: JsonDecoder[SET_SPEED] =
+    DeriveJsonDecoder.gen[SET_SPEED]
+}
 case class ADJUST_MAX_SPEED(id: GLOBZ_ID, delta: Double)
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = (ADJUST_MAX_SPEED, id)

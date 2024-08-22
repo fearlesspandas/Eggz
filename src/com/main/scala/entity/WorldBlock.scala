@@ -290,7 +290,7 @@ object WorldBlockEnvironment {
               .map { case p: Prowler => p }
             maxspeed <- prowler.getMaxSpeed
             _ <- prowler.adjustMaxSpeed(-maxspeed + 5)
-            - <- prowler.adjustSpeed(1)
+            - <- prowler.adjustSpeed(5)
           } yield prowler
         )
       }
