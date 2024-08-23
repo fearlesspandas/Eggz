@@ -590,7 +590,11 @@ case class DELETE_DESTINATION(id: ID, uuid: UUID)
         .orElseFail(
           GenericCommandError(s"Error while deleting destination with id $uuid")
         )
-    } yield ???
+      _ <- glob
+        .getAllDestinations()
+        .flatMap(d => ZIO.log(s"all destinations post delete $d"))
+        .orElseFail(GenericCommandError(""))
+    } yield DeleteDestination(id, uuid)
 
 object DELETE_DESTINATION {
   implicit val encoder: JsonEncoder[DELETE_DESTINATION] = DeriveJsonEncoder

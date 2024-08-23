@@ -116,7 +116,13 @@ package object auth {
       } yield senderId == id
     case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATIONS")
   }
-  val delete_destination: AUTH[String] = clear_destinations
+  val delete_destination: AUTH[String] = {
+    case DELETE_DESTINATION(id, _) =>
+      for {
+        senderid <- ZIO.service[String]
+      } yield senderid == id
+    case cmd => ZIO.fail(s"$cmd not relevant to DELETE_DESTINATION")
+  }
   val set_mode_destinations: AUTH[String] = {
     case SET_MODE_DESTINATIONS(id, mode) =>
       for {
@@ -145,7 +151,13 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_PHYSICAL_STATS")
   }
-  val adjust_speed: AUTH[String] = adjust_physical_stats
+  val set_speed: AUTH[String] = {
+    case SET_SPEED(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for SET_SPEED")
+  }
   val adjust_max_speed: Set[String] => AUTH[String] = server_keys => {
     case ADJUST_MAX_SPEED(_, _) =>
       for {
@@ -254,7 +266,7 @@ object AuthCommandService {
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
-            adjust_speed(op),
+            set_speed(op),
             adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
@@ -296,7 +308,7 @@ object AuthCommandService {
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
-            adjust_speed(op),
+            set_speed(op),
             adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
