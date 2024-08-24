@@ -156,11 +156,16 @@ trait LivingEntity
   def toggleDestinations(): IO[DestinationsError, Unit] =
     destinations.toggleDestinations()
 
+  override def setIsActive(value: Boolean): IO[DestinationsError, Unit] =
+    destinations.setIsActive(value)
   def isActive(): IO[DestinationsError, Boolean] =
     destinations.isActive()
 
   def toggleGravitate(): IO[DestinationsError, Unit] =
     destinations.toggleGravitate()
+
+  override def setGravitate(value: Boolean): IO[DestinationsError, Unit] =
+    destinations.setGravitate(value)
 
   def isGravitating(): IO[DestinationsError, Boolean] =
     destinations.isGravitating()

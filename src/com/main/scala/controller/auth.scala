@@ -109,12 +109,26 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant to TOGGLE_DESTINATIONS")
   }
-  val clear_destinations: AUTH[String] = {
-    case CLEAR_DESTINATIONS(id) =>
+  val set_gravitate: AUTH[String] = {
+    case SET_GRAVITATE(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_GRAVITATE")
+  }
+  val set_active: AUTH[String] = {
+    case SET_ACTIVE(id, _) =>
       for {
         senderId <- ZIO.service[String]
       } yield senderId == id
-    case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATIONS")
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_ACTIVE")
+  }
+  val clear_destinations: AUTH[String] = {
+    case CLEAR_DESTINATIONS(id) =>
+      for {
+        senderid <- ZIO.service[String]
+      } yield senderid == id
+    case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATION")
   }
   val delete_destination: AUTH[String] = {
     case DELETE_DESTINATION(id, _) =>
@@ -277,7 +291,9 @@ object AuthCommandService {
             get_top_level_terrain_in_distance(op),
             get_cached_terrain(op),
             next_cmd(op),
+            set_active(op),
             toggle_destinations(op),
+            set_gravitate(op),
             toggle_gravity(op),
             set_mode_destinations(op)
           )
@@ -319,7 +335,9 @@ object AuthCommandService {
             get_top_level_terrain_in_distance(op),
             get_cached_terrain(op),
             next_cmd(op),
+            set_active(op),
             toggle_destinations(op),
+            set_gravitate(op),
             toggle_gravity(op),
             set_mode_destinations(op)
           )

@@ -23,8 +23,10 @@ trait Destinations {
   def popNextDestination(): IO[DestinationsError, Option[Destination]]
   def clearDestinations(): IO[DestinationsError, Unit]
   def toggleDestinations(): IO[DestinationsError, Unit]
+  def setIsActive(value: Boolean): IO[DestinationsError, Unit]
   def isActive(): IO[DestinationsError, Boolean]
   def toggleGravitate(): IO[DestinationsError, Unit]
+  def setGravitate(value: Boolean): IO[DestinationsError, Unit]
   def isGravitating(): IO[DestinationsError, Boolean]
   def setMode(mode: Mode): IO[DestinationsError, Unit]
   def getMode(): IO[DestinationsError, Mode]
@@ -140,6 +142,12 @@ case class BasicDestinations(
     for {
       _ <- destinations.update(ch => ch.filterNot(_.uuid == uuid))
     } yield ()
+
+  override def setIsActive(value: Boolean): IO[DestinationsError, Unit] =
+    active.update(_ => value)
+
+  override def setGravitate(value: Boolean): IO[DestinationsError, Unit] =
+    gravitating.update(_ => value)
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =

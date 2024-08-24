@@ -475,6 +475,7 @@ object START_EGG {
   implicit val decoder: JsonDecoder[START_EGG] =
     DeriveJsonDecoder.gen[START_EGG]
 }
+//--------------------------------DESTINATIONS-------------------------------------------------------
 case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (TOGGLE_GRAVITATE, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -500,6 +501,34 @@ object TOGGLE_GRAVITATE {
     DeriveJsonEncoder.gen[TOGGLE_GRAVITATE]
   implicit val decoder: JsonDecoder[TOGGLE_GRAVITATE] =
     DeriveJsonDecoder.gen[TOGGLE_GRAVITATE]
+}
+
+case class SET_GRAVITATE(id: ID, value: Boolean)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (TOGGLE_GRAVITATE, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      wb <- ZIO.service[WorldBlock.Block]
+      blob <- wb
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(_ => ???, { case destinations: Destinations => destinations })
+      res <- blob
+        .setGravitate(value)
+        .zipRight(blob.isGravitating())
+        .orElseFail(???)
+    } yield MultiResponse(
+      Chunk(
+        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res)))),
+        QueuedClientMessage(id, Chunk(GravityActive(id, res)))
+      )
+    )
+}
+object SET_GRAVITATE {
+  implicit val encoder: JsonEncoder[SET_GRAVITATE] =
+    DeriveJsonEncoder.gen[SET_GRAVITATE]
+  implicit val decoder: JsonDecoder[SET_GRAVITATE] =
+    DeriveJsonDecoder.gen[SET_GRAVITATE]
 }
 
 case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
@@ -542,6 +571,43 @@ object TOGGLE_DESTINATIONS {
     DeriveJsonEncoder.gen[TOGGLE_DESTINATIONS]
   implicit val decoder: JsonDecoder[TOGGLE_DESTINATIONS] =
     DeriveJsonDecoder.gen[TOGGLE_DESTINATIONS]
+}
+
+case class SET_ACTIVE(id: ID, value: Boolean)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (TOGGLE_DESTINATIONS, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    wb <- ZIO.service[WorldBlock.Block]
+    blob <- wb
+      .getBlob(id)
+      .flatMap(ZIO.fromOption(_))
+      .mapBoth(
+        err =>
+          GenericCommandError(
+            s"Error while attemtping to toggle destinations for $id due to $err"
+          ),
+        { case pe: Destinations => pe }
+      )
+    isactive <- blob
+      .setIsActive(value)
+      .flatMap(_ => blob.isActive())
+      .mapError(err =>
+        GenericCommandError(
+          s"Error while toggling destinations for $id due to $err"
+        )
+      )
+  } yield MultiResponse(
+    Chunk(
+      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive)))),
+      QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
+    )
+  )
+}
+object SET_ACTIVE {
+  implicit val encoder: JsonEncoder[SET_ACTIVE] =
+    DeriveJsonEncoder.gen[SET_ACTIVE]
+  implicit val decoder: JsonDecoder[SET_ACTIVE] =
+    DeriveJsonDecoder.gen[SET_ACTIVE]
 }
 
 case class ADD_DESTINATION(id: ID, dest: destination)
@@ -785,6 +851,7 @@ object SET_MODE_DESTINATIONS {
   implicit val decoder: JsonDecoder[SET_MODE_DESTINATIONS] =
     DeriveJsonDecoder.gen[SET_MODE_DESTINATIONS]
 }
+//---------------------------------INPUT-----------------------------------------------------------------------------------------------------
 @deprecated
 case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
@@ -830,7 +897,7 @@ object GET_INPUT_VECTOR {
   implicit val decoder: JsonDecoder[GET_INPUT_VECTOR] =
     DeriveJsonDecoder.gen[GET_INPUT_VECTOR]
 }
-
+//------------------------------------STATS--------------------------------------------------------------------
 case class SET_LV(id: GLOBZ_ID, lv: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = SET_LV
@@ -994,7 +1061,7 @@ object GET_PHYSICAL_STATS {
   implicit val decoder: JsonDecoder[GET_PHYSICAL_STATS] =
     DeriveJsonDecoder.gen[GET_PHYSICAL_STATS]
 }
-
+//TERRAIN---------------------------------------------------------
 case class ADD_TERRAIN(id: String, location: Vector[Double])
     extends SimpleCommandSerializable[WorldBlock.Block] {
   val REF_TYPE: Any = ADD_TERRAIN
@@ -1237,6 +1304,7 @@ object GET_CACHED_TERRAIN {
   implicit val decoder: JsonDecoder[GET_CACHED_TERRAIN] =
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
+//---------------------------------CONSOLE--------------------------------------------------------
 case class NEXT_CMD() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = NEXT_CMD
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
