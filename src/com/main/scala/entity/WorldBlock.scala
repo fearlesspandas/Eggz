@@ -1,8 +1,8 @@
 package entity
 
 import entity.WorldBlock.GenericWorldBlockError
-import network.example.BasicPhysicsChannel
-import network.example.PhysicsChannel
+import network.BasicPhysicsChannel
+import network.PhysicsChannel
 import physics.PhysicsCommand
 import physics.SendLocation
 import src.com.main.scala.entity.EggzOps.ID
@@ -195,14 +195,14 @@ object WorldBlockInMem extends WorldBlock.Service {
       _ <- WorldBlockEnvironment
         .add_prowlers(res, 10, radius)
         .mapError(_ => ???)
-      _ <- ZIO.log("Attempting to start physics socket")
-      pc <- PhysicsChannel.make
-        .provide(ZLayer.succeed(res))
-        .orElseFail(
-          GenericWorldBlockError("Error while creating Physics Channel")
-        )
-      _ <- pc.start_socket().mapError(_ => ???)
-      _ <- ZIO.log("Physics Socket Started")
+//      _ <- ZIO.log("Attempting to start physics socket")
+//      pc <- PhysicsChannel.make
+//        .provide(ZLayer.succeed(res))
+//        .orElseFail(
+//          GenericWorldBlockError("Error while creating Physics Channel")
+//        )
+//      _ <- pc.start_socket().mapError(_ => ???)
+//      _ <- ZIO.log("Physics Socket Started")
     } yield res
 }
 object WorldBlockEnvironment {

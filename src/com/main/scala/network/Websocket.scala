@@ -17,6 +17,7 @@ import controller.PaginatedResponse
 import controller.Query
 import controller.QueryResponse
 import controller.QueuedClientMessage
+import controller.QueuedPhysicsMessage
 import controller.QueuedServerMessage
 import controller.ResponseQuery
 import controller.SUBSCRIBE
@@ -226,6 +227,12 @@ case class BasicWebSocket(
         ZIO
           .foreach(responses)(response =>
             channel.send(Read(WebSocketFrame.text(response.toJson)))
+          )
+          .unit
+      case QueuedPhysicsMessage(messages) =>
+        ZIO
+          .foreach(messages)(message =>
+            controller.queueQuery(ZIO.succeed(message))
           )
           .unit
       case QueuedServerMessage(responses) =>

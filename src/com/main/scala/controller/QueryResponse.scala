@@ -10,6 +10,7 @@ import physics.DEST
 import physics.DESTINATION_TYPE
 import physics.DestinationModel
 import physics.Mode
+import physics.PhysicsCommand
 import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -245,10 +246,10 @@ object ConsoleResponse {
 case class Completed() extends QueryResponse
 case class QueuedServerMessage(responses: Chunk[QueryResponse])
     extends QueryResponse
-
 case class QueuedClientMessage(id: ID, responses: Chunk[QueryResponse])
     extends QueryResponse
-
+case class QueuedPhysicsMessage(messages: Chunk[PhysicsCommand])
+    extends QueryResponse
 case class TerrainChunkm(
   uuid: UUID,
   location: (Double, Double, Double),

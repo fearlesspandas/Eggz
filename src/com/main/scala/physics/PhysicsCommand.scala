@@ -16,6 +16,7 @@ object SendLocation {
   implicit val decoder: JsonDecoder[SendLocation] =
     DeriveJsonDecoder.gen[SendLocation]
 }
+case class SetInputLock(id: String, value: Boolean) extends PhysicsCommand
 object serializationTest {
 
   import zio.json._

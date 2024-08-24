@@ -1,12 +1,11 @@
 package network
 
-package example
-
 import entity.PhysicalEntity
 import entity.WorldBlock
-import network.example.PhysicsChannel.PHYSICS_COMMAND
+import network.PhysicsChannel.PHYSICS_COMMAND
 import physics.PhysicsCommand
 import physics.SendLocation
+import physics.SetInputLock
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.*
 import zio.http.ChannelEvent.ExceptionCaught
@@ -18,16 +17,21 @@ import zio.stream.ZStream
 import zio.json.*
 trait PhysicsChannel {
   def get_queue(): IO[PhysicsChannelError, Queue[PHYSICS_COMMAND]]
-  def add_to_queue(cmd: PHYSICS_COMMAND): IO[PhysicsChannelError, Unit]
+  def add_to_queue(cmd: PHYSICS_COMMAND): UIO[Unit]
   def start_queue_stream(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
       queue <- get_queue()
-      _ <- ZStream.fromQueue(queue).foreach(cmd => send(cmd)).fork
+      _ <- ZStream
+        .fromQueue(queue)
+        .foreach { case SetInputLock(id, value) =>
+          if (value) { lock_input(id) }
+          else unlock_input(id)
+        }
+        .fork
     } yield ()
-//  def register(id: GLOBZ_ID): IO[PhysicsChannelError, Unit]
   def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long]
   def send(
-    msg: PHYSICS_COMMAND
+    msg: String
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
       channel <- ZIO.service[WebSocketChannel]
@@ -46,6 +50,14 @@ trait PhysicsChannel {
           FailedSend(s"Error while sending to physics server : $err")
         )
     } yield ()
+
+  def lock_input(id: String): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
+    send(s"""{"type":"LOCK_INPUT","body":{"id":$id}}""")
+
+  def unlock_input(
+    id: String
+  ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
+    send(s"""{"type":"UNLOCK_INPUT","body":{"id":$id}}""")
 
     // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
     // todo remove interval on loop and see how unthrottled processing handles
@@ -79,6 +91,9 @@ trait PhysicsChannel {
                     ZIO.log(s"Error while processing loop ${err.toString}")
                   )
                   .fork
+                _ <- start_queue_stream()
+                  .provide(ZLayer.succeed(channel))
+                  .mapError(_ => ???)
               } yield ()) *> ZIO.log("Channel Connected")
             case ExceptionCaught(cause) =>
               ZIO.logError(s"Error while handling physics socket $cause")
@@ -121,7 +136,7 @@ trait PhysicsChannel {
 }
 
 object PhysicsChannel {
-  type PHYSICS_COMMAND = String
+  type PHYSICS_COMMAND = PhysicsCommand
   val get_url: IO[PhysicsChannelError, String] =
     System
       .env("PHYSICS_ADDR")
@@ -129,24 +144,16 @@ object PhysicsChannel {
       .mapError(err => PhysicsAddrNotFound())
   def make: ZIO[WorldBlock.Block, PhysicsChannelError, PhysicsChannel] =
     for {
-//      tracked_ids <- Ref.make(Set.empty[GLOBZ_ID])
       id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
       queue <- Queue.unbounded[PHYSICS_COMMAND]
       wb <- ZIO.service[WorldBlock.Block]
     } yield BasicPhysicsChannel(id_queue, queue, wb)
 }
 case class BasicPhysicsChannel(
-//  tracked_ids: Ref[Set[GLOBZ_ID]],
   id_queue: Ref[Seq[GLOBZ_ID]],
   cmd_queue: Queue[PHYSICS_COMMAND],
   worldBlock: WorldBlock.Block
 ) extends PhysicsChannel {
-//  override def register(id: GLOBZ_ID): IO[PhysicsChannelError, Unit] =
-//    for {
-//      _ <- tracked_ids.update(_ + id)
-//      _ <- id_queue.update(id +: _)
-//      _ <- ZIO.log(s"Id registered $id")
-//    } yield ()
 
   def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
     (for {
@@ -173,7 +180,7 @@ case class BasicPhysicsChannel(
 
   override def add_to_queue(
     cmd: PHYSICS_COMMAND
-  ): IO[PhysicsChannelError, Unit] =
+  ): UIO[Unit] =
     cmd_queue.offer(cmd).unit
 
   override def start_socket(): IO[PhysicsChannelError, Unit] =

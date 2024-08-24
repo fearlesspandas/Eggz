@@ -4,6 +4,8 @@ import implicits.*
 import entity.BasicPlayer
 import entity.WorldBlock
 import entity.WorldBlockInMem
+import network.PhysicsChannel
+import physics.PhysicsCommand
 import src.com.main.scala.entity.Globz
 import zio.Chunk
 import zio.IO
@@ -54,7 +56,8 @@ object BasicController {
 case class Control(
   glob: Globz.Service,
   worldBlock: Ref[WorldBlock.Block],
-  server_response_queue: Queue[QueryResponse]
+  server_response_queue: Queue[QueryResponse],
+  physics_channel: PhysicsChannel
 ) extends BasicController[Globz.Service with WorldBlock.Block, Queue[
       QueryResponse
     ]] {
@@ -98,8 +101,11 @@ case class Control(
     query: ZIO[Globz.Service with WorldBlock.Block, E, Q]
   ): ZIO[Any, E, Unit] =
     for {
-      res <- runQuery[Q, E](query).map{case response : QueryResponse => response}
-      _ <- server_response_queue.offer(res)
+      res <- runQuery[Q, E](query).flatMap {
+        case response: QueryResponse => server_response_queue.offer(response)
+        case physcommand: PhysicsCommand =>
+          physics_channel.add_to_queue(physcommand)
+      }
     } yield ()
 
   override def getQueue[E]: ZIO[Any, E, Queue[QueryResponse]] =
@@ -118,5 +124,9 @@ object Control
         .mapError(err => GenericControllerError(err.toString))
       r <- Ref.make(w)
       queue <- Queue.unbounded[QueryResponse]
-    } yield Control(BasicPlayer, r, queue)
+      pc <- PhysicsChannel.make.provide(ZLayer.succeed(w)).mapError(_ => ???)
+      _ <- ZIO.log("Attempting to start physics socket")
+      _ <- pc.start_socket().mapError(_ => ???)
+      _ <- ZIO.log("Physics Socket Started")
+    } yield Control(BasicPlayer, r, queue, pc)
 }

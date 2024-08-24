@@ -21,6 +21,7 @@ import physics.Destination
 import physics.DestinationModel
 import physics.Destinations
 import physics.Mode
+import physics.SetInputLock
 import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -485,14 +486,16 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(_ => ???, { case destinations: Destinations => destinations })
-      res <- blob
+      gravitate <- blob
         .toggleGravitate()
         .zipRight(blob.isGravitating())
         .orElseFail(???)
+      isActive <- blob.isActive().orElseFail(???)
     } yield MultiResponse(
       Chunk(
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res)))),
-        QueuedClientMessage(id, Chunk(GravityActive(id, res)))
+        QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !gravitate))),
+        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, gravitate)))),
+        QueuedClientMessage(id, Chunk(GravityActive(id, gravitate)))
       )
     )
 }
@@ -517,8 +520,10 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
         .setGravitate(value)
         .zipRight(blob.isGravitating())
         .orElseFail(???)
+      isActive <- blob.isActive().orElseFail(???)
     } yield MultiResponse(
       Chunk(
+        QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !res))),
         QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res)))),
         QueuedClientMessage(id, Chunk(GravityActive(id, res)))
       )
@@ -559,8 +564,10 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
           s"Error while retrieving active for $id due to $err"
         )
       )
+    gravitate <- blob.isGravitating().orElseFail(???)
   } yield MultiResponse(
     Chunk(
+      QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
       QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive)))),
       QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
     )
@@ -596,8 +603,10 @@ case class SET_ACTIVE(id: ID, value: Boolean)
           s"Error while toggling destinations for $id due to $err"
         )
       )
+    gravitate <- blob.isGravitating().orElseFail(???)
   } yield MultiResponse(
     Chunk(
+      QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
       QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive)))),
       QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
     )
