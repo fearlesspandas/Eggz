@@ -239,7 +239,7 @@ object GET_ALL_STATS {
 
 case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
     extends ResponseQuery[WorldBlock.Block]:
-  override val REF_TYPE: Any = ADD_HEALTH
+  override val REF_TYPE: Any = (ADD_HEALTH, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
@@ -267,7 +267,7 @@ object ADD_HEALTH {
 
 case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
     extends ResponseQuery[WorldBlock.Block]:
-  override val REF_TYPE: Any = REMOVE_HEALTH
+  override val REF_TYPE: Any = (REMOVE_HEALTH, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO

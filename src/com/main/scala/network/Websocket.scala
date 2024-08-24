@@ -118,24 +118,24 @@ case class BasicWebSocket(
         .fork
     } yield ()).when(!server_keys.contains(id))
 
-  def sendResponses(
-    stream: ZStream[WebSocketChannel, Nothing, QueryResponse]
-  ): ZIO[WebSocketChannel, Nothing, Unit] = for {
-    channel <- ZIO.service[WebSocketChannel]
-    _ <- stream
-      .foreach(cmd =>
-        cmd match {
-          case _ =>
-            for {
-              n <- response_queue.takeUpTo(1)
-              _ = n.map(qr =>
-                channel.send(Read(WebSocketFrame.text(qr.toJson)))
-              )
-            } yield ()
-        }
-      )
-      .fork
-  } yield ()
+//  def sendResponses(
+//    stream: ZStream[WebSocketChannel, Nothing, QueryResponse]
+//  ): ZIO[WebSocketChannel, Nothing, Unit] = for {
+//    channel <- ZIO.service[WebSocketChannel]
+//    _ <- stream
+//      .foreach(cmd =>
+//        cmd match {
+//          case _ =>
+//            for {
+//              n <- response_queue.takeUpTo(1)
+//              _ = n.map(qr =>
+//                channel.send(Read(WebSocketFrame.text(qr.toJson)))
+//              )
+//            } yield ()
+//        }
+//      )
+//      .fork
+//  } yield ()
 
   def handleCommand(
     command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
@@ -326,8 +326,8 @@ case class BasicWebSocket(
               _ <- Console.printLine("Verified succeeded")
               _ <- authenticated.update(_ => true)
               // initialize response stream when first authenticating
-              _ <- sendResponses(ZStream.fromQueue(response_queue))
-                .provide(ZLayer.succeed(channel))
+//              _ <- sendResponses(ZStream.fromQueue(response_queue))
+//                .provide(ZLayer.succeed(channel))
               _ <- linkControllerServer(channel)
               _ <- linkControllerClient(channel)
               _ <- recieveAllText(
