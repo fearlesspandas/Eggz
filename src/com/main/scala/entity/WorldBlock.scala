@@ -155,13 +155,33 @@ object WorldBlockInMem extends WorldBlock.Service {
     for {
       s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
       t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      radius = 4096
+      radius <- System
+        .env("WORLDBLOCK_RADIUS")
+        .flatMap(ZIO.fromOption(_))
+        .map(_.toInt)
+        .mapError(err =>
+          GenericWorldBlockError(s"error initiating worldblock $err")
+        )
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
       ) // create terrain region for world block
-      // condense output schema to increase payload size
-      num = 50000
+//      num = 50000
+      num <- System
+        .env("RANDOMIZED_SPAWN_COUNT")
+        .flatMap(ZIO.fromOption(_))
+        .map(_.toInt)
+        .mapError(err =>
+          GenericWorldBlockError(s"Error initiating worldblock $err")
+        )
+
+      num_prowlers <- System
+        .env("PROWLER_COUNT")
+        .flatMap(ZIO.fromOption(_))
+        .map(_.toInt)
+        .mapError(err =>
+          GenericWorldBlockError(s"Error initiating worldblock $err")
+        )
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
@@ -193,16 +213,8 @@ object WorldBlockInMem extends WorldBlock.Service {
         .orElseFail(GenericWorldBlockError("Error while creating npchandler"))
       res = WorldBlockInMem(t, terrain, npchandler)
       _ <- WorldBlockEnvironment
-        .add_prowlers(res, 10, radius)
+        .add_prowlers(res, num_prowlers, radius)
         .mapError(_ => ???)
-//      _ <- ZIO.log("Attempting to start physics socket")
-//      pc <- PhysicsChannel.make
-//        .provide(ZLayer.succeed(res))
-//        .orElseFail(
-//          GenericWorldBlockError("Error while creating Physics Channel")
-//        )
-//      _ <- pc.start_socket().mapError(_ => ???)
-//      _ <- ZIO.log("Physics Socket Started")
     } yield res
 }
 object WorldBlockEnvironment {
@@ -241,25 +253,5 @@ object WorldBlockEnvironment {
         } yield ()
       }
     } yield ()
-
-//  val worldblock =
-//    ZLayer[Ref[Map[GLOBZ_ID, Vector[Double]]] with Ref[
-//      Map[GLOBZ_ID, Globz]
-//    ], Nothing, WorldBlock.Block] {
-//      ZIO
-//        .service[Ref[Map[GLOBZ_ID, Vector[Double]]]]
-//        .flatMap(s =>
-//          ZIO.service[Ref[Map[GLOBZ_ID, Globz]]].map(t => WorldBlockInMem(s, t))
-//        )
-//    }
-//  val anyref = ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Vector[Double]]]] {
-//    for {
-//      r <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
-//    } yield r
-//  } ++ ZLayer[Any, Nothing, Ref[Map[GLOBZ_ID, Globz]]] {
-//    for {
-//      r <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-//    } yield r
-//  }
 
 }
