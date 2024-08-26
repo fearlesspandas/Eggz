@@ -1221,12 +1221,12 @@ case class GET_TERRAIN_WITHIN_DISTANCE(location: Vector[Double], radius: Double)
       .flatMap(
         _.get_terrain_within_distance(location, radius)
       )
-      .flatMap(r => ZIO.collectAllPar(r.map(_.serialize())).map(_.flatten))
-      .mapError(_ =>
+      .flatMap(r => ZIO.foreachPar(r)(_.serialize()).map(_.flatten))
+      .orElseFail {
         GenericCommandError(
           s"Error while retrieving terrain within radius $radius around point $location"
         )
-      )
+      }
   } yield TerrainSet(res.toSet)
 }
 
@@ -1281,7 +1281,6 @@ object GET_TERRAIN_WITHIN_PLAYER_DISTANCE {
 
 case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       terrain <- ZIO
@@ -1323,7 +1322,6 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
   distance: Double
 ) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
@@ -1336,8 +1334,7 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
       _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
         case t: TerrainUnit => true;
-//        case t: TerrainRegion if (t.center(1)) < 0 => true
-        case _ => false
+        case _              => false
       }
       _ <- ZIO.log(s"bad terrain $res_unit")
       res = top_terr
@@ -1352,10 +1349,7 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
             t.radius
           )
         }
-
-//      _ <- ZIO.log(s"Terrain $res")
       _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
-//      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
     } yield PaginatedResponse(res)
 }
 object GET_TOP_LEVEL_TERRAIN_IN_DISTANCE {
@@ -1365,9 +1359,25 @@ object GET_TOP_LEVEL_TERRAIN_IN_DISTANCE {
     DeriveJsonDecoder.gen[GET_TOP_LEVEL_TERRAIN_IN_DISTANCE]
 }
 
+case class EXPAND_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = EXPAND_TERRAIN
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    terrain <- ZIO
+      .serviceWithZIO[WorldBlock.Block](
+        _.expandTerrain *> ZIO.log("Terrain Expanded for worldblock")
+      )
+      .mapError(_ => ???)
+  } yield MultiResponse(Chunk())
+}
+object EXPAND_TERRAIN {
+  implicit val encoder: JsonEncoder[EXPAND_TERRAIN] =
+    DeriveJsonEncoder.gen[EXPAND_TERRAIN]
+  implicit val decoder: JsonDecoder[EXPAND_TERRAIN] =
+    DeriveJsonDecoder.gen[EXPAND_TERRAIN]
+}
+
 case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = GET_CACHED_TERRAIN
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       terrain <- ZIO

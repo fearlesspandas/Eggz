@@ -43,9 +43,11 @@ object WorldBlock {
 
     def updateBlob(blob: Globz): IO[WorldBlockError, ExitCode]
 
-    val terrain: TerrainManager with Terrain
-    def getTerrain: IO[WorldBlockError, TerrainManager with Terrain] =
-      ZIO.succeed(terrain)
+//    val terrain: TerrainManager with Terrain
+    def getTerrain: IO[WorldBlockError, TerrainManager with Terrain]
+//      ZIO.succeed(terrain)
+
+    def expandTerrain: IO[WorldBlockError, Unit]
   }
 
   trait Service {
@@ -91,7 +93,7 @@ object WorldBlock {
 
 case class WorldBlockInMem(
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
-  terrain: TerrainManager with Terrain,
+  terrain: Ref[TerrainManager with Terrain],
   npc_handler: NPCHandler
 ) extends WorldBlock.Block {
 
@@ -120,7 +122,8 @@ case class WorldBlockInMem(
       all <- getAllBlobs()
       r <- ZIO.foreachPar(all)(g => g.tickAll())
       fail = r.count(_ != ExitCode.success)
-    } yield ExitCode.apply(fail)).orElseFail(GenericWorldBlockError("error tick blobs"))
+    } yield ExitCode.apply(fail))
+      .orElseFail(GenericWorldBlockError("error tick blobs"))
   // deprecated
   override def spawnFreshBlob(
     coords: Vector[Double]
@@ -137,12 +140,23 @@ case class WorldBlockInMem(
   override def updateBlob(
     blob: Globz
   ): IO[WorldBlock.WorldBlockError, ExitCode] = ???
+
+  override def getTerrain
+    : IO[WorldBlock.WorldBlockError, TerrainManager with Terrain] = terrain.get
+
+  override def expandTerrain: IO[WorldBlock.WorldBlockError, Unit] = for {
+    t <- terrain.get
+    d <- t
+      .expandTerrain()
+      .map { case tr: TerrainRegion => tr }
+      .mapError(_ => ???)
+    _ <- terrain.update(_ => d)
+    generated_terrain <- WorldBlockEnvironment.add_terrain(d, d.radius, 10000)
+  } yield ()
 }
 object WorldBlockInMem extends WorldBlock.Service {
   override def make: IO[WorldBlock.WorldBlockError, WorldBlock.Block] =
     for {
-      s <- Ref.make(Map.empty[GLOBZ_ID, Vector[Double]])
-      t <- Ref.make(Map.empty[GLOBZ_ID, Globz])
       radius <- System
         .env("WORLDBLOCK_RADIUS")
         .flatMap(ZIO.fromOption(_))
@@ -153,7 +167,7 @@ object WorldBlockInMem extends WorldBlock.Service {
             ),
           _.toInt
         )
-//      num = 50000
+      //      num = 50000
       num <- System
         .env("RANDOMIZED_SPAWN_COUNT")
         .flatMap(ZIO.fromOption(_))
@@ -174,30 +188,10 @@ object WorldBlockInMem extends WorldBlock.Service {
             ),
           _.toInt
         )
-      terrain <- TerrainRegion.make(
-        Vector(0, 0, 0),
-        radius
-      ) // create terrain region for world block
-      groups = (0 to num).grouped(num / 1000)
-      _ <- ZIO
-        .collectAllPar(groups.map { r =>
-          ZIO
-            .foreach(r) { i =>
-              for {
-                x <- Random.nextDoubleBetween(-radius, radius)
-                y <- Random.nextDoubleBetween(-radius, radius)
-                z <- Random.nextDoubleBetween(-radius, radius)
-                _ <- terrain.add_terrain("6", Vector(x, y, z))
-                _ <-
-                  ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
-              } yield ()
-            }
-        }.toSeq)
-        .mapError(err =>
-          GenericWorldBlockError(
-            s"Failed to add terrain to worldblock due to : $err"
-          )
-        )
+      terrain <- TerrainRegion.make(Vector(0, 0, 0), radius).map {
+        case tr: TerrainRegion => tr
+      }
+      terrain <- WorldBlockEnvironment.add_terrain(terrain, terrain.radius, num)
       _ <- terrain // add spawn block to terrain
         .add_terrain("9", Vector(0, -20, 0))
         .orElseFail(
@@ -214,7 +208,10 @@ object WorldBlockInMem extends WorldBlock.Service {
       npchandler <- NPCHandler
         .make()
         .orElseFail(GenericWorldBlockError("Error while creating npchandler"))
-      res = WorldBlockInMem(t, terrain, npchandler)
+      terrain_ref <- Ref.make(terrain)
+
+      globz_map <- Ref.make(Map.empty[GLOBZ_ID, Globz])
+      res = WorldBlockInMem(globz_map, terrain_ref, npchandler)
       _ <- WorldBlockEnvironment
         .add_prowlers(res, num_prowlers, radius)
         .mapError(err =>
@@ -225,6 +222,37 @@ object WorldBlockInMem extends WorldBlock.Service {
     } yield res
 }
 object WorldBlockEnvironment {
+
+  def add_terrain(
+    terrain: TerrainManager with Terrain,
+    radius: Double,
+    num: Int
+  ): IO[GenericWorldBlockError, TerrainManager & Terrain] = for {
+//    terrain <- TerrainRegion.make(
+//      Vector(0, 0, 0),
+//      radius
+//    ) // create terrain region for world block
+    groups <- ZIO.succeed((0 to num).grouped(num / 1000))
+    _ <- ZIO
+      .collectAllPar(groups.map { r =>
+        ZIO
+          .foreach(r) { i =>
+            for {
+              x <- Random.nextDoubleBetween(-radius, radius)
+              y <- Random.nextDoubleBetween(-radius, radius)
+              z <- Random.nextDoubleBetween(-radius, radius)
+              _ <- terrain.add_terrain("6", Vector(x, y, z))
+              _ <-
+                ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+            } yield ()
+          }
+      }.toSeq)
+      .mapError(err =>
+        GenericWorldBlockError(
+          s"Failed to add terrain to worldblock due to : $err"
+        )
+      )
+  } yield terrain
 
   def add_prowlers(worldblock: WorldBlockInMem, count: Int, radius: Double) =
     for {

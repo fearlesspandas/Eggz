@@ -102,6 +102,11 @@ case class SimpleTerrainBlock(
     distance: Double,
     size: Double
   ): IO[TerrainError, Chunk[Terrain]] = ???
+
+  override def addQuadrant(region: TerrainRegion): IO[TerrainError, Unit] = ???
+
+  override def expandTerrain(): IO[TerrainError, Terrain with TerrainManager] =
+    ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {
