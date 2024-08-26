@@ -59,13 +59,26 @@ package object auth {
       } yield senderId == id
     case cmd => ZIO.fail(s"$cmd not relevant to ADD_DESTINATION")
   }
-
   val get_next_destination: Set[String] => AUTH[String] = server_keys => {
     case GET_NEXT_DESTINATION(id) =>
       for {
         senderId <- ZIO.service[String]
       } yield server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION")
+  }
+  val get_next_destination_client: AUTH[String] = {
+    case GET_NEXT_DESTINATION_CLIENT(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION_CLIENT")
+  }
+  val set_active_destination: AUTH[String] = {
+    case SET_ACTIVE_DESTINATION(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_ACTIVE_DESTINATION")
   }
   val get_next_index: AUTH[String] = {
     case GET_NEXT_INDEX(id) =>
@@ -271,6 +284,8 @@ object AuthCommandService {
             remove_health(server_keys)(op),
             add_destination(op),
             get_next_destination(server_keys)(op),
+            get_next_destination_client(op),
+            set_active_destination(op),
             get_next_index(op),
             get_all_destinations(op),
             apply_vector(op),
@@ -315,6 +330,8 @@ object AuthCommandService {
             remove_health(server_keys)(op),
             add_destination(op),
             get_next_destination(server_keys)(op),
+            get_next_destination_client(op),
+            set_active_destination(op),
             get_next_index(op),
             get_all_destinations(op),
             apply_vector(op),

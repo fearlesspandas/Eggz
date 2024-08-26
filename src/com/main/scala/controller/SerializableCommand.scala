@@ -779,7 +779,38 @@ object GET_NEXT_DESTINATION {
     )
   }
 }
+case class GET_NEXT_DESTINATION_CLIENT(id: ID)
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = (GET_NEXT_DESTINATION_CLIENT, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      blob <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericCommandError(
+              s"Error while getting next destination : Could not find glob with id $id"
+            ),
+          { case de: Destinations => de }
+        )
+      next_dest <- blob
+        .getNextDestination()
+        .flatMap(ZIO.fromOption(_))
+        .flatMap(_.serialize)
+        .orElseFail(
+          GenericCommandError(
+            s"Error while getting next destination for client $id"
+          )
+        )
+    } yield NextDestination(id, next_dest)
 
+object GET_NEXT_DESTINATION_CLIENT {
+  implicit val encoder: JsonEncoder[GET_NEXT_DESTINATION_CLIENT] =
+    DeriveJsonEncoder.gen[GET_NEXT_DESTINATION_CLIENT]
+  implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION_CLIENT] =
+    DeriveJsonDecoder.gen[GET_NEXT_DESTINATION_CLIENT]
+}
 case class GET_ALL_DESTINATIONS(id: ID)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_ALL_DESTINATIONS, id)
@@ -839,11 +870,12 @@ case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
       glob <- wb
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .map { case d: Destinations => d }
-        .mapError(err =>
-          GenericCommandError(
-            s"Could not update destination mode for $id due to $err "
-          )
+        .mapBoth(
+          err =>
+            GenericCommandError(
+              s"Could not update destination mode for $id due to $err "
+            ),
+          { case d: Destinations => d }
         )
       _ <- glob
         .setMode(mode)
@@ -859,6 +891,38 @@ object SET_MODE_DESTINATIONS {
     DeriveJsonEncoder.gen[SET_MODE_DESTINATIONS]
   implicit val decoder: JsonDecoder[SET_MODE_DESTINATIONS] =
     DeriveJsonDecoder.gen[SET_MODE_DESTINATIONS]
+}
+
+case class SET_ACTIVE_DESTINATION(id: GLOBZ_ID, destination_id: UUID)
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = (SET_ACTIVE_DESTINATION, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      wb <- ZIO.service[WorldBlock.Block]
+      glob <- wb
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericCommandError(
+              s"Could not update destination mode for $id due to $err "
+            ),
+          { case d: Destinations => d }
+        )
+      _ <- glob
+        .setActiveDest(destination_id)
+        .mapError(err =>
+          GenericCommandError(
+            s"failed while updating destinations mode for $id due to $err"
+          )
+        )
+    } yield ActiveDestination(id, destination_id)
+
+object SET_ACTIVE_DESTINATION {
+  implicit val encoder: JsonEncoder[SET_ACTIVE_DESTINATION] =
+    DeriveJsonEncoder.gen[SET_ACTIVE_DESTINATION]
+  implicit val decoder: JsonDecoder[SET_ACTIVE_DESTINATION] =
+    DeriveJsonDecoder.gen[SET_ACTIVE_DESTINATION]
 }
 //---------------------------------INPUT-----------------------------------------------------------------------------------------------------
 @deprecated

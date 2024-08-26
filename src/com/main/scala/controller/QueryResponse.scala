@@ -83,6 +83,13 @@ object NextDestination {
     DeriveJsonDecoder.gen[NextDestination]
 }
 
+case class ActiveDestination(id: ID, destination: UUID) extends QueryResponse
+object ActiveDestination {
+  implicit val encoder: JsonEncoder[ActiveDestination] =
+    DeriveJsonEncoder.gen[ActiveDestination]
+  implicit val decoder: JsonDecoder[ActiveDestination] =
+    DeriveJsonDecoder.gen[ActiveDestination]
+}
 case class NextIndex(id: ID, index: Int) extends QueryResponse
 object NextIndex {
   implicit val encoder: JsonEncoder[NextIndex] =

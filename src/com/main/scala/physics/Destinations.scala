@@ -31,7 +31,8 @@ trait Destinations {
   def setMode(mode: Mode): IO[DestinationsError, Unit]
   def getMode(): IO[DestinationsError, Mode]
   def getIndex(): IO[DestinationsError, Int]
-  def setIndex(value: Int): IO[DestinationsError, Unit]
+  def setIndex(index: Int): IO[DestinationsError, Unit]
+  def setActiveDest(id: UUID): IO[DestinationsError, Unit]
   def getDestAtIndex(ind: Int): IO[DestinationsError, Option[Destination]]
   def getDestAtCurrentIndex(): IO[DestinationsError, Option[Destination]]
   def deleteDest(uuid: UUID): IO[DestinationsError, Unit]
@@ -133,9 +134,15 @@ case class BasicDestinations(
       ind <- index.get
     } yield dest_ch.lift(ind)
 
-  override def setIndex(value: Int): IO[DestinationsError, Unit] =
-    destinations.get.flatMap(dests =>
-      index.update(_ => value).when(value < dests.size).unit
+  override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
+    destinations.get.flatMap(ch =>
+      for {
+        newindex <- ZIO
+          .fromOption(ch.find(_.uuid == id).map(ch.indexOf(_)))
+          .mapError(_ => ???)
+        _ <- index.update(_ => newindex)
+
+      } yield ()
     )
 
   override def deleteDest(uuid: UUID): IO[DestinationsError, Unit] =
@@ -148,6 +155,11 @@ case class BasicDestinations(
 
   override def setGravitate(value: Boolean): IO[DestinationsError, Unit] =
     gravitating.update(_ => value)
+
+  override def setIndex(index: Int): IO[DestinationsError, Unit] =
+    destinations.get.flatMap(dests =>
+      this.index.update(_ => index).when(index < dests.size).unit
+    )
 }
 object BasicDestinations extends Destinations.Service {
   override def make(): IO[Nothing, Destinations] =

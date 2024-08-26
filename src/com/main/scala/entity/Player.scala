@@ -32,6 +32,8 @@ import zio.Ref
 import zio.ZIO
 import zio.ZLayer
 
+import java.util.UUID
+
 trait Player extends LivingEntity {}
 
 object Player {
@@ -88,8 +90,11 @@ case class BasicPlayer(
 
   override def op: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] = ???
 
-  override def setIndex(value: Level): IO[DestinationsError, Unit] =
-    destinations.setIndex(value)
+  override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
+    destinations.setActiveDest(id)
+
+  override def setIndex(index: Level): IO[DestinationsError, Unit] =
+    destinations.setIndex(index)
 }
 
 object BasicPlayer extends Globz.Service {

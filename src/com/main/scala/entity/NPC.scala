@@ -23,6 +23,8 @@ import zio.Ref
 import zio.ZIO
 import zio.ZLayer
 
+import java.util.UUID
+
 trait NPC extends LivingEntity
 trait NPC_ERROR
 case class GenericNPCError(msg: String) extends NPC_ERROR
@@ -89,8 +91,11 @@ case class Prowler(
 
   override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
 
-  override def setIndex(value: Int): IO[DestinationsError, Unit] =
-    destinations.setIndex(value)
+  override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
+    destinations.setActiveDest(id)
+
+  override def setIndex(index: Int): IO[DestinationsError, Unit] =
+    destinations.setIndex(index)
 }
 
 object Prowler extends Globz.Service {
