@@ -726,16 +726,32 @@ case class GET_NEXT_DESTINATION(id: ID)
                   res <- next.dest_type match {
                     case TELEPORT =>
                       for {
-                        teleport_to <- entity
+                        teleport_to_destination <- entity
                           .getNextDestination()
                           .flatMap(ZIO.fromOption(_))
-                          .map(d =>
-                            (d.location(0), d.location(1), d.location(2))
+                        teleport_to <- ZIO
+                          .succeed(teleport_to_destination.location(0))
+                          .zip(ZIO.succeed(teleport_to_destination.location(1)))
+                          .zip(ZIO.succeed(teleport_to_destination.location(2)))
+                        server_res = PaginatedResponse(
+                          Chunk(
+                            MSG(id, TeleportToNext(id, teleport_to)),
+                            MSG(id, NextDestination(id, ser_dest))
                           )
-                      } yield PaginatedResponse(
+                        )
+                        client_res <- GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
+                          teleport_to_destination.location,
+                          1024
+                        ).run.map(qr =>
+                          QueuedClientMessage(
+                            id,
+                            Chunk(qr)
+                          )
+                        )
+                      } yield MultiResponse(
                         Chunk(
-                          MSG(id, TeleportToNext(id, teleport_to)),
-                          MSG(id, NextDestination(id, ser_dest))
+                          server_res,
+                          client_res
                         )
                       )
                     case GRAVITY =>
@@ -1229,30 +1245,28 @@ case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
     location <- WorldBlock
       .getBlob(id)
       .flatMap(ZIO.fromOption(_))
-      .flatMap(g =>
-        g match {
-          case p: Player => p.getLocation;
-          case _ =>
-            ZIO.fail(
-              GenericCommandError(s"Player not found when retrieving terrain")
-            )
-        }
-      )
-      .mapError(_ =>
+      .flatMap {
+        case p: Player => p.getLocation;
+        case _ =>
+          ZIO.fail(
+            GenericCommandError(s"Player not found when retrieving terrain")
+          )
+      }
+      .orElseFail {
         GenericCommandError(
           s"could not retrieve player location while attempting to get terrain"
         )
-      )
+      }
     res <- WorldBlock.getTerrain
       .flatMap(
         _.get_terrain_within_distance(location, radius)
       )
-      .flatMap(r => ZIO.collectAllPar(r.map(_.serialize())).map(_.flatten))
-      .mapError(_ =>
+      .flatMap(r => ZIO.foreachPar(r)(_.serialize()).map(_.flatten))
+      .orElseFail {
         GenericCommandError(
           s"Error while retrieving terrain within radius $radius around point $location"
         )
-      )
+      }
     _ <- ZIO.log(s"terrain within distance $res")
     rr = Chunk.from(res.grouped(100).map(x => TerrainSet(x.toSet)))
   } yield PaginatedResponse(rr)

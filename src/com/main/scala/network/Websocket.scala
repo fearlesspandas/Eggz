@@ -111,9 +111,16 @@ case class BasicWebSocket(
         .fromQueue(q)
         .foreach {
           case QueuedClientMessage(id, responses) if id == this.id =>
-            ZIO.foreach(responses)(response =>
-              channel.send(Read(WebSocketFrame.text(response.toJson)))
-            )
+            ZIO.foreach(responses) {
+              case PaginatedResponse(grouped_responses) =>
+                ZIO.foreach(grouped_responses)(send_response =>
+                  channel.send(
+                    Read(WebSocketFrame.text(send_response.toJson))
+                  )
+                )
+              case response =>
+                channel.send(Read(WebSocketFrame.text(response.toJson)))
+            }
           case x => q.offer(x)
         }
         .fork
