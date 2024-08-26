@@ -46,9 +46,6 @@ object WorldBlock {
     val terrain: TerrainManager with Terrain
     def getTerrain: IO[WorldBlockError, TerrainManager with Terrain] =
       ZIO.succeed(terrain)
-    // val physics_channel: PhysicsChannel
-//    def getPhysicsChannel: IO[WorldBlockError, PhysicsChannel] =
-//      ZIO.succeed(physics_channel)
   }
 
   trait Service {
@@ -80,15 +77,11 @@ object WorldBlock {
   def getBlob(
     id: GLOBZ_ID
   ): ZIO[WorldBlock.Block, WorldBlockError, Option[Globz]] =
-    ZIO.service[WorldBlock.Block].flatMap(_.getBlob(id))
+    ZIO.serviceWithZIO[Block](_.getBlob(id))
 
   def getTerrain
     : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
     ZIO.environmentWithZIO(_.get.getTerrain)
-
-//  def getPhysicsChannel
-//    : ZIO[WorldBlock.Block, WorldBlockError, PhysicsChannel] =
-//    ZIO.environmentWithZIO(_.get.getPhysicsChannel)
 
   trait WorldBlockError
 
@@ -100,7 +93,6 @@ case class WorldBlockInMem(
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   terrain: TerrainManager with Terrain,
   npc_handler: NPCHandler
-//  physics_channel: PhysicsChannel
 ) extends WorldBlock.Block {
 
   override def spawnBlob(
@@ -109,7 +101,6 @@ case class WorldBlockInMem(
   ): IO[WorldBlock.WorldBlockError, ExitCode] =
     for {
       _ <- dbRef.update(_.updated(blob.id, blob))
-//      _ <- physics_channel.register(blob.id).mapError(_ => ???)
     } yield ExitCode.success
 
   override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
@@ -123,16 +114,13 @@ case class WorldBlockInMem(
     for {
       _ <- dbRef.update(_.removed(blob.id))
     } yield ExitCode.success
-  // .mapError(_ => GenericWorldBlockError("error removing blob"))
 
   override def tickAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, ExitCode] =
     (for {
       all <- getAllBlobs()
-      r <- ZIO.collectAllPar(all.map(g => g.tickAll()))
-      fail = r.filter(_ != ExitCode.success).size
-    } yield ExitCode.apply(fail)).mapError(_ =>
-      GenericWorldBlockError("error tick blobs")
-    )
+      r <- ZIO.foreachPar(all)(g => g.tickAll())
+      fail = r.count(_ != ExitCode.success)
+    } yield ExitCode.apply(fail)).orElseFail(GenericWorldBlockError("error tick blobs"))
   // deprecated
   override def spawnFreshBlob(
     coords: Vector[Double]
@@ -158,30 +146,38 @@ object WorldBlockInMem extends WorldBlock.Service {
       radius <- System
         .env("WORLDBLOCK_RADIUS")
         .flatMap(ZIO.fromOption(_))
-        .map(_.toInt)
-        .mapError(err =>
-          GenericWorldBlockError(s"error initiating worldblock $err")
+        .mapBoth(
+          err =>
+            GenericWorldBlockError(
+              s"error initiating worldblock; no WORLDBLOCK_RADIUS env variable set; $err"
+            ),
+          _.toInt
+        )
+//      num = 50000
+      num <- System
+        .env("RANDOMIZED_SPAWN_COUNT")
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericWorldBlockError(
+              s"Error initiating worldblock; no RANDOMIZED_SPAWN_COUNT env variable set; $err"
+            ),
+          _.toInt
+        )
+      num_prowlers <- System
+        .env("PROWLER_COUNT")
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericWorldBlockError(
+              s"Error initiating worldblock; no PROWLER_COUNT env variable set; $err"
+            ),
+          _.toInt
         )
       terrain <- TerrainRegion.make(
         Vector(0, 0, 0),
         radius
       ) // create terrain region for world block
-//      num = 50000
-      num <- System
-        .env("RANDOMIZED_SPAWN_COUNT")
-        .flatMap(ZIO.fromOption(_))
-        .map(_.toInt)
-        .mapError(err =>
-          GenericWorldBlockError(s"Error initiating worldblock $err")
-        )
-
-      num_prowlers <- System
-        .env("PROWLER_COUNT")
-        .flatMap(ZIO.fromOption(_))
-        .map(_.toInt)
-        .mapError(err =>
-          GenericWorldBlockError(s"Error initiating worldblock $err")
-        )
       groups = (0 to num).grouped(num / 1000)
       _ <- ZIO
         .collectAllPar(groups.map { r =>
@@ -193,20 +189,27 @@ object WorldBlockInMem extends WorldBlock.Service {
                 z <- Random.nextDoubleBetween(-radius, radius)
                 _ <- terrain.add_terrain("6", Vector(x, y, z))
                 _ <-
-                  if (i % 1000 == 0)
-                    ZIO.log(s"Generating terrain $i/$num")
-                  else ZIO.unit
-                // _ <- Console.print("\0000b[2J")
+                  ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
               } yield ()
             }
         }.toSeq)
-        .mapError(_ => ???)
+        .mapError(err =>
+          GenericWorldBlockError(
+            s"Failed to add terrain to worldblock due to : $err"
+          )
+        )
       _ <- terrain // add spawn block to terrain
         .add_terrain("9", Vector(0, -20, 0))
         .orElseFail(
           GenericWorldBlockError("Could not add spawn block to terrain block")
         )
-      t_count <- terrain.get_count().mapError(_ => ???)
+      t_count <- terrain
+        .get_count()
+        .mapError(err =>
+          GenericWorldBlockError(
+            s"Failed to get worldblock terrain count : $err"
+          )
+        )
       _ <- ZIO.log(s"starting terrain with count $t_count")
       npchandler <- NPCHandler
         .make()
@@ -214,27 +217,29 @@ object WorldBlockInMem extends WorldBlock.Service {
       res = WorldBlockInMem(t, terrain, npchandler)
       _ <- WorldBlockEnvironment
         .add_prowlers(res, num_prowlers, radius)
-        .mapError(_ => ???)
+        .mapError(err =>
+          GenericWorldBlockError(
+            s"Errow while adding prowlers to worldblock : $err"
+          )
+        )
     } yield res
 }
 object WorldBlockEnvironment {
 
   def add_prowlers(worldblock: WorldBlockInMem, count: Int, radius: Double) =
     for {
-      prowlers <- ZIO.collectAllPar {
-        (1 to count).map(i =>
-          for {
-            prowler <- Globz
-              .create(s"Prowler_$i")
-              .provide(ZLayer.succeed(Prowler))
-              .map { case p: Prowler => p }
-            maxspeed <- prowler.getMaxSpeed
-            _ <- prowler.adjustMaxSpeed(-maxspeed + 5)
-            - <- prowler.adjustSpeed(5)
-          } yield prowler
-        )
+      prowlers <- ZIO.foreachPar(1 to count) { i =>
+        for {
+          prowler <- Globz
+            .create(s"Prowler_$i")
+            .provide(ZLayer.succeed(Prowler))
+            .map { case p: Prowler => p }
+          maxspeed <- prowler.getMaxSpeed
+          _ <- prowler.adjustMaxSpeed(-maxspeed + 5)
+          - <- prowler.adjustSpeed(5)
+        } yield prowler
       }
-      _ <- ZIO.foreach(prowlers) { p =>
+      _ <- ZIO.foreachDiscard(prowlers) { p =>
         for {
           x <- Random.nextDouble.map(t => (t * radius) - radius / 2)
           y <- Random.nextDouble.map(t => (t * radius) - radius / 2)
@@ -249,7 +254,9 @@ object WorldBlockEnvironment {
                 .provide(ZLayer.succeed(worldblock))
                 .mapError(err => err.toString)
             )
-            .mapError(_ => ???)
+            .mapError(err =>
+              GenericWorldBlockError(s"Error while adding prowlers $err")
+            )
         } yield ()
       }
     } yield ()
