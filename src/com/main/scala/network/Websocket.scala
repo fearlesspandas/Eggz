@@ -9,6 +9,7 @@ import controller.CONSOLE
 import controller.CREATE_GLOB
 import controller.Completed
 import controller.Control
+import controller.Control.CONTROLLER_ENV
 import controller.GET_ALL_GLOBS
 import controller.GET_BLOB
 import controller.GET_GLOB_LOCATION
@@ -80,9 +81,7 @@ object WebSocketAdvanced extends ZIOAppDefault {
 case class BasicWebSocket(
   id: String,
   authMap: Ref[SESSION_MAP],
-  controller: BasicController[Globz.Service with WorldBlock.Block, Queue[
-    QueryResponse
-  ]],
+  controller: BasicController[CONTROLLER_ENV, Queue[QueryResponse]],
   authenticated: Ref[Boolean],
   server_keys: Set[String],
   auth: AUTH[String],
@@ -126,27 +125,8 @@ case class BasicWebSocket(
         .fork
     } yield ()).when(!server_keys.contains(id))
 
-//  def sendResponses(
-//    stream: ZStream[WebSocketChannel, Nothing, QueryResponse]
-//  ): ZIO[WebSocketChannel, Nothing, Unit] = for {
-//    channel <- ZIO.service[WebSocketChannel]
-//    _ <- stream
-//      .foreach(cmd =>
-//        cmd match {
-//          case _ =>
-//            for {
-//              n <- response_queue.takeUpTo(1)
-//              _ = n.map(qr =>
-//                channel.send(Read(WebSocketFrame.text(qr.toJson)))
-//              )
-//            } yield ()
-//        }
-//      )
-//      .fork
-//  } yield ()
-
   def handleCommand(
-    command: SerializableCommand[Globz.Service with WorldBlock.Block, Unit]
+    command: SerializableCommand[CONTROLLER_ENV, Unit]
   ): ZIO[Any, Nothing, Unit] =
     controller
       .runCommand(
@@ -159,7 +139,7 @@ case class BasicWebSocket(
       .unit
 
   def handleQuery(
-    query: ResponseQuery[Globz.Service with WorldBlock.Block]
+    query: ResponseQuery[CONTROLLER_ENV]
   ): ZIO[Any, Nothing, Seq[String] | QueryResponse] =
     for {
       res <- controller.runQuery(
@@ -268,10 +248,10 @@ case class BasicWebSocket(
           )
           .map(_ => ())
 
-      case c: SimpleCommandSerializable[Globz.Service with WorldBlock.Block] =>
+      case c: SimpleCommandSerializable[CONTROLLER_ENV] =>
         handleCommand(c)
 
-      case rq: ResponseQuery[Globz.Service with WorldBlock.Block] =>
+      case rq: ResponseQuery[CONTROLLER_ENV] =>
         for {
           channel <- ZIO.service[WebSocketChannel]
           res <- handleQuery(rq)
@@ -387,17 +367,14 @@ case class BasicWebSocket(
 
 object BasicWebSocket extends WebSocketControlServer.Service[Any] {
 
-  override def make(authID: AUTH_ID)
-    : ZIO[BasicController[
-      Globz.Service with WorldBlock.Block,
-      Queue[QueryResponse]
-    ] with Ref[SESSION_MAP]
-      with Ref[SERVER_IDS], Nothing, WebSocketControlServer[Any]] =
+  override def make(
+    authID: AUTH_ID
+  ): ZIO[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]
+    with Ref[SESSION_MAP]
+    with Ref[SERVER_IDS], Nothing, WebSocketControlServer[Any]] =
     for {
       controller <- ZIO
-        .service[BasicController[Globz.Service with WorldBlock.Block, Queue[
-          QueryResponse
-        ]]]
+        .service[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
       sessions <- ZIO.service[Ref[SESSION_MAP]]
       server_keys <- ZIO.serviceWithZIO[Ref[SERVER_IDS]](_.get)
       authd <- Ref.make(false)

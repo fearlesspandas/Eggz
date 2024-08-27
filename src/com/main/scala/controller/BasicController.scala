@@ -1,5 +1,6 @@
 package controller
 
+import controller.Control.CONTROLLER_ENV
 import implicits.*
 import entity.BasicPlayer
 import entity.WorldBlock
@@ -63,7 +64,7 @@ case class Control(
     ]] {
   override def runCommand[E](
     comm: ZIO[Globz.Service with WorldBlock.Block, E, Unit]
-  ): ZIO[Any, E, BasicController[Globz.Service with WorldBlock.Block, Queue[
+  ): ZIO[Any, E, BasicController[CONTROLLER_ENV, Queue[
     QueryResponse
   ]]] =
     for {
@@ -74,7 +75,7 @@ case class Control(
     } yield this
 
   override def runQuery[Q, E](
-    query: ZIO[Globz.Service with WorldBlock.Block, E, Q]
+    query: ZIO[CONTROLLER_ENV, E, Q]
   ): ZIO[Any, E, Q] =
     worldBlock.get.flatMap(wb =>
       query.provide(ZLayer(ZIO.succeed(glob)) ++ ZLayer {
@@ -86,9 +87,9 @@ case class Control(
     query: ZIO[
       Globz.Service with WorldBlock.Block,
       E,
-      ZIO[Globz.Service with WorldBlock.Block, E, Q]
+      ZIO[CONTROLLER_ENV, E, Q]
     ]
-  ): ZIO[Any, E, BasicController[Globz.Service with WorldBlock.Block, Queue[
+  ): ZIO[Any, E, BasicController[CONTROLLER_ENV, Queue[
     QueryResponse
   ]]] =
     for {
@@ -98,7 +99,7 @@ case class Control(
     } yield this
 
   override def queueQuery[Q, E](
-    query: ZIO[Globz.Service with WorldBlock.Block, E, Q]
+    query: ZIO[CONTROLLER_ENV, E, Q]
   ): ZIO[Any, E, Unit] =
     for {
       res <- runQuery[Q, E](query).flatMap {
@@ -112,8 +113,8 @@ case class Control(
     ZIO.succeed(server_response_queue)
 }
 
-object Control
-    extends BasicController.Service[Globz.Service with WorldBlock.Block] {
+object Control extends BasicController.Service[CONTROLLER_ENV] {
+  type CONTROLLER_ENV = Globz.Service with WorldBlock.Block
   override def make: IO[ControllerError, BasicController[
     Globz.Service with WorldBlock.Block,
     Queue[QueryResponse]
