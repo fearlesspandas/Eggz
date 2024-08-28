@@ -506,7 +506,7 @@ case class TerrainRegion(
       case None       => ZIO.succeed(Seq())
     }
   } yield res
-
+  // todo add list of uuids to terrain regions to verify that caching is valid
   override def cacheTerrain(
     terr: Chunk[Terrain]
   ): IO[TerrainError, Unit] =
@@ -526,10 +526,10 @@ object TerrainRegion {
     center: Vector[Double],
     radius: Double
   ): IO[Nothing, TerrainManager with Terrain] = for {
-    t <- Ref.make(Map.empty[Quadrant, Terrain])
-    c <- Ref.make(0)
+    quadrants <- Ref.make(Map.empty[Quadrant, Terrain])
+    count <- Ref.make(0)
     cached <- Ref.make(Map.empty[UUID, Terrain])
-  } yield TerrainRegion(center, radius, t, c, cached)
+  } yield TerrainRegion(center, radius, quadrants, count, cached)
 
   def make(
     center: Vector[Double],
@@ -540,6 +540,7 @@ object TerrainRegion {
     count <- Ref.make(0)
     cached <- Ref.make(Map.empty[UUID, Terrain])
   } yield TerrainRegion(center, radius, quadrantsRef, count, cached)
+
   case class GetTerrainByQuadrantError(msg: String) extends TerrainError
 }
 
@@ -622,12 +623,44 @@ object TerrainUnit {
     location: Vector[Double]
   ): IO[TerrainError, Terrain] = for {
     idref <- Ref.make(Map((id, 1)))
-    glob <- GlobzInMem.make(id).mapError(_ => ???)
   } yield TerrainUnit(idref, location)
 }
 
 object TerrainTests extends ZIOAppDefault {
-
+  override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
+    for {
+      maxRand <- ZIO.succeed(1000)
+      minRand <- ZIO.succeed(-1000)
+      terrain <- TerrainRegion
+        .make(
+          Vector(0, 0, 0),
+          math.max(abs(maxRand), abs(minRand))
+        )
+        .map { case t: TerrainRegion => t }
+      testterrain = (0 to 100000).map(x =>
+        (s"testId$x", randomVec(-minRand, maxRand))
+      )
+      _ <- terrain.add_terrain("testid", Vector(-1, 0, 2))
+      _ <- terrain.add_terrain("testid2", Vector(1, 1, 2))
+      _ <- terrain.add_terrain("testid3", Vector(1, 1, 2))
+      _ <- terrain.add_terrain("testid4", Vector(2, 1, 2))
+      _ <- terrain.add_terrain("testid5", Vector(4, 1, 2))
+      _ <- terrain.add_terrain("testid6", Vector(1, 3, 3))
+      _ <- terrain.add_terrain("testid7", Vector(1, 5, 2))
+      _ <- terrain.add_terrain("testid8", Vector(1, 5, 10))
+      _ <- ZIO.foreachDiscard(testterrain) { case (id, v) =>
+        terrain.add_terrain(id, v)
+      }
+      _ <- ZIO.log("Starting basic distance query tests")
+      _ <- basicDistanceQueryTests(terrain)
+      _ <- ZIO.log("Completed: Basic Distance Query tests")
+      _ <- ZIO.log("Starting random point query tests")
+      _ <- randomPointQueryTest(terrain)
+      _ <- ZIO.log("Completed: Random point query tests")
+      _ <- ZIO.log("Starting terrain expansion tests")
+      _ <- terrainExpansionTest(terrain)
+      _ <- ZIO.log("Completed: Terrain Expansion Tests")
+    } yield {}
   def randomVec(min: Double, max: Double): Vector[Double] = {
     val negX = Random.nextBoolean()
     val negy = Random.nextBoolean()
@@ -773,7 +806,6 @@ object TerrainTests extends ZIOAppDefault {
         s"Passed: Found regions that were filled and converted to normal terrain after fill of $num_fill points"
       )
     } yield ()
-
   def randomPointQueryTest(terrain: TerrainRegion) =
     for {
       query_point <- ZIO.succeed(Vector(78.125, 78.125, 390.625))
@@ -815,7 +847,6 @@ object TerrainTests extends ZIOAppDefault {
         s"Passed: get_top_terrain_within_distance($query_distance) does not contain points outside of the expected distance"
       )
     } yield ()
-
   def basicDistanceQueryTests(terrain: TerrainRegion) =
     for {
       res <- terrain.get_terrain_within_distance(Vector(0, 0, 0), 3)
@@ -895,38 +926,4 @@ object TerrainTests extends ZIOAppDefault {
         s"Top Terrain return should be ordered inversely to input"
       )
     }
-  override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
-    for {
-      maxRand <- ZIO.succeed(1000)
-      minRand <- ZIO.succeed(-1000)
-      terrain <- TerrainRegion
-        .make(
-          Vector(0, 0, 0),
-          math.max(abs(maxRand), abs(minRand))
-        )
-        .map { case t: TerrainRegion => t }
-      testterrain = (0 to 100000).map(x =>
-        (s"testId$x", randomVec(-minRand, maxRand))
-      )
-      _ <- terrain.add_terrain("testid", Vector(-1, 0, 2))
-      _ <- terrain.add_terrain("testid2", Vector(1, 1, 2))
-      _ <- terrain.add_terrain("testid3", Vector(1, 1, 2))
-      _ <- terrain.add_terrain("testid4", Vector(2, 1, 2))
-      _ <- terrain.add_terrain("testid5", Vector(4, 1, 2))
-      _ <- terrain.add_terrain("testid6", Vector(1, 3, 3))
-      _ <- terrain.add_terrain("testid7", Vector(1, 5, 2))
-      _ <- terrain.add_terrain("testid8", Vector(1, 5, 10))
-      _ <- ZIO.foreachDiscard(testterrain) { case (id, v) =>
-        terrain.add_terrain(id, v)
-      }
-      _ <- ZIO.log("Starting basic distance query tests")
-      _ <- basicDistanceQueryTests(terrain)
-      _ <- ZIO.log("Completed: Basic Distance Query tests")
-      _ <- ZIO.log("Starting random point query tests")
-      _ <- randomPointQueryTest(terrain)
-      _ <- ZIO.log("Completed: Random point query tests")
-      _ <- ZIO.log("Starting terrain expansion tests")
-      _ <- terrainExpansionTest(terrain)
-      _ <- ZIO.log("Completed: Terrain Expansion Tests")
-    } yield {}
 }
