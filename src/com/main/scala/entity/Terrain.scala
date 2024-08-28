@@ -34,6 +34,11 @@ object implicits {
         case (a: Int, b)    => a + b
         case (a: Double, b) => a + b
       }
+    def -(vector: Vector[Double]): Vector[Double] =
+      vec.zip(vector).map {
+        case (a: Int, b)    => a - b
+        case (a: Double, b) => a - b
+      }
     def *(scalar: Double): Vector[Double] = vec.map {
       case a: Double => a * scalar
       case a: Int    => a * scalar
@@ -235,7 +240,8 @@ case class TerrainRegion(
                 ZIO.succeed(Chunk.succeed(tr))
               case tr: TerrainRegion => tr.get_top_terrain(size)
               case tu: TerrainUnit   => ZIO.succeed(Chunk.succeed(tu))
-              case em: EmptyTerrain  => ZIO.succeed(Chunk.succeed(em))
+              // todo not sure whether to include the size check here yet
+              case em: EmptyTerrain => ZIO.succeed(Chunk.succeed(em))
             }
           )
       } yield thing.foldLeft(Chunk.empty[Terrain])((acc, curr) => acc ++ curr)
@@ -246,7 +252,7 @@ case class TerrainRegion(
   ): IO[TerrainError, Seq[Terrain]] = if (
     !is_within_range(location, center, math.max(radius, distance)) && this
       .get_boundaries_distance(location) > distance
-  ) ZIO.log("found nothing").as(Seq())
+  ) ZIO.succeed(Seq.empty[Terrain])
   else
     for {
       // check quadrants to see if their boundaries are within distance
@@ -288,7 +294,7 @@ case class TerrainRegion(
   else {
     for {
       // check quadrants to see if their boundaries are within distance
-      quads <- terrain.get.map(m =>
+      quads_within_range <- terrain.get.map(m =>
         m.values.filter(t =>
           t match {
             case q: TerrainRegion =>
@@ -308,7 +314,7 @@ case class TerrainRegion(
           }
         )
       )
-      res <- ZIO.foreach(quads) {
+      res <- ZIO.foreach(quads_within_range) {
         case tr: TerrainRegion if tr.radius <= size =>
           ZIO.succeed(Chunk.succeed(tr))
         case tr: TerrainRegion =>
@@ -401,17 +407,11 @@ case class TerrainRegion(
                 radius / 2,
                 Map.empty[Quadrant, Terrain].updated(newQuadLoc, u)
               )
-//              newQuad = TerrainRegion(
-//                newCenter,
-//                radius / 2,
-//                quadrantMap,
-//                newCount,
-//                newcached
-//              )
               _ <- newQuad.add_terrain(id, location)
               _ <- terrain.update(_.updated(quad, newQuad))
               _ <- count.update(_ + 1)
             } yield ()
+        case Some(e: EmptyTerrain) => ZIO.unit // e.fill(Set((id, location)))
         case None =>
           for {
             tu <- TerrainUnit.make(id, location)
@@ -419,24 +419,15 @@ case class TerrainRegion(
             _ <- count.update(_ + 1)
           } yield ()
       }
-//        .fold(
-//        x => x,
-//         this does nothing as its not using fold zio and its also incorrect (failure and success are swapped here)
-//        e =>
-//          for {
-//            tu <- TerrainUnit.make(id, location)
-//            _ <- terrain.update(_.updated(quad, tu))
-//            _ <- count.update(_ + 1)
-//          } yield ()
-//      )
     } yield ()).when(Terrain.is_within_range(location, center, radius)).unit
 
   def emptify(): IO[TerrainError, Unit] =
     for {
 //      _ <- ZIO.log("emptifying")
       tmap <- this.terrain.get
-      _ <- this.terrain.get
-        .map(_.keys)
+      _ <- get_all_quadrants(3)
+//        this.terrain.get
+//        .map(_.keys)
         .map(_.map(q => (q, tmap.get(q))))
         .flatMap(ZIO.foreach(_) {
           case (key, Some(terrain: TerrainRegion)) =>
@@ -456,7 +447,17 @@ case class TerrainRegion(
                     }
                   ) // recurse to check for empty regions
             }
-          case _ => ZIO.unit
+          case (key, Some(TerrainUnit(_, _))) => ZIO.unit
+          case (key, None) =>
+            terrain.update(
+              _.updated(
+                key,
+                EmptyTerrain(
+                  this.center + (key * (this.radius / 2)),
+                  this.radius / 2
+                )
+              )
+            )
         })
     } yield ()
   override def remove_terrain(id: TerrainId): IO[TerrainError, Unit] = ???
@@ -638,82 +639,185 @@ object TerrainTests extends ZIOAppDefault {
   }
   def terrainExpansionTest(startingTerrain: TerrainRegion) =
     for {
-
       topTerr_100 <- startingTerrain.get_top_terrain(100)
       bigger_terrain <- startingTerrain.expandTerrain().map {
         case t: TerrainRegion =>
           t
       }
+      _ <- ZIO.succeed(
+        assert(
+          bigger_terrain.center == startingTerrain.center,
+          s"center points for expanded terrain and starting terrain region do not match [Expanded:${bigger_terrain.center}, Original: ${startingTerrain.center}]"
+        )
+      )
+      _ <- ZIO.log("Passed: center point for expanded terrain matches original")
+      _ <- ZIO.succeed(
+        assert(
+          bigger_terrain.radius == 2 * startingTerrain.radius,
+          s"Radius for expanded terrain is not twice the original terrain [Expanded: ${bigger_terrain.radius}, Original:${startingTerrain.radius}]"
+        )
+      )
+      _ <- ZIO.log(
+        "Passed: Radius for expanded terrain is twice the size of the original"
+      )
       expanded_top_terrain <- bigger_terrain.get_top_terrain(100)
+      top_terrain_diff_non_empty <- ZIO.succeed(
+        expanded_top_terrain.diff(topTerr_100).filter {
+          case e: EmptyTerrain => false; case _ => true
+        }
+      )
+      _ <- ZIO.succeed(
+        assert(
+          top_terrain_diff_non_empty.isEmpty,
+          "Differing results for top terrain between Region and Expanded Region that's not EmptyTerrain"
+        )
+      )
+      _ <- ZIO.log(
+        "Passed: Only difference between expanded terrain and original regions for query get_top_terrain(100) are EmptyTerrain"
+      )
       bigger_count <- bigger_terrain.get_count()
       original_count <- startingTerrain.get_count()
+      _ <- ZIO.succeed(
+        assert(
+          bigger_count == original_count,
+          s"counts are not matching for expanded terrain and original region before fill [Expanded:${bigger_count}, Original:${original_count}]"
+        )
+      )
+      _ <- ZIO.log(
+        "Passed: Counts for expanded terrain and original region are matching before fill"
+      )
       bigger_quads <- bigger_terrain.terrain.get
       bigger_empty = bigger_quads.flatMap {
         case (q, e: EmptyTerrain) => Set((q, e)); case _ => Set()
       }
-      fillset <- ZIO.foreach(0 to 1000)(i =>
+      empty_to_be_filled <- ZIO.succeed(bigger_empty.head._2)
+      num_fill <- ZIO.succeed(100000)
+      fillset <- ZIO.foreach(0 until num_fill)(i =>
         ZIO.succeed(
           (
             s"$i",
             randomVec(
-              -bigger_terrain.radius,
-              bigger_terrain.radius
-            ) + bigger_terrain.center
+              -empty_to_be_filled.radius,
+              empty_to_be_filled.radius
+            ) + empty_to_be_filled.center
           )
         )
       )
-      empty_filled <- bigger_empty.head._2.fill(fillset.toSet).map {
+      first_5_fill <- ZIO.succeed(fillset.take(5))
+      filled_5 <- empty_to_be_filled.fill(first_5_fill.toSet).map {
         case tr: TerrainRegion => tr
       }
-      empty_filled_quads <- empty_filled.terrain.get.map(_.map {
+      _ <- filled_5
+        .get_count()
+        .map(c =>
+          assert(c == 5, "filled_5 count is not equal to 5 when 5 added")
+        )
+      _ <- ZIO.log("Passed: fill empty terrain with 5 random vectors")
+      at_least_one_empty <- filled_5.terrain.get.map(_.filter {
+        case (q, tr: TerrainRegion) => false
+        case (q, tr: EmptyTerrain)  => true
+        case (q, tr: TerrainUnit)   => false
+      })
+      _ <- ZIO.succeed(
+        assert(
+          at_least_one_empty.nonEmpty,
+          "No empty regions found after fill 5 (should contain at least one)"
+        )
+      )
+      _ <- ZIO.log("Passed: At least one empty quadrant found in fill 5")
+      filled <- empty_to_be_filled.fill(fillset.toSet).map {
+        case tr: TerrainRegion => tr
+      }
+      _ <- filled
+        .get_count()
+        .map(c =>
+          assert(
+            c == num_fill,
+            s"count ${c} does not match the number of items added $num_fill"
+          )
+        )
+      _ <- ZIO.log(
+        "Passed: all terrain added to empty terrain was added successfully"
+      )
+      can_add_with_empties <- filled.add_terrain(
+        "postfill",
+        randomVec(
+          -filled.radius,
+          filled.radius
+        ) + filled.center
+      )
+      _ <- ZIO.log(
+        "Passed: successfully added to terrain region that contains EmptyTerrain"
+      )
+      filled_quads <- filled.terrain.get.map(_.map {
         case (q, tr: TerrainRegion) => ("REGION", q, tr.center)
         case (q, tr: EmptyTerrain)  => ("EMPTY", q, tr.center)
         case (q, tr: TerrainUnit)   => ("UNIT", q, tr.location)
       })
+      _ <- ZIO.succeed(assert(filled_quads.size == 8))
       _ <- ZIO.log(
-        s"Expanded; ${expanded_top_terrain.size} , Original: ${topTerr_100.size}"
+        "Passed: Filled terrain has the correct number of explicit quadrants (8)"
+      )
+      filled_quads_non_empty <- filled.terrain.get.map(_.filter {
+        case (q, tr: TerrainRegion) => true
+        case (q, tr: EmptyTerrain)  => false
+        case (q, tr: TerrainUnit)   => true
+      })
+      _ <- ZIO.succeed(
+        assert(
+          filled_quads_non_empty.nonEmpty,
+          s"No regions were filled after fill test of $num_fill points"
+        )
       )
       _ <- ZIO.log(
-        s"Expanded count; ${bigger_count} , Original count: ${original_count}"
-      )
-      _ <- ZIO.log(
-        s"Expanded center ; ${bigger_terrain.center} , Original count: ${startingTerrain.center}"
-      )
-      _ <- ZIO.log(
-        s"Expanded radius ; ${bigger_terrain.radius} , Original radius: ${startingTerrain.radius}"
-      )
-      _ <- ZIO.log(
-        s"Expanded quadrants empty ; ${bigger_empty}"
-      )
-      _ <- ZIO.log(
-        s"Empty quadrant filled ; ${empty_filled_quads}"
+        s"Passed: Found regions that were filled and converted to normal terrain after fill of $num_fill points"
       )
     } yield ()
-  override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
-    for {
-      maxRand <- ZIO.succeed(1000)
-      minRand <- ZIO.succeed(-1000)
-      terrain <- TerrainRegion
-        .make(
-          Vector(0, 0, 0),
-          math.max(abs(maxRand), abs(minRand))
-        )
-        .map { case t: TerrainRegion => t }
-      testterrain = (0 to 100000).map(x =>
-        (s"testId$x", randomVec(-minRand, maxRand))
-      )
-      _ <- terrain.add_terrain("testid", Vector(-1, 0, 2))
-      _ <- terrain.add_terrain("testid2", Vector(1, 1, 2))
-      _ <- terrain.add_terrain("testid3", Vector(1, 1, 2))
-      _ <- terrain.add_terrain("testid4", Vector(2, 1, 2))
-      _ <- terrain.add_terrain("testid5", Vector(4, 1, 2))
-      _ <- terrain.add_terrain("testid6", Vector(1, 3, 3))
-      _ <- terrain.add_terrain("testid7", Vector(1, 5, 2))
-      _ <- terrain.add_terrain("testid8", Vector(1, 5, 10))
-      _ <- ZIO.foreachDiscard(testterrain) { case (id, v) =>
-        terrain.add_terrain(id, v)
-      }
 
+  def randomPointQueryTest(terrain: TerrainRegion) =
+    for {
+      query_point <- ZIO.succeed(Vector(78.125, 78.125, 390.625))
+      query_distance <- ZIO.succeed(100)
+      top_terr_within_100 <- terrain.get_top_terrain_within_distance(
+        query_point,
+        query_distance,
+        10
+      )
+      outside_query_distance <- ZIO.filter(top_terr_within_100) {
+        case tr: TerrainRegion =>
+          ZIO.succeed(
+            (tr.center - query_point)
+              .map(math.abs)
+              .forall(curr => curr > query_distance + tr.radius)
+          )
+        case tu: TerrainUnit =>
+          ZIO.succeed(
+            (tu.location - query_point)
+              .map(math.abs)
+              .forall(curr => curr > query_distance)
+          )
+      }
+      fmt_outside_query_distance = outside_query_distance
+        .filter(x =>
+          x match {
+            case t: TerrainRegion => true;
+            case _                => false
+          }
+        )
+        .map { case tr: TerrainRegion => (tr.center, tr.radius) }
+      _ <- ZIO.succeed(
+        assert(
+          outside_query_distance.isEmpty,
+          s"Terrain found outside query distance for test get_top_level_terrain_within_distance($query_distance) : $fmt_outside_query_distance"
+        )
+      )
+      _ <- ZIO.log(
+        s"Passed: get_top_terrain_within_distance($query_distance) does not contain points outside of the expected distance"
+      )
+    } yield ()
+
+  def basicDistanceQueryTests(terrain: TerrainRegion) =
+    for {
       res <- terrain.get_terrain_within_distance(Vector(0, 0, 0), 3)
       res2 <- terrain.get_terrain_within_distance(Vector(0, 0, 0), 4)
       res3 <- terrain.get_terrain_within_distance(Vector(0, 0, 0), 5)
@@ -722,36 +826,20 @@ object TerrainTests extends ZIOAppDefault {
         100
       )
       allterain <- terrain.get_terrain()
-
       topTerr_0 <- terrain.get_top_terrain(0)
       topTerr_5 <- terrain.get_top_terrain(5)
       topTerr_8 <- terrain.get_top_terrain(8)
       topTerr_10 <- terrain.get_top_terrain(10)
       topTerr_100 <- terrain.get_top_terrain(100)
-
-      _ <- ZIO.log(
-        s"Top Terrain size ${topTerr_0.size}, all terrain size ${allterain.size}"
-      )
-      _ <- terrainExpansionTest(terrain)
-      //      _ <- ZIO.log(s"Top Terrain 10: ${topTerr_10
-      //          .filter(x => x match { case t: TerrainRegion => true; case _ => false })
-      //          .map(_ match { case tr: TerrainRegion => (tr.center, tr.radius) })
-      //          .toString}")
-      // todo write a better test around this, but im willing to believe it works for now
-      top_terr_within_100 <- terrain.get_top_terrain_within_distance(
-        Vector(78.125, 78.125, 390.625),
-        100,
-        10
-      )
-      fmtd = top_terr_within_100
-        .filter(x =>
-          x match {
-            case t: TerrainRegion => true;
-            case _                => false
-          }
+      _ <- ZIO.succeed(
+        assert(
+          topTerr_0.size == allterain.size,
+          "sizes of allterrain and get_top_terrain_within_distance(0) should be the same"
         )
-        .map { case tr: TerrainRegion => (tr.center, tr.radius) }
-      _ <- ZIO.log(s"Top Terrain within 100, size 10 $fmtd")
+      )
+      _ <- ZIO.log(
+        s"Passed: get_top_terrain_within_distance(0) size is the same as the size of allterrain"
+      )
     } yield {
       val failed_dist_3 = res.filter {
         case tu: TerrainUnit =>
@@ -807,4 +895,38 @@ object TerrainTests extends ZIOAppDefault {
         s"Top Terrain return should be ordered inversely to input"
       )
     }
+  override def run: ZIO[Any with ZIOAppArgs with Scope, Any, Any] =
+    for {
+      maxRand <- ZIO.succeed(1000)
+      minRand <- ZIO.succeed(-1000)
+      terrain <- TerrainRegion
+        .make(
+          Vector(0, 0, 0),
+          math.max(abs(maxRand), abs(minRand))
+        )
+        .map { case t: TerrainRegion => t }
+      testterrain = (0 to 100000).map(x =>
+        (s"testId$x", randomVec(-minRand, maxRand))
+      )
+      _ <- terrain.add_terrain("testid", Vector(-1, 0, 2))
+      _ <- terrain.add_terrain("testid2", Vector(1, 1, 2))
+      _ <- terrain.add_terrain("testid3", Vector(1, 1, 2))
+      _ <- terrain.add_terrain("testid4", Vector(2, 1, 2))
+      _ <- terrain.add_terrain("testid5", Vector(4, 1, 2))
+      _ <- terrain.add_terrain("testid6", Vector(1, 3, 3))
+      _ <- terrain.add_terrain("testid7", Vector(1, 5, 2))
+      _ <- terrain.add_terrain("testid8", Vector(1, 5, 10))
+      _ <- ZIO.foreachDiscard(testterrain) { case (id, v) =>
+        terrain.add_terrain(id, v)
+      }
+      _ <- ZIO.log("Starting basic distance query tests")
+      _ <- basicDistanceQueryTests(terrain)
+      _ <- ZIO.log("Completed: Basic Distance Query tests")
+      _ <- ZIO.log("Starting random point query tests")
+      _ <- randomPointQueryTest(terrain)
+      _ <- ZIO.log("Completed: Random point query tests")
+      _ <- ZIO.log("Starting terrain expansion tests")
+      _ <- terrainExpansionTest(terrain)
+      _ <- ZIO.log("Completed: Terrain Expansion Tests")
+    } yield {}
 }
