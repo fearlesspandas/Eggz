@@ -4,6 +4,7 @@ import controller.CONSOLE.CONSOLE_ENV
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
+import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.LivingEntity
 import entity.PhysicalEntity
@@ -1339,15 +1340,23 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
       _ <- ZIO.log(s"bad terrain $res_unit")
       res = top_terr
         .filter {
-          case t: TerrainRegion => true;
+          case t: TerrainRegion => true
+          case e: EmptyTerrain  => true
           case _                => false
         }
-        .map { case t: TerrainRegion =>
-          TerrainChunkm(
-            t.uuid,
-            (t.center(0), t.center(1), t.center(2)),
-            t.radius
-          )
+        .map {
+          case t: TerrainRegion =>
+            TerrainChunkm(
+              t.uuid,
+              (t.center(0), t.center(1), t.center(2)),
+              t.radius
+            )
+          case e: EmptyTerrain =>
+            EmptyChunk(
+              e.uuid,
+              (e.center(0), e.center(1), e.center(2)),
+              e.radius
+            )
         }
       _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
     } yield PaginatedResponse(res)

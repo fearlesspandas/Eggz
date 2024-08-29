@@ -84,6 +84,12 @@ trait PhysicsChannel {
               )
             case UserEventTriggered(UserEvent.HandshakeComplete) =>
               (for {
+                blobs <- wb.getAllBlobs().mapError(_ => ???)
+                interval <- ZIO
+                  .succeed(
+                    if (blobs.size > 0) math.max(50 / blobs.size, 1) else 10
+                  )
+                  .map(_.toLong)
                 xx <- this
                   .loop(10)
                   .provide(ZLayer.succeed(channel))
@@ -172,7 +178,7 @@ case class BasicPhysicsChannel(
       _ <- get_location(next_id)
       _ <- id_queue.update(_.tail)
     } yield ())
-      .repeat(Schedule.spaced(Duration.fromMillis(interval)))
+      .repeat(Schedule.spaced(Duration.fromNanos(interval)))
       .mapError(err => FailedSend(s"Error inside loop ${err.toString}"))
 
   override def get_queue(): IO[PhysicsChannelError, Queue[PHYSICS_COMMAND]] =

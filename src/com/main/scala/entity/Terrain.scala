@@ -205,6 +205,7 @@ case class TerrainRegion(
   terrain: Ref[Map[Quadrant, Terrain]],
   count: Ref[Int],
   cached: Ref[Map[UUID, Terrain]]
+//  terrain_final: Ref[Boolean]
 ) extends Terrain
     with TerrainManager {
 
@@ -305,6 +306,13 @@ case class TerrainRegion(
                 math.max(distance, q.radius)
               ) || boundaryDist < distance
               isWithin // || is_within_range(location, q.center, distance)
+            case e: EmptyTerrain =>
+//              true
+              is_within_range(
+                location,
+                e.center,
+                math.max(distance, e.radius)
+              )
             case u: TerrainUnit =>
               is_within_range(
                 location,
@@ -324,6 +332,7 @@ case class TerrainRegion(
             size
           )
         case tu: TerrainUnit => ZIO.succeed(Chunk.succeed(tu))
+        case e: EmptyTerrain => ZIO.succeed(Chunk.succeed(e))
       }
     } yield Chunk.from(res.flatten)
   }
@@ -333,9 +342,8 @@ case class TerrainRegion(
       r <- TerrainRegion.make(this.center, this.radius * 2).map {
         case tr: TerrainRegion => tr
       }
-      _ <- this.get_count().flatMap(c => this.count.update(_ => c))
       quads <- get_all_quadrants(3)
-      emptyQuads <- ZIO.foreach(quads)(quadrant =>
+      _ <- ZIO.foreachDiscard(quads) { quadrant =>
         r.terrain.update(
           _.updated(
             quadrant,
@@ -345,7 +353,8 @@ case class TerrainRegion(
             )
           )
         )
-      )
+      }
+      // this also updates terrain count
       _ <- r.addQuadrant(this)
     } yield r
 

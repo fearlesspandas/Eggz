@@ -72,7 +72,7 @@ object BasicPhysicalEntity extends PhysicalEntity.Service {
       loc <- Ref.make(Vector(0.0, 10, 0))
       vel <- Ref.make(Vector(0.0, 0, 0))
       inpt <- Ref.make[Option[Vector[Double]]](None)
-      max_speed <- Ref.make(70.0)
+      max_speed <- Ref.make(500.0)
       speed <- Ref.make(0.0)
     } yield BasicPhysicalEntity(loc, vel, inpt, max_speed, speed)
 }

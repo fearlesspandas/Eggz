@@ -151,7 +151,7 @@ case class WorldBlockInMem(
       .map { case tr: TerrainRegion => tr }
       .mapError(_ => ???)
     _ <- terrain.update(_ => d)
-    generated_terrain <- WorldBlockEnvironment.add_terrain(d, d.radius, 10000)
+//    generated_terrain <- WorldBlockEnvironment.add_terrain(d, d.radius, 10000)
   } yield ()
 }
 object WorldBlockInMem extends WorldBlock.Service {
@@ -211,7 +211,12 @@ object WorldBlockInMem extends WorldBlock.Service {
       terrain_ref <- Ref.make(terrain)
 
       globz_map <- Ref.make(Map.empty[GLOBZ_ID, Globz])
-      res = WorldBlockInMem(globz_map, terrain_ref, npchandler)
+      res <- ZIO
+        .attempt(WorldBlockInMem(globz_map, terrain_ref, npchandler))
+        .orElseFail(
+          GenericWorldBlockError("Failed to create woldblock on startup")
+        )
+      _ <- res.expandTerrain
       _ <- WorldBlockEnvironment
         .add_prowlers(res, num_prowlers, radius)
         .mapError(err =>
@@ -263,8 +268,9 @@ object WorldBlockEnvironment {
             .provide(ZLayer.succeed(Prowler))
             .map { case p: Prowler => p }
           maxspeed <- prowler.getMaxSpeed
-          _ <- prowler.adjustMaxSpeed(-maxspeed + 5)
-          - <- prowler.adjustSpeed(5)
+          speed <- prowler.getSpeed
+          _ <- prowler.adjustMaxSpeed(-maxspeed + 30)
+          - <- prowler.adjustSpeed(-speed + 30)
         } yield prowler
       }
       _ <- ZIO.foreachDiscard(prowlers) { p =>

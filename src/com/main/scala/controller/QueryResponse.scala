@@ -268,6 +268,17 @@ object TerrainChunkm {
   implicit val decoder: JsonDecoder[TerrainChunkm] =
     DeriveJsonDecoder.gen[TerrainChunkm]
 }
+case class EmptyChunk(
+  uuid: UUID,
+  location: (Double, Double, Double),
+  radius: Double
+) extends QueryResponse
+object EmptyChunk {
+  implicit val encoder: JsonEncoder[EmptyChunk] =
+    DeriveJsonEncoder.gen[EmptyChunk]
+  implicit val decoder: JsonDecoder[EmptyChunk] =
+    DeriveJsonDecoder.gen[EmptyChunk]
+}
 case class TerrainRegionm(
   terrain: Set[(Vector[Double], Map[TerrainId, Int], UUID)]
 ) extends QueryResponse
