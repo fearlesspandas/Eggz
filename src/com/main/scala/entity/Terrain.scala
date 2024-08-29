@@ -311,7 +311,7 @@ case class TerrainRegion(
               is_within_range(
                 location,
                 e.center,
-                math.max(distance, e.radius)
+                math.max(distance, 3 * e.radius)
               )
             case u: TerrainUnit =>
               is_within_range(
@@ -339,24 +339,42 @@ case class TerrainRegion(
 
   override def expandTerrain(): IO[TerrainError, Terrain with TerrainManager] =
     for {
-      r <- TerrainRegion.make(this.center, this.radius * 2).map {
+      expanded_region <- TerrainRegion.make(this.center, this.radius * 2).map {
         case tr: TerrainRegion => tr
       }
       quads <- get_all_quadrants(3)
-      _ <- ZIO.foreachDiscard(quads) { quadrant =>
-        r.terrain.update(
-          _.updated(
-            quadrant,
-            EmptyTerrain(
-              (quadrant * this.radius) + this.center,
-              this.radius
+      quad_regions <- ZIO.foreach(quads)(quadrant =>
+        for {
+          // new region
+          expanded_sub_region <- TerrainRegion
+            .make(this.center + (quadrant * this.radius), this.radius)
+            .map { case tr: TerrainRegion => tr }
+          // existing quadrant to be placed in new region
+          current_sub_region <- this.terrain.get
+            .map(_.get(quadrant))
+//            .mapError(_ => ???)
+          // replace with emptify (once optimization of final is in)
+          _ <- ZIO.foreachDiscard(quads) { other_quadrant =>
+            expanded_sub_region.terrain.update(
+              _.updated(
+                other_quadrant,
+                EmptyTerrain(
+                  expanded_sub_region.center + (other_quadrant * (expanded_sub_region.radius / 2)),
+                  expanded_sub_region.radius / 2
+                )
+              )
             )
-          )
-        )
-      }
-      // this also updates terrain count
-      _ <- r.addQuadrant(this)
-    } yield r
+          }
+          _ <- current_sub_region match {
+            case Some(tr: TerrainRegion) => expanded_sub_region.addQuadrant(tr);
+            case _                       => ZIO.unit
+          }
+        } yield expanded_sub_region
+      )
+      _ <- ZIO.foreachDiscard(quad_regions)(newquad =>
+        expanded_region.addQuadrant(newquad)
+      )
+    } yield expanded_region
 
   override def addQuadrant(region: TerrainRegion): IO[TerrainError, Unit] =
     for {
