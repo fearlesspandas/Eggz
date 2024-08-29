@@ -246,6 +246,21 @@ package object auth {
     case cmd =>
       ZIO.fail(s"$cmd not relevant for GET_TOP_LEVEL_TERRAIN_IN_DISTANCE")
   }
+  val expand_terrain: Set[String] => AUTH[String] = server_keys => {
+    case EXPAND_TERRAIN() =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+
+    case cmd => ZIO.fail(s"$cmd not relevant for EXPAND_TERRAIN")
+  }
+  val fill_empty_chunk: Set[String] => AUTH[String] = server_keys => {
+    case FILL_EMPTY_CHUNK(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for FILL_EMPTY_CHUNK")
+  }
   val get_cached_terrain: AUTH[String] = {
     case GET_CACHED_TERRAIN(_) =>
       for {
@@ -304,6 +319,8 @@ object AuthCommandService {
             add_terrain(op),
             get_top_level_terrain(op),
             get_top_level_terrain_in_distance(op),
+            expand_terrain(server_keys)(op),
+            fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
             next_cmd(op),
             set_active(op),
@@ -350,6 +367,8 @@ object AuthCommandService {
             add_terrain(op),
             get_top_level_terrain(op),
             get_top_level_terrain_in_distance(op),
+            expand_terrain(server_keys)(op),
+            fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
             next_cmd(op),
             set_active(op),

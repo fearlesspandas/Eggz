@@ -15,6 +15,7 @@ import entity.TerrainRegion
 import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.WorldBlock
+import entity.WorldBlockEnvironment
 import physics.DESTINATION_TYPE.GRAVITY
 import physics.DESTINATION_TYPE.TELEPORT
 import physics.DESTINATION_TYPE.WAYPOINT
@@ -1325,19 +1326,19 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
-      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
+//      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .mapError(_ => ???)
       top_terr <- terrain
         .get_top_terrain_within_distance(loc, distance, 1024)
         .mapError(_ => ???)
-      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
+//      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
         case t: TerrainUnit => true;
         case _              => false
       }
-      _ <- ZIO.log(s"bad terrain $res_unit")
+      _ <- ZIO.log(s"bad terrain $res_unit").when(res_unit.nonEmpty)
       res = top_terr
         .filter {
           case t: TerrainRegion => true
@@ -1383,6 +1384,86 @@ object EXPAND_TERRAIN {
     DeriveJsonEncoder.gen[EXPAND_TERRAIN]
   implicit val decoder: JsonDecoder[EXPAND_TERRAIN] =
     DeriveJsonDecoder.gen[EXPAND_TERRAIN]
+}
+
+case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = FILL_EMPTY_CHUNK
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      _ <- ZIO.log(s"Filling empty chunk $id for entity $trigger_entity")
+      terrain <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+        .mapBoth(
+          _ => GenericCommandError("Could not get terrain for worldblock"),
+          { case tr: TerrainRegion => tr }
+        )
+      empty_chunk <- terrain
+        .get_cached(id)
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          _ =>
+            GenericCommandError(
+              s"Could not find empty chunk with $id in cache"
+            ),
+          { case e: EmptyTerrain => e }
+        )
+      fill_set <- WorldBlockEnvironment
+        .create_terrain_set(
+          10000,
+          empty_chunk.radius,
+          empty_chunk.center
+        )
+        .orElseFail(GenericCommandError("Error while creating fill set"))
+      filled_chunk <- empty_chunk
+        .fill(fill_set)
+        .mapBoth(
+          _ => GenericCommandError("Problem while filling empty chunk"),
+          { case tr: TerrainRegion => tr }
+        )
+      //      _ <- terrain.remove_cached
+      _ <- terrain
+        .addQuadrant(filled_chunk)
+        .orElseFail {
+          GenericCommandError(
+            "problem while adding filled chunk to global terrain"
+          )
+        }
+      top_terr <- filled_chunk.get_top_terrain(1024).mapError(_ => ???)
+      _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
+      res = top_terr
+        .filter {
+          case t: TerrainRegion => true
+          case e: EmptyTerrain  => true
+          case _                => false
+        }
+        .map {
+          case t: TerrainRegion =>
+            TerrainChunkm(
+              t.uuid,
+              (t.center(0), t.center(1), t.center(2)),
+              t.radius
+            )
+          case e: EmptyTerrain =>
+            EmptyChunk(
+              e.uuid,
+              (e.center(0), e.center(1), e.center(2)),
+              e.radius
+            )
+        }
+      _ <- ZIO.log(s"Sending top terrain post fill $res")
+    } yield MultiResponse(
+      Chunk(
+        PaginatedResponse(res),
+        QueuedClientMessage(trigger_entity, res)
+      )
+    )
+}
+object FILL_EMPTY_CHUNK {
+  implicit val encoder: JsonEncoder[FILL_EMPTY_CHUNK] =
+    DeriveJsonEncoder.gen[FILL_EMPTY_CHUNK]
+  implicit val decoder: JsonDecoder[FILL_EMPTY_CHUNK] =
+    DeriveJsonDecoder.gen[FILL_EMPTY_CHUNK]
 }
 
 case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:

@@ -1,6 +1,8 @@
 package entity
 
+import entity.Terrain.TerrainId
 import entity.WorldBlock.GenericWorldBlockError
+import entity.WorldBlock.WorldBlockError
 import network.BasicPhysicsChannel
 import network.PhysicsChannel
 import physics.PhysicsCommand
@@ -227,6 +229,29 @@ object WorldBlockInMem extends WorldBlock.Service {
     } yield res
 }
 object WorldBlockEnvironment {
+
+  import entity.implicits._
+  def create_terrain_set(
+    num: Int,
+    radius: Double,
+    center: Vector[Double]
+  ): IO[WorldBlockError, Set[(TerrainId, Vector[Double])]] =
+    for {
+      groups <- ZIO.succeed((0 to num).grouped(num / 1000))
+      collected <- ZIO
+        .collectAllPar(groups.map { r =>
+          ZIO
+            .foreach(r) { i =>
+              for {
+                x <- Random.nextDoubleBetween(-radius, radius)
+                y <- Random.nextDoubleBetween(-radius, radius)
+                z <- Random.nextDoubleBetween(-radius, radius)
+                _ <- ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+              } yield ("6", Vector(x, y, z) + center)
+            }
+        }.toSeq)
+        .map(_.flatten)
+    } yield collected.toSet
 
   def add_terrain(
     terrain: TerrainManager with Terrain,
