@@ -49,7 +49,7 @@ object WorldBlock {
     def getTerrain: IO[WorldBlockError, TerrainManager with Terrain]
 //      ZIO.succeed(terrain)
 
-    def expandTerrain: IO[WorldBlockError, Unit]
+    def expandTerrain: IO[WorldBlockError, Chunk[Terrain]]
   }
 
   trait Service {
@@ -146,15 +146,25 @@ case class WorldBlockInMem(
   override def getTerrain
     : IO[WorldBlock.WorldBlockError, TerrainManager with Terrain] = terrain.get
 
-  override def expandTerrain: IO[WorldBlock.WorldBlockError, Unit] = for {
-    t <- terrain.get
-    d <- t
-      .expandTerrain()
-      .map { case tr: TerrainRegion => tr }
-      .mapError(_ => ???)
-    _ <- terrain.update(_ => d)
+  override def expandTerrain: IO[WorldBlock.WorldBlockError, Chunk[Terrain]] =
+    for {
+      t <- terrain.get
+      d <- t
+        .expandTerrain()
+        .mapBoth(
+          _ => GenericWorldBlockError("Problem while expanding terrain"),
+          { case tr: TerrainRegion => tr }
+        )
+      _ <- terrain.update(_ => d)
+      top_terr <- d
+        .get_top_terrain(d.radius / 2)
+        .orElseFail(
+          GenericWorldBlockError(
+            "could not retrieve top terrain after expansion"
+          )
+        )
 //    generated_terrain <- WorldBlockEnvironment.add_terrain(d, d.radius, 10000)
-  } yield ()
+    } yield top_terr
 }
 object WorldBlockInMem extends WorldBlock.Service {
   override def make: IO[WorldBlock.WorldBlockError, WorldBlock.Block] =

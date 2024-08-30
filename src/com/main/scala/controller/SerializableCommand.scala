@@ -16,6 +16,7 @@ import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
+import entity.implicits._
 import physics.DESTINATION_TYPE.GRAVITY
 import physics.DESTINATION_TYPE.TELEPORT
 import physics.DESTINATION_TYPE.WAYPOINT
@@ -1392,14 +1393,15 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       _ <- ZIO.log(s"Filling empty chunk $id for entity $trigger_entity")
-      terrain <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-        .mapBoth(
-          _ => GenericCommandError("Could not get terrain for worldblock"),
-          { case tr: TerrainRegion => tr }
-        )
-      empty_chunk <- terrain
-        .get_cached(id)
+      wb <- ZIO.service[WorldBlock.Block]
+//      terrain <- ZIO
+//        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+//        .mapBoth(
+//          _ => GenericCommandError("Could not get terrain for worldblock"),
+//          { case tr: TerrainRegion => tr }
+//        )
+      empty_chunk <- wb.getTerrain
+        .flatMap { case tr: TerrainRegion => tr.get_cached(id) }
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ =>
@@ -1422,16 +1424,41 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
           { case tr: TerrainRegion => tr }
         )
       //      _ <- terrain.remove_cached
-      _ <- terrain
-        .addQuadrant(filled_chunk)
+      _ <- wb.getTerrain
+        .flatMap { case tr: TerrainRegion => tr.addQuadrant(filled_chunk) }
         .orElseFail {
           GenericCommandError(
             "problem while adding filled chunk to global terrain"
           )
         }
-      top_terr <- filled_chunk.get_top_terrain(1024).mapError(_ => ???)
-      _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
-      res = top_terr
+      top_terr <- filled_chunk
+        .get_top_terrain(filled_chunk.radius / 2)
+        .orElseFail(
+          GenericCommandError("Error while getting top terrain post fill")
+        )
+      _ <- wb.getTerrain
+        .flatMap { case tr: TerrainRegion =>
+          tr.cacheTerrain(top_terr)
+        }
+        .orElseFail(
+          GenericCommandError("Error while caching terrain during generation")
+        )
+      newchunks <- wb.expandTerrain
+        .when(true)
+//        .when(
+//          !((filled_chunk.center + Vector(
+//            filled_chunk.radius,
+//            filled_chunk.radius,
+//            filled_chunk.radius
+//          )) - terrain.center).forall(_ < terrain.radius) || true
+//        )
+        .orElseFail(
+          GenericCommandError("Problem while checking if terrain should expand")
+        )
+      chunksShouldbeEmpty <- ZIO.log(
+        s"Expanded chunks ${newchunks.map(_.size)}"
+      )
+      res = (top_terr ++ newchunks.getOrElse(Chunk()))
         .filter {
           case t: TerrainRegion => true
           case e: EmptyTerrain  => true
@@ -1470,19 +1497,30 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = GET_CACHED_TERRAIN
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
+      _ <- ZIO.log(s"GEtting cached terrain $id")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-        .mapError(_ => ???)
+        .orElseFail(
+          GenericCommandError("Could not retrieve terrain from worldblock")
+        )
       quad <- terrain
         .get_cached(id)
         .flatMap(ZIO.fromOption(_))
-        .mapBoth(_ => ???, { case tr: TerrainRegion => tr })
-      res <- quad.serializeMini(Vector(0), true, 0).mapError(_ => ???)
+        .mapBoth(
+          _ => GenericCommandError(s"could not find terrain in cache $id"),
+          { case tr: TerrainRegion => tr }
+        )
+      res <- quad
+        .serializeMini(Vector(0), true, 0)
+        .orElseFail(
+          GenericCommandError("Error while serializing terrain cache")
+        )
       rr = Chunk.from(
         res.terrain
           .grouped(100)
           .map(x => TerrainRegionm(x))
       )
+      _ <- ZIO.log(s"Successfully retrieved cached terrain $id")
     } yield PaginatedResponse(rr)
 
 object GET_CACHED_TERRAIN {

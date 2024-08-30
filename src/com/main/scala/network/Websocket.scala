@@ -165,9 +165,9 @@ case class BasicWebSocket(
       res <- controller.runQuery(
         query.run.foldZIO(
           err =>
-            ZIO.log(s"Error while performing query $err") *> ZIO.succeed(
-              QueryResponse.Empty
-            ),
+            ZIO
+              .log(s"Error while performing query $err")
+              .as(QueryResponse.Empty),
           x => ZIO.succeed(x)
         )
       )
@@ -205,19 +205,26 @@ case class BasicWebSocket(
       ZIO
         .fromEither(text.fromJson[SerializableCommand[_, _]])
         .flatMapError(err =>
-          Console
-            .printLine(s"Error processing command $text, error: $err")
-            .fold(_ => ???, x => ???)
+          ZIO.log(
+            s"Error while deserializing command $text, error : $err"
+          ) *> ZIO.never
         )
 
   val authorizeMsg: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
     cmd =>
       auth(cmd)
         .provide(ZLayer.succeed(id))
-        .flatMapError(err =>
-          Console.printLine(s"bad auth: $err").mapError(_ => ???)
+        .foldZIO(
+          err =>
+            ZIO
+              .logError(s"Error while authenticating command $cmd : $err")
+              .as(false),
+          ZIO.succeed(_)
         )
-        .fold(_ => false, x => x)
+//        .flatMapError(err =>
+//          Console.printLine(s"bad auth: $err").mapError(_ => ???)
+//        )
+//        .fold(_ => false, x => x)
 
   def handle_query_response(
     channel: WebSocketChannel,
@@ -304,11 +311,14 @@ case class BasicWebSocket(
           msg <- parse_message(text)
           authorized <- authorizeMsg(msg)
           _ <-
-            if (authorized)
-              handle_request(msg).provide(ZLayer.succeed(channel))
-            else ZIO.unit
+            handle_request(msg)
+              .provide(ZLayer.succeed(channel))
+              .when(authorized)
         } yield ())
-          .fold(err => println(s"error processing cmd $text :  $err"), x => x)
+          .foldZIO(
+            err => ZIO.logError(s"Error while processing cmd $text : $err"),
+            ZIO.succeed(_)
+          )
     }
 
   def recieveAll(channel: WebSocketChannel, text: String) =

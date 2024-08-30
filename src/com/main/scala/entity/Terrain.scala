@@ -43,6 +43,10 @@ object implicits {
       case a: Double => a * scalar
       case a: Int    => a * scalar
     }
+    def length(): Double =
+      vec match
+        case v: Vector[Double] => math.sqrt(v.map(a => a * a).sum)
+        case v: Vector[Int]    => math.sqrt(v.map(a => a * a).sum)
   }
   implicit def vecDtoVecI(vector: Vector[Int]): Vector[Double] = vector
 }
@@ -373,6 +377,9 @@ case class TerrainRegion(
       )
       _ <- ZIO.foreachDiscard(quad_regions)(newquad =>
         expanded_region.addQuadrant(newquad)
+      )
+      _ <- this.cached.get.flatMap(cachedTerr =>
+        expanded_region.cached.update(_ => cachedTerr)
       )
     } yield expanded_region
 
