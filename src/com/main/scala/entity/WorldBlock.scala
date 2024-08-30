@@ -157,7 +157,7 @@ case class WorldBlockInMem(
         )
       _ <- terrain.update(_ => d)
       top_terr <- d
-        .get_top_terrain(d.radius / 2)
+        .get_top_terrain_within_distance(d.center, d.radius / 2, d.radius / 2)
         .orElseFail(
           GenericWorldBlockError(
             "could not retrieve top terrain after expansion"

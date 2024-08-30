@@ -1339,7 +1339,7 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
         case t: TerrainUnit => true;
         case _              => false
       }
-      _ <- ZIO.log(s"bad terrain $res_unit").when(res_unit.nonEmpty)
+      _ <- ZIO.log(s"bad terrain ${res_unit.size}").when(res_unit.nonEmpty)
       res = top_terr
         .filter {
           case t: TerrainRegion => true
@@ -1394,12 +1394,12 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
     for {
       _ <- ZIO.log(s"Filling empty chunk $id for entity $trigger_entity")
       wb <- ZIO.service[WorldBlock.Block]
-//      terrain <- ZIO
-//        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-//        .mapBoth(
-//          _ => GenericCommandError("Could not get terrain for worldblock"),
-//          { case tr: TerrainRegion => tr }
-//        )
+      //      terrain <- ZIO
+      //        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+      //        .mapBoth(
+      //          _ => GenericCommandError("Could not get terrain for worldblock"),
+      //          { case tr: TerrainRegion => tr }
+      //        )
       empty_chunk <- wb.getTerrain
         .flatMap { case tr: TerrainRegion => tr.get_cached(id) }
         .flatMap(ZIO.fromOption(_))
@@ -1431,8 +1431,19 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
             "problem while adding filled chunk to global terrain"
           )
         }
+      blob_location <- wb
+        .getBlob(trigger_entity)
+        .flatMap(ZIO.fromOption(_))
+        .flatMap { case pe: PhysicalEntity => pe.getLocation }
+        .orElseFail(
+          GenericCommandError("Could not find glob while filling terrain")
+        )
       top_terr <- filled_chunk
-        .get_top_terrain(filled_chunk.radius / 2)
+        .get_top_terrain_within_distance(
+          blob_location,
+          2048,
+          math.min(filled_chunk.radius / 2, 4096.0)
+        )
         .orElseFail(
           GenericCommandError("Error while getting top terrain post fill")
         )
@@ -1443,15 +1454,14 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
         .orElseFail(
           GenericCommandError("Error while caching terrain during generation")
         )
-      newchunks <- wb.expandTerrain
-        .when(true)
-//        .when(
-//          !((filled_chunk.center + Vector(
-//            filled_chunk.radius,
-//            filled_chunk.radius,
-//            filled_chunk.radius
-//          )) - terrain.center).forall(_ < terrain.radius) || true
-//        )
+      newchunks <- wb.getTerrain
+        .flatMap { case terrain: TerrainRegion =>
+          wb.expandTerrain
+            .when(
+              !(blob_location - terrain.center)
+                .forall(math.abs(_) < terrain.radius - 2 * filled_chunk.radius)
+            )
+        }
         .orElseFail(
           GenericCommandError("Problem while checking if terrain should expand")
         )
@@ -1478,7 +1488,7 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
               e.radius
             )
         }
-      _ <- ZIO.log(s"Sending top terrain post fill $res")
+      _ <- ZIO.log(s"Sending top terrain post fill ${res.size}")
     } yield MultiResponse(
       Chunk(
         PaginatedResponse(res),
@@ -1497,7 +1507,6 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = GET_CACHED_TERRAIN
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
-      _ <- ZIO.log(s"GEtting cached terrain $id")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .orElseFail(
@@ -1520,7 +1529,6 @@ case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
           .grouped(100)
           .map(x => TerrainRegionm(x))
       )
-      _ <- ZIO.log(s"Successfully retrieved cached terrain $id")
     } yield PaginatedResponse(rr)
 
 object GET_CACHED_TERRAIN {

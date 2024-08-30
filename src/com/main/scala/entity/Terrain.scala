@@ -580,7 +580,7 @@ object TerrainRegion {
 
 case class EmptyTerrain(center: Vector[Double], radius: Double)
     extends Terrain {
-
+  // todo add ability for empty terrain to be reduced down to fixed size chunks
   def fill(
     terrain_to_add: Set[(TerrainId, Vector[Double])]
   ): IO[TerrainError, TerrainManager with Terrain] =
