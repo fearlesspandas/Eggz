@@ -34,6 +34,7 @@ object SimpleTerrain {
 }
 trait TerrainError
 case class TerrainAddError(msg: String) extends TerrainError
+case class TerrainGetBoundaryDistanceError(msg: String) extends TerrainError
 case class SimpleTerrainBlock(
   center: Vector[Double],
   radius: Ref[Double],

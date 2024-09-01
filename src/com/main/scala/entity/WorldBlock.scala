@@ -272,21 +272,32 @@ object WorldBlockEnvironment {
 //      Vector(0, 0, 0),
 //      radius
 //    ) // create terrain region for world block
-    groups <- ZIO.succeed((0 to num).grouped(num / 1000))
+//    groups <- ZIO.succeed((0 to num).grouped(num / 1000))
     _ <- ZIO
-      .collectAllPar(groups.map { r =>
-        ZIO
-          .foreach(r) { i =>
-            for {
-              x <- Random.nextDoubleBetween(-radius, radius)
-              y <- Random.nextDoubleBetween(-radius, radius)
-              z <- Random.nextDoubleBetween(-radius, radius)
-              _ <- terrain.add_terrain("6", Vector(x, y, z))
-              _ <-
-                ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
-            } yield ()
-          }
-      }.toSeq)
+      .foreachParDiscard(0 to num) { i =>
+        for {
+          x <- Random.nextDoubleBetween(-radius, radius)
+          y <- Random.nextDoubleBetween(-radius, radius)
+          z <- Random.nextDoubleBetween(-radius, radius)
+          _ <- terrain.add_terrain("6", Vector(x, y, z))
+          _ <-
+            ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+        } yield ()
+      }
+//    _ <- ZIO
+//      .collectAllPar(groups.map { r =>
+//        ZIO
+//          .foreach(r) { i =>
+//            for {
+//              x <- Random.nextDoubleBetween(-radius, radius)
+//              y <- Random.nextDoubleBetween(-radius, radius)
+//              z <- Random.nextDoubleBetween(-radius, radius)
+//              _ <- terrain.add_terrain("6", Vector(x, y, z))
+//              _ <-
+//                ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+//            } yield ()
+//          }
+//      }.toSeq)
       .mapError(err =>
         GenericWorldBlockError(
           s"Failed to add terrain to worldblock due to : $err"

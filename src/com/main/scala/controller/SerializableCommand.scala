@@ -1327,13 +1327,17 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
-//      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
+      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-        .mapError(_ => ???)
+        .orElseFail(GenericCommandError("Could not get worldblock"))
       top_terr <- terrain
         .get_top_terrain_within_distance(loc, distance, 1024)
-        .mapError(_ => ???)
+        .orElseFail {
+          GenericCommandError(
+            "Problem while retrieving top terrain within distance"
+          )
+        }
 //      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
         case t: TerrainUnit => true;
@@ -1394,12 +1398,6 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
     for {
       _ <- ZIO.log(s"Filling empty chunk $id for entity $trigger_entity")
       wb <- ZIO.service[WorldBlock.Block]
-      //      terrain <- ZIO
-      //        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-      //        .mapBoth(
-      //          _ => GenericCommandError("Could not get terrain for worldblock"),
-      //          { case tr: TerrainRegion => tr }
-      //        )
       empty_chunk <- wb.getTerrain
         .flatMap { case tr: TerrainRegion => tr.get_cached(id) }
         .flatMap(ZIO.fromOption(_))
@@ -1468,26 +1466,71 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
       chunksShouldbeEmpty <- ZIO.log(
         s"Expanded chunks ${newchunks.map(_.size)}"
       )
-      res = (top_terr ++ newchunks.getOrElse(Chunk()))
-        .filter {
-          case t: TerrainRegion => true
-          case e: EmptyTerrain  => true
-          case _                => false
-        }
-        .map {
+      mapped_result <- ZIO
+        .foreach(
+          (top_terr ++ newchunks.getOrElse(Chunk()))
+            .filter {
+              case t: TerrainRegion => true
+              case e: EmptyTerrain  => true
+              case _                => false
+            }
+        ) {
           case t: TerrainRegion =>
-            TerrainChunkm(
-              t.uuid,
-              (t.center(0), t.center(1), t.center(2)),
-              t.radius
+            ZIO.succeed(
+//              Chunk(
+              TerrainChunkm(
+                t.uuid,
+                (t.center(0), t.center(1), t.center(2)),
+                t.radius
+              )
+//              )
             )
           case e: EmptyTerrain =>
-            EmptyChunk(
-              e.uuid,
-              (e.center(0), e.center(1), e.center(2)),
-              e.radius
+            ZIO.succeed(
+//              Chunk(
+              EmptyChunk(
+                e.uuid,
+                (e.center(0), e.center(1), e.center(2)),
+                e.radius
+              )
+//              )
             )
+//            for {
+//              split <- e
+//                .split_down(32768)
+//                .flatMap {
+//                  case tr: TerrainRegion =>
+//                    tr.get_top_terrain(32768)
+//                      .mapBoth(
+//                        _ => GenericCommandError(""),
+//                        _.map { case smaller_empty: EmptyTerrain =>
+//                          EmptyChunk(
+//                            e.uuid,
+//                            (
+//                              smaller_empty.center(0),
+//                              smaller_empty.center(1),
+//                              smaller_empty.center(2)
+//                            ),
+//                            smaller_empty.radius
+//                          )
+//                        }
+//                      )
+//                  case _: EmptyTerrain =>
+//                    ZIO.succeed(
+//                      Chunk(
+//                        EmptyChunk(
+//                          e.uuid,
+//                          (e.center(1), e.center(2), e.center(3)),
+//                          e.radius
+//                        )
+//                      )
+//                    )
+//                }
+//                .orElseFail(GenericCommandError(""))
+//            } yield split
         }
+//        .orElseFail(GenericCommandError(""))
+      res <- ZIO.succeed(mapped_result) // .flatten)
       _ <- ZIO.log(s"Sending top terrain post fill ${res.size}")
     } yield MultiResponse(
       Chunk(
