@@ -219,72 +219,9 @@ case class TerrainRegion(
     with TerrainManager {
 
   final override def get_count(): IO[TerrainError, Int] = count.get
-  def is_within_distance_from_boundary(
-    location: Vector[Double],
-    distance: Double
-  ): IO[TerrainError, Boolean] =
-    for {
-      distance_from_center <- ZIO.succeed((location - center).length())
 
-      quadrant <- get_quadrant(location, center, 2 * distance_from_center)
-        .flatMap(ZIO.fromOption(_))
-        .orElseFail {
-          TerrainGetBoundaryDistanceError(
-            "Could not retrieve boundary distance"
-          )
-        }
-      compare_point <- ZIO.succeed(center + (quadrant * radius))
-      diff_vec <- ZIO.succeed(location - compare_point)
-      quads <- get_all_quadrants(3)
-      offsets <- ZIO.foreachPar(quads)(quadrant =>
-        ZIO.succeed(center + (quadrant * radius))
-      )
-      distances <- ZIO.foreachPar(offsets)(offset_vec =>
-        ZIO.succeed(offset_vec)
-      )
-      max_coords <- ZIO.foldLeft(offsets)(center) { (accum, curr) =>
-        var (accum_x, accum_y, accum_z) = (accum(0), accum(1), accum(2))
-        ZIO.succeed(
-          Vector(
-            if (curr(0) > accum_x) curr(0) else accum_x,
-            if (curr(1) > accum_y) curr(1) else accum_y,
-            if (curr(2) > accum_z) curr(2) else accum_z
-          )
-        )
-      }
-      min_coords <- ZIO.foldLeft(offsets)(center) { (accum, curr) =>
-        var (accum_x, accum_y, accum_z) = (accum(0), accum(1), accum(2))
-        ZIO.succeed(
-          Vector(
-            if (curr(0) < accum_x) curr(0) else accum_x,
-            if (curr(1) < accum_y) curr(1) else accum_y,
-            if (curr(2) < accum_z) curr(2) else accum_z
-          )
-        )
-      }
-
-      res <- ZIO.foldLeft(max_coords.zip(min_coords).zip(location))(true) {
-        (accum, curr) =>
-          val ((curr_max, curr_min), l) = curr
-          ZIO.succeed(accum && l <= curr_max && l >= curr_min)
-      }
-    } yield ???
-  // determine minimum boundary distances from location, then find distance from that boundary
-  def get_boundaries_distance(location: Vector[Double]): Double = {
-
-    val positive_bounds = center + Vector(radius, radius, radius)
-    val negative_bounds = center - Vector(radius, radius, radius)
-    val bounds = positive_bounds.zip(negative_bounds)
-    val all = location.zip(bounds)
-    all
-      .map { case (l, (p, n)) =>
-        if (abs(l - p) < abs(l - n)) abs(l - p) else abs(l - n)
-      }
-      .reduce(math.max(_, _))
-//      .foldLeft(0.0)((acc, curr) => acc + curr)
-  }
   final override def get_terrain(): IO[TerrainError, Seq[Terrain]] = for {
-    res <- terrain.get.flatMap(t => ZIO.foreach(t.values)(_.get_terrain()))
+    res <- terrain.get.flatMap(t => ZIO.foreachPar(t.values)(_.get_terrain()))
   } yield res.flatten.toSeq
   // returns a collection of the first regions within each quadrant that are under
   // a certain size. This is used for deferred terrain retrieval (cached chunking)
@@ -312,8 +249,6 @@ case class TerrainRegion(
     distance: Double
   ): IO[TerrainError, Seq[Terrain]] = if (
     !is_within_range(location, center, math.max(radius, distance))
-//      && this
-//      .get_boundaries_distance(location) > distance
   ) ZIO.succeed(Seq.empty[Terrain])
   else
     for {
@@ -322,18 +257,17 @@ case class TerrainRegion(
         m.values.filter(t =>
           t match {
             case q: TerrainRegion =>
-//              val boundaryDist = q.get_boundaries_distance(location)
               val isWithin = is_within_range(
                 location,
                 q.center,
                 math.max(distance, q.radius)
-              ) // || boundaryDist < distance
+              )
               isWithin
             case u: TerrainUnit => true // defer to terrain unit def
           }
         )
       )
-      res <- ZIO.foreach(quads) { t =>
+      res <- ZIO.foreachPar(quads) { t =>
         t.get_terrain_within_distance(
           location,
           distance
@@ -350,8 +284,6 @@ case class TerrainRegion(
     size: Double
   ): IO[TerrainError, Chunk[Terrain]] = if (
     !is_within_range(location, center, math.max(2 * radius, distance))
-//    && this
-//      .get_boundaries_distance(location) > distance
   ) { ZIO.succeed(Chunk.empty[Terrain]) }
   else if (radius < size) ZIO.succeed(Chunk.succeed(this))
   else {
@@ -360,17 +292,8 @@ case class TerrainRegion(
       quads_within_range <- terrain.get.map(m =>
         m.values.filter(t =>
           t match {
-            case q: TerrainRegion =>
-              val boundaryDist = q.get_boundaries_distance(location)
-              val isWithin = is_within_range(
-                location,
-                q.center,
-                math.max(distance, q.radius)
-              ) // || boundaryDist < distance
-
-              isWithin || true // || is_within_range(location, q.center, distance)
+            case q: TerrainRegion => true
             case e: EmptyTerrain =>
-//              true
               is_within_range(
                 location,
                 e.center,
@@ -381,7 +304,7 @@ case class TerrainRegion(
                 location,
                 u.location,
                 distance
-              ) // defer to terrain unit def
+              )
           }
         )
       )
@@ -407,7 +330,7 @@ case class TerrainRegion(
         case tr: TerrainRegion => tr
       }
       quads <- get_all_quadrants(3)
-      quad_regions <- ZIO.foreach(quads)(quadrant =>
+      quad_regions <- ZIO.foreachPar(quads)(quadrant =>
         for {
           // new region
           expanded_sub_region <- TerrainRegion
@@ -416,7 +339,6 @@ case class TerrainRegion(
           // existing quadrant to be placed in new region
           current_sub_region <- this.terrain.get
             .map(_.get(quadrant))
-//            .mapError(_ => ???)
           // replace with emptify (once optimization of final is in)
           _ <- ZIO.foreachDiscard(quads) { other_quadrant =>
             expanded_sub_region.terrain.update(
@@ -462,7 +384,11 @@ case class TerrainRegion(
       // get quadrant of location
       quad <- get_quadrant(location, center, radius)
         .flatMap(
-          ZIO.fromOption(_).mapError(_ => ???)
+          ZIO
+            .fromOption(_)
+            .orElseFail(
+              TerrainAddError(s"Could not find quadrant for location $location")
+            )
         )
       subQuad <- terrain.get
         .map(t => t.get(quad))
@@ -483,10 +409,11 @@ case class TerrainRegion(
           else
             for {
               newCenter <- ZIO.succeed(
-                quad
-                  .map(i => i * radius / 2)
-                  .zip(center)
-                  .map(x => x._1 + x._2)
+                (quad * (radius / 2)) + center
+//                quad
+//                  .map(i => i * radius / 2)
+//                  .zip(center)
+//                  .map(x => x._1 + x._2)
               )
               newQuadLoc <- get_quadrant(u.location, newCenter, radius / 2)
                 .flatMap(ZIO.fromOption(_))
@@ -496,8 +423,6 @@ case class TerrainRegion(
               quadrantMap <- Ref
                 .make(Map[Quadrant, Terrain]())
                 .tap(ref => ref.update(_.updated(newQuadLoc, u)))
-              newCount <- Ref.make(0)
-              newcached <- Ref.make(Map.empty[UUID, Terrain])
               newQuad <- TerrainRegion.make(
                 newCenter,
                 radius / 2,
@@ -519,13 +444,10 @@ case class TerrainRegion(
 
   final def emptify(): IO[TerrainError, Unit] =
     for {
-//      _ <- ZIO.log("emptifying")
       tmap <- this.terrain.get
       _ <- get_all_quadrants(3)
-//        this.terrain.get
-//        .map(_.keys)
         .map(_.map(q => (q, tmap.get(q))))
-        .flatMap(ZIO.foreach(_) {
+        .flatMap(ZIO.foreachPar(_) {
           case (key, Some(terrain: TerrainRegion)) =>
             terrain.get_count().flatMap {
               case c if c == 0 =>
@@ -536,7 +458,7 @@ case class TerrainRegion(
                 terrain.terrain.get
                   .map(_.values)
                   .flatMap(
-                    ZIO.foreach(_) {
+                    ZIO.foreachPar(_) {
                       case inner_terrain: TerrainRegion =>
                         inner_terrain.emptify()
                       case _ => ZIO.unit
@@ -648,7 +570,7 @@ case class EmptyTerrain(center: Vector[Double], radius: Double)
     (for {
       quads <- get_all_quadrants(3)
       quadmap <- ZIO
-        .foreach(quads)(quadrant =>
+        .foreachPar(quads)(quadrant =>
           EmptyTerrain(center + (quadrant * radius), radius / 2)
             .split_down(max_size)
             .map(e => (quadrant, e))

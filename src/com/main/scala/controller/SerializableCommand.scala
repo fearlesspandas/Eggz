@@ -1339,32 +1339,36 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
           )
         }
 //      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
-      res_unit = top_terr.filter {
-        case t: TerrainUnit => true;
-        case _              => false
+      res_unit <- ZIO.filterPar(top_terr) {
+        case t: TerrainUnit => ZIO.succeed(true);
+        case _              => ZIO.succeed(false)
       }
       _ <- ZIO.log(s"bad terrain ${res_unit.size}").when(res_unit.nonEmpty)
-      res = top_terr
-        .filter {
-          case t: TerrainRegion => true
-          case e: EmptyTerrain  => true
-          case _                => false
-        }
-        .map {
-          case t: TerrainRegion =>
+      filtered_res <- ZIO.filterPar(top_terr) {
+        case tr: TerrainRegion => ZIO.succeed(true);
+        case e: EmptyTerrain => ZIO.succeed(true); case _ => ZIO.succeed(false)
+      }
+      res <- ZIO.foreachPar(filtered_res) {
+        case t: TerrainRegion =>
+          ZIO.succeed(
             TerrainChunkm(
               t.uuid,
               (t.center(0), t.center(1), t.center(2)),
               t.radius
             )
-          case e: EmptyTerrain =>
+          )
+        case e: EmptyTerrain =>
+          ZIO.succeed(
             EmptyChunk(
               e.uuid,
               (e.center(0), e.center(1), e.center(2)),
               e.radius
             )
-        }
-      _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
+          )
+      }
+      _ <- terrain
+        .cacheTerrain(top_terr)
+        .orElseFail(GenericCommandError("Problem while caching terrain"))
     } yield PaginatedResponse(res)
 }
 object GET_TOP_LEVEL_TERRAIN_IN_DISTANCE {
