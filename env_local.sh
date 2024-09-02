@@ -1,7 +1,9 @@
 #!/bin/bash
 
 
-export PHYSICS_ADDR=
-export RANDOMIZED_SPAWN_COUNT=
-export PROWLER_COUNT=
-
+export PHYSICS_ADDR=ws://127.0.0.1:8081
+export RANDOMIZED_SPAWN_COUNT=2000000
+export WORLDBLOCK_RADIUS=32768
+export PROWLER_COUNT=300
+export SBT_OPTS='-Xmx6G'
+sbt run 
