@@ -50,6 +50,15 @@ object implicits {
       vec match
         case v: Vector[Double] => math.sqrt(v.map(a => a * a).sum)
         case v: Vector[Int]    => math.sqrt(v.map(a => a * a).sum)
+
+    def vequals(vector: Vector[Double]): Boolean =
+      vec
+        .zip(vector)
+        .map {
+          case (a: Int, b)    => a.toDouble == b
+          case (a: Double, b) => a == b
+        }
+        .forall(x => x)
   }
   implicit def vecDtoVecI(vector: Vector[Int]): Vector[Double] = vector
 }
@@ -340,8 +349,7 @@ case class TerrainRegion(
 
           // replace with emptify (once optimization of final is in)
           _ <- ZIO.foreachDiscard(quads) {
-            case other_quadrant
-                if other_quadrant != (quadrant * -1).map(_.toInt) =>
+            case other_quadrant if !other_quadrant.vequals(quadrant * -1) =>
               expanded_sub_region.terrain.update(
                 _.updated(
                   other_quadrant,
