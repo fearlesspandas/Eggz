@@ -386,15 +386,37 @@ case class TerrainRegion(
 
   final override def addQuadrant(
     region: TerrainRegion
-  ): IO[TerrainError, Unit] =
-    for {
-      quadrant <- get_quadrant(region.center, this.center, this.radius)
-        .flatMap(ZIO.fromOption(_))
-        .mapError(err => TerrainAddError("Error adding quadrant to terrain"))
-      _ <- terrain.update(_.updated(quadrant, region))
-      _ <- region.count.get.flatMap(in_count => count.update(_ + in_count))
-    } yield ()
+  ): IO[TerrainError, Unit] = region match {
+    case _
+        if region.radius == this.radius / 2 && is_within_range(
+          region.center,
+          this.center,
+          this.radius
+        ) =>
+      for {
+        quadrant <- get_quadrant(region.center, this.center, this.radius)
+          .flatMap(ZIO.fromOption(_))
+          .mapError(err => TerrainAddError("Error adding quadrant to terrain"))
+        _ <- terrain
+          .update(_.updated(quadrant, region))
+          .when(region.center.vequals(this.center + (quadrant * region.radius)))
+        _ <- region.count.get.flatMap(in_count => count.update(_ + in_count))
+      } yield ()
 
+    case _ if region.radius < this.radius / 2 =>
+      this
+        .get_top_terrain_within_distance(
+          region.center,
+          region.radius,
+          region.radius * 2
+        )
+        .flatMap(ZIO.foreachPar(_) { case tr: TerrainRegion =>
+          tr.addQuadrant(region)
+        })
+        .unit
+    case _ => ZIO.unit
+
+  }
   final override def add_terrain(
     id: TerrainId,
     location: Vector[Double]
