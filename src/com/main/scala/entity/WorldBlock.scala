@@ -247,6 +247,7 @@ object WorldBlockEnvironment {
     center: Vector[Double]
   ): IO[WorldBlockError, Set[(TerrainId, Vector[Double])]] =
     for {
+      terrain_types <- ZIO.succeed(List("6", "11"))
       groups <- ZIO.succeed((0 to num).grouped(num / 1000))
       collected <- ZIO
         .collectAllPar(groups.map { r =>
@@ -256,8 +257,11 @@ object WorldBlockEnvironment {
                 x <- Random.nextDoubleBetween(-radius, radius)
                 y <- Random.nextDoubleBetween(-radius, radius)
                 z <- Random.nextDoubleBetween(-radius, radius)
+                terrain_type <- Random
+                  .nextIntBetween(0, terrain_types.size)
+                  .map(i => terrain_types(i))
                 _ <- ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
-              } yield ("6", Vector(x, y, z) + center)
+              } yield (terrain_type, Vector(x, y, z) + center)
             }
         }.toSeq)
         .map(_.flatten)
@@ -273,13 +277,17 @@ object WorldBlockEnvironment {
 //      radius
 //    ) // create terrain region for world block
 //    groups <- ZIO.succeed((0 to num).grouped(num / 1000))
+    terrain_types <- ZIO.succeed(List("6", "11"))
     _ <- ZIO
       .foreachParDiscard(0 to num) { i =>
         for {
           x <- Random.nextDoubleBetween(-radius, radius)
           y <- Random.nextDoubleBetween(-radius, radius)
           z <- Random.nextDoubleBetween(-radius, radius)
-          _ <- terrain.add_terrain("6", Vector(x, y, z))
+          terrain_type <- Random
+            .nextIntBetween(0, terrain_types.size)
+            .map(i => terrain_types(i))
+          _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
           _ <-
             ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
         } yield ()
