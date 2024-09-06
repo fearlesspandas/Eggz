@@ -94,10 +94,8 @@ case class BasicWebSocket(
         controller.getQueue
       _ <- ZStream
         .fromQueue(q)
-        .foreach {
-//          case x: QueuedClientMessage => q.offer(x)
-          case response =>
-            channel.send(Read(WebSocketFrame.text(response.toJson)))
+        .foreach { case response =>
+          channel.send(Read(WebSocketFrame.text(response.toJson)))
         }
         .fork
     } yield ()).when(server_keys.contains(id))
@@ -109,18 +107,14 @@ case class BasicWebSocket(
       _ <- ZStream
         .fromQueue(q)
         .foreach {
-          case QueuedClientMessage(id, responses) if id == this.id =>
-            ZIO.foreach(responses) {
-              case PaginatedResponse(grouped_responses) =>
-                ZIO.foreach(grouped_responses)(send_response =>
-                  channel.send(
-                    Read(WebSocketFrame.text(send_response.toJson))
-                  )
-                )
-              case response =>
-                channel.send(Read(WebSocketFrame.text(response.toJson)))
-            }
-          case x => q.offer(x)
+          case PaginatedResponse(grouped_responses) =>
+            ZIO.foreach(grouped_responses)(send_response =>
+              channel.send(
+                Read(WebSocketFrame.text(send_response.toJson))
+              )
+            )
+          case response =>
+            channel.send(Read(WebSocketFrame.text(response.toJson)))
         }
         .fork
     } yield ()).when(!server_keys.contains(id))
@@ -223,17 +217,9 @@ case class BasicWebSocket(
             channel.send(Read(WebSocketFrame.text(response.toJson)))
           )
           .unit
-      case QueuedPhysicsMessage(messages) =>
-        ZIO
-          .foreach(messages)(message =>
-            controller.queueQuery(ZIO.succeed(message))
-          )
-          .unit
-      case QueuedServerMessage(responses) =>
-        ZIO
-          .foreach(responses)(resp => controller.queueQuery(ZIO.succeed(resp)))
-          .unit
-      case x: QueuedClientMessage => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedPhysicsMessage => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedServerMessage  => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedClientMessage  => controller.queueQuery(ZIO.succeed(x))
       case response => channel.send(Read(WebSocketFrame.text(response.toJson)))
     }
 

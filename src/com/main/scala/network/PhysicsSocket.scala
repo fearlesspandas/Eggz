@@ -52,12 +52,16 @@ trait PhysicsChannel {
     } yield ()
 
   def lock_input(id: String): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"LOCK_INPUT","body":{"id":$id}}""")
+    send(s"""{"type":"LOCK_INPUT","body":{"id":$id}}""") *> ZIO.log(
+      s"Input locked! $id"
+    )
 
   def unlock_input(
     id: String
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"UNLOCK_INPUT","body":{"id":$id}}""")
+    send(s"""{"type":"UNLOCK_INPUT","body":{"id":$id}}""") *> ZIO.log(
+      s"Input unlocked! $id"
+    )
 
     // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
     // todo remove interval on loop and see how unthrottled processing handles

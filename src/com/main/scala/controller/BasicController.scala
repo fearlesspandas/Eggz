@@ -108,17 +108,18 @@ case class Control(
   ): ZIO[Any, E, Unit] =
     for {
       res <- runQuery[Q, E](query).flatMap {
-        case x: QueuedClientMessage =>
+        case QueuedClientMessage(id, messages) =>
           client_response_queues.get
-            .map(_.get(x.id))
+            .map(_.get(id))
             .flatMap(ZIO.fromOption(_))
             .foldZIO(
-              _ => ZIO.logError(s"could not find client queue ${x.id}"),
-              q => q.offer(x)
+              _ => ZIO.logError(s"could not find client queue ${id}"),
+              q => ZIO.foreachPar(messages)(q.offer(_))
             )
-        case response: QueryResponse => server_response_queue.offer(response)
-        case physcommand: PhysicsCommand =>
-          physics_channel.add_to_queue(physcommand)
+        case QueuedServerMessage(messages) =>
+          ZIO.foreachPar(messages)(server_response_queue.offer(_))
+        case QueuedPhysicsMessage(messages) =>
+          ZIO.foreach(messages)(physics_channel.add_to_queue)
       }
     } yield ()
 
