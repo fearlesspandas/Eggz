@@ -52,14 +52,14 @@ trait PhysicsChannel {
     } yield ()
 
   def lock_input(id: String): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"LOCK_INPUT","body":{"id":$id}}""") *> ZIO.log(
+    send(s"""{"type":"LOCK_INPUT","body":{"id":"$id"}}""") *> ZIO.log(
       s"Input locked! $id"
     )
 
   def unlock_input(
     id: String
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"UNLOCK_INPUT","body":{"id":$id}}""") *> ZIO.log(
+    send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""") *> ZIO.log(
       s"Input unlocked! $id"
     )
 
