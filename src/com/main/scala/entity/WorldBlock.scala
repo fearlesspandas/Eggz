@@ -230,7 +230,7 @@ object WorldBlockInMem extends WorldBlock.Service {
         )
       _ <- res.expandTerrain
       _ <- WorldBlockEnvironment
-        .add_prowlers(res, num_prowlers, radius)
+        .add_prowlers(res, num_prowlers, 1000)
         .mapError(err =>
           GenericWorldBlockError(
             s"Errow while adding prowlers to worldblock : $err"

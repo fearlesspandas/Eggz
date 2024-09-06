@@ -8,6 +8,7 @@ import entity.WorldBlockInMem
 import network.PhysicsChannel
 import physics.PhysicsCommand
 import src.com.main.scala.entity.Globz
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.Chunk
 import zio.IO
 import zio.Queue
@@ -30,6 +31,9 @@ trait BasicController[Env, Queued] {
 
   def getQueue[E]: ZIO[Any, E, Queued]
 
+  def getClientQueue[E](id: GLOBZ_ID): ZIO[Any, E, Option[Queued]]
+
+  def addClientQueue[E](id: GLOBZ_ID): ZIO[Any, E, Unit]
 //  def broadcast[E]: ZIO[Any, E, Queued]
 
   def runProcess[Q, E](
@@ -58,6 +62,7 @@ case class Control(
   glob: Globz.Service,
   worldBlock: Ref[WorldBlock.Block],
   server_response_queue: Queue[QueryResponse],
+  client_response_queues: Ref[Map[GLOBZ_ID, Queue[QueryResponse]]],
   physics_channel: PhysicsChannel
 ) extends BasicController[Globz.Service with WorldBlock.Block, Queue[
       QueryResponse
@@ -103,6 +108,14 @@ case class Control(
   ): ZIO[Any, E, Unit] =
     for {
       res <- runQuery[Q, E](query).flatMap {
+        case x: QueuedClientMessage =>
+          client_response_queues.get
+            .map(_.get(x.id))
+            .flatMap(ZIO.fromOption(_))
+            .foldZIO(
+              _ => ZIO.logError(s"could not find client queue ${x.id}"),
+              q => q.offer(x)
+            )
         case response: QueryResponse => server_response_queue.offer(response)
         case physcommand: PhysicsCommand =>
           physics_channel.add_to_queue(physcommand)
@@ -111,6 +124,20 @@ case class Control(
 
   override def getQueue[E]: ZIO[Any, E, Queue[QueryResponse]] =
     ZIO.succeed(server_response_queue)
+
+  override def addClientQueue[E](id: GLOBZ_ID): ZIO[Any, E, Unit] = Queue
+    .unbounded[QueryResponse]
+    .flatMap(q =>
+      client_response_queues
+        .update(_.updated(id, q))
+    )
+    .whenZIO(client_response_queues.get.map(!_.keySet.contains(id)))
+    .unit
+
+  override def getClientQueue[E](
+    id: GLOBZ_ID
+  ): ZIO[Any, E, Option[Queue[QueryResponse]]] =
+    client_response_queues.get.map(_.get(id))
 }
 
 object Control extends BasicController.Service[CONTROLLER_ENV] {
@@ -125,9 +152,10 @@ object Control extends BasicController.Service[CONTROLLER_ENV] {
         .mapError(err => GenericControllerError(err.toString))
       r <- Ref.make(w)
       queue <- Queue.unbounded[QueryResponse]
+      client_queues <- Ref.make(Map.empty[GLOBZ_ID, Queue[QueryResponse]])
       pc <- PhysicsChannel.make.provide(ZLayer.succeed(w)).mapError(_ => ???)
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- pc.start_socket().mapError(_ => ???)
       _ <- ZIO.log("Physics Socket Started")
-    } yield Control(BasicPlayer, r, queue, pc)
+    } yield Control(BasicPlayer, r, queue, client_queues, pc)
 }

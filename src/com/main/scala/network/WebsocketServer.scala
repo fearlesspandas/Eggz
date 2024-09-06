@@ -84,14 +84,15 @@ case class WebSocketServerBasic(
       },
       Method.GET / "connect" / string("id") -> handler {
         (id: String, request: Request) =>
-          BasicWebSocket
-            .make(id)
-            .flatMap(sockerApp => sockerApp.socket(false).toResponse)
-            .provide(
-              ZLayer.succeed(controller)
-                ++ ZLayer.succeed(authMap)
-                ++ ZLayer.succeed(server_ids)
-            )
+          controller.addClientQueue(id) *>
+            BasicWebSocket
+              .make(id)
+              .flatMap(sockerApp => sockerApp.socket(false).toResponse)
+              .provide(
+                ZLayer.succeed(controller)
+                  ++ ZLayer.succeed(authMap)
+                  ++ ZLayer.succeed(server_ids)
+              )
       }
     ).toHttpApp
 

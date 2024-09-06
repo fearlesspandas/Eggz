@@ -95,7 +95,7 @@ case class BasicWebSocket(
       _ <- ZStream
         .fromQueue(q)
         .foreach {
-          case x: QueuedClientMessage => q.offer(x)
+//          case x: QueuedClientMessage => q.offer(x)
           case response =>
             channel.send(Read(WebSocketFrame.text(response.toJson)))
         }
@@ -105,7 +105,7 @@ case class BasicWebSocket(
   def linkControllerClient(channel: WebSocketChannel) =
     (for {
       q <-
-        controller.getQueue
+        controller.getClientQueue(id).flatMap(ZIO.fromOption(_))
       _ <- ZStream
         .fromQueue(q)
         .foreach {
@@ -234,13 +234,6 @@ case class BasicWebSocket(
           .foreach(responses)(resp => controller.queueQuery(ZIO.succeed(resp)))
           .unit
       case x: QueuedClientMessage => controller.queueQuery(ZIO.succeed(x))
-      case x: Completed =>
-        for {
-          next <- response_queue.takeUpTo(1)
-          _ <- ZIO.foreach(next)(x =>
-            channel.send(Read(WebSocketFrame.text(x.toJson)))
-          )
-        } yield ()
       case response => channel.send(Read(WebSocketFrame.text(response.toJson)))
     }
 
