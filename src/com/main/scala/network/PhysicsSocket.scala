@@ -62,6 +62,8 @@ trait PhysicsChannel {
     send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""") *> ZIO.log(
       s"Input unlocked! $id"
     )
+  def send_noop(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
+    send("NOOP")
 
     // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
     // todo remove interval on loop and see how unthrottled processing handles
@@ -70,6 +72,7 @@ trait PhysicsChannel {
       Handler
         .webSocket { channel =>
           channel.receiveAll {
+            case Read(WebSocketFrame.Text(txt)) if txt == "0" => ZIO.unit
             case Read(WebSocketFrame.Text(txt)) =>
               (for {
                 r <- ZIO
@@ -175,11 +178,21 @@ case class BasicPhysicsChannel(
             for {
               ids <- worldBlock.getAllBlobs().map(_.map(g => g.id))
               _ <- id_queue.update(_ => ids.toSeq)
-              n <- ZIO.fromOption(ids.headOption).mapError(_ => ???)
+//              _ <- ZIO.log(s"Checking inner loop $ids")
+              n <- ZIO
+                .succeed(ids.headOption)
             } yield n,
-          x => ZIO.succeed(x)
+          x => ZIO.some(x)
         )
-      _ <- get_location(next_id)
+        .foldZIO(
+          _ => (ZIO.log("Sending noop liveness probe") *> send_noop()).as(None),
+          ZIO.succeed(_)
+        )
+
+      _ <- ZIO
+        .fromOption(next_id)
+        .flatMap(id => get_location(id))
+        .orElse(ZIO.log("Sending noop liveness probe") *> send_noop())
       _ <- id_queue.update(_.tail)
     } yield ())
       .repeat(Schedule.spaced(Duration.fromNanos(interval)))
