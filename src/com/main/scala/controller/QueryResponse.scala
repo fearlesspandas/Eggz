@@ -257,6 +257,18 @@ case class QueuedClientMessage(id: ID, responses: Chunk[QueryResponse])
     extends QueryResponse
 case class QueuedPhysicsMessage(messages: Chunk[PhysicsCommand])
     extends QueryResponse
+
+case class TerrainUnitm(
+  uuid: UUID,
+  location: (Double, Double, Double),
+  entities: Map[TerrainId, Int]
+) extends QueryResponse
+object TerrainUnitm {
+  implicit val encoder: JsonEncoder[TerrainUnitm] =
+    DeriveJsonEncoder.gen[TerrainUnitm]
+  implicit val decoder: JsonDecoder[TerrainUnitm] =
+    DeriveJsonDecoder.gen[TerrainUnitm]
+}
 case class TerrainChunkm(
   uuid: UUID,
   location: (Double, Double, Double),

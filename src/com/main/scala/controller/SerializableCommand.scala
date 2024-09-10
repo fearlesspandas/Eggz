@@ -9,14 +9,16 @@ import entity.GlobzModel
 import entity.LivingEntity
 import entity.PhysicalEntity
 import entity.Player
+import entity.Terrain
 import entity.TerrainChunkM
 import entity.TerrainModel
 import entity.TerrainRegion
 import entity.TerrainRegionM
 import entity.TerrainUnit
+import entity.TerrainUnitM
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
-import entity.implicits._
+import entity.implicits.*
 import physics.DESTINATION_TYPE.GRAVITY
 import physics.DESTINATION_TYPE.TELEPORT
 import physics.DESTINATION_TYPE.WAYPOINT
@@ -1319,36 +1321,26 @@ object GET_TOP_LEVEL_TERRAIN {
   implicit val decoder: JsonDecoder[GET_TOP_LEVEL_TERRAIN] =
     DeriveJsonDecoder.gen[GET_TOP_LEVEL_TERRAIN]
 }
-
-case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
-  loc: Vector[Double],
-  distance: Double
-) extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+implicit class TerrainUtils(terrain: Chunk[Terrain]) {
+  def serialize_as_chunks(
+    default_chunk_size: Double = 1024
+  ): ZIO[Any, Nothing, Chunk[QueryResponse]] =
     for {
-      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
-      terrain <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-        .orElseFail(GenericCommandError("Could not get worldblock"))
-      top_terr <- terrain
-        .get_top_terrain_within_distance(loc, distance, 1024)
-        .orElseFail {
-          GenericCommandError(
-            "Problem while retrieving top terrain within distance"
-          )
-        }
-//      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
-      res_unit <- ZIO.filterPar(top_terr) {
-        case t: TerrainUnit => ZIO.succeed(true);
-        case _              => ZIO.succeed(false)
-      }
-      _ <- ZIO.log(s"bad terrain ${res_unit.size}").when(res_unit.nonEmpty)
-      filtered_res <- ZIO.filterPar(top_terr) {
+      filtered_res <- ZIO.filterPar(terrain) {
         case tr: TerrainRegion => ZIO.succeed(true);
-        case e: EmptyTerrain => ZIO.succeed(true); case _ => ZIO.succeed(false)
+        case e: EmptyTerrain   => ZIO.succeed(true);
+        case tu: TerrainUnit   => ZIO.succeed(true);
+        case _                 => ZIO.succeed(false)
       }
       res <- ZIO.foreachPar(filtered_res) {
+        case t: TerrainUnit =>
+          t.entitiesRef.get.map(
+            TerrainUnitm(
+              t.uuid,
+              (t.location(0), t.location(1), t.location(2)),
+              _
+            )
+          )
         case t: TerrainRegion =>
           ZIO.succeed(
             TerrainChunkm(
@@ -1366,6 +1358,34 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
             )
           )
       }
+    } yield res
+}
+case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
+  loc: Vector[Double],
+  distance: Double
+) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
+      terrain <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getTerrain)
+        .orElseFail(GenericCommandError("Could not get worldblock"))
+      chunk_size <- ZIO.succeed(1024)
+      top_terr <- terrain
+        .get_top_terrain_within_distance(loc, distance, chunk_size)
+        .orElseFail {
+          GenericCommandError(
+            "Problem while retrieving top terrain within distance"
+          )
+        }
+//      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
+//      res_unit <- ZIO.filterPar(top_terr) {
+//        case t: TerrainUnit => ZIO.succeed(true);
+//        case _              => ZIO.succeed(false)
+//      }
+//      _ <- ZIO.log(s"bad terrain ${res_unit.size}").when(res_unit.nonEmpty)
+      res <- top_terr.serialize_as_chunks(1024)
       _ <- terrain
         .cacheTerrain(top_terr)
         .orElseFail(GenericCommandError("Problem while caching terrain"))
@@ -1470,76 +1490,13 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
       chunksShouldbeEmpty <- ZIO.log(
         s"Expanded chunks ${newchunks.map(_.size)}"
       )
-      mapped_result <- ZIO
-        .foreach(
-          (top_terr ++ newchunks.getOrElse(Chunk()))
-            .filter {
-              case t: TerrainRegion => true
-              case e: EmptyTerrain  => true
-              case _                => false
-            }
-        ) {
-          case t: TerrainRegion =>
-            ZIO.succeed(
-//              Chunk(
-              TerrainChunkm(
-                t.uuid,
-                (t.center(0), t.center(1), t.center(2)),
-                t.radius
-              )
-//              )
-            )
-          case e: EmptyTerrain =>
-            ZIO.succeed(
-//              Chunk(
-              EmptyChunk(
-                e.uuid,
-                (e.center(0), e.center(1), e.center(2)),
-                e.radius
-              )
-//              )
-            )
-//            for {
-//              split <- e
-//                .split_down(32768)
-//                .flatMap {
-//                  case tr: TerrainRegion =>
-//                    tr.get_top_terrain(32768)
-//                      .mapBoth(
-//                        _ => GenericCommandError(""),
-//                        _.map { case smaller_empty: EmptyTerrain =>
-//                          EmptyChunk(
-//                            e.uuid,
-//                            (
-//                              smaller_empty.center(0),
-//                              smaller_empty.center(1),
-//                              smaller_empty.center(2)
-//                            ),
-//                            smaller_empty.radius
-//                          )
-//                        }
-//                      )
-//                  case _: EmptyTerrain =>
-//                    ZIO.succeed(
-//                      Chunk(
-//                        EmptyChunk(
-//                          e.uuid,
-//                          (e.center(1), e.center(2), e.center(3)),
-//                          e.radius
-//                        )
-//                      )
-//                    )
-//                }
-//                .orElseFail(GenericCommandError(""))
-//            } yield split
-        }
-//        .orElseFail(GenericCommandError(""))
-      res <- ZIO.succeed(mapped_result) // .flatten)
-      _ <- ZIO.log(s"Sending top terrain post fill ${res.size}")
+      mapped_result <- (top_terr ++ newchunks.getOrElse(Chunk()))
+        .serialize_as_chunks(1024)
+      _ <- ZIO.log(s"Sending top terrain post fill ${mapped_result.size}")
     } yield MultiResponse(
       Chunk(
-        PaginatedResponse(res),
-        QueuedClientMessage(trigger_entity, res)
+        PaginatedResponse(mapped_result),
+        QueuedClientMessage(trigger_entity, mapped_result)
       )
     )
 }
