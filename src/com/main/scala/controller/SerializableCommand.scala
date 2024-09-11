@@ -1434,7 +1434,7 @@ case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
         )
       fill_set <- WorldBlockEnvironment
         .create_terrain_set(
-          10000,
+          1000,
           empty_chunk.radius,
           empty_chunk.center
         )

@@ -354,15 +354,19 @@ case class TerrainRegion(
           // replace with emptify (once optimization of final is in)
           _ <- ZIO.foreachDiscard(quads) {
             case other_quadrant if !other_quadrant.vequals(quadrant * -1) =>
-              expanded_sub_region.terrain.update(
-                _.updated(
-                  other_quadrant,
+              for {
+                et <-
                   EmptyTerrain(
                     expanded_sub_region.center + (other_quadrant * (expanded_sub_region.radius / 2)),
                     expanded_sub_region.radius / 2
+                  ).split_down(4096)
+                _ <- expanded_sub_region.terrain.update(
+                  _.updated(
+                    other_quadrant,
+                    et
                   )
                 )
-              )
+              } yield ()
             case other_quadrant =>
               for {
                 curr_sub_region <- this.terrain.get.map(_.get(quadrant))
@@ -602,7 +606,7 @@ case class EmptyTerrain(center: Vector[Double], radius: Double)
       quads <- get_all_quadrants(3)
       quadmap <- ZIO
         .foreachPar(quads)(quadrant =>
-          EmptyTerrain(center + (quadrant * radius), radius / 2)
+          EmptyTerrain(center + (quadrant * (radius / 2)), radius / 2)
             .split_down(max_size)
             .map(e => (quadrant, e))
         )
