@@ -114,7 +114,7 @@ case class Control(
             .flatMap(ZIO.fromOption(_))
             .foldZIO(
               _ => ZIO.logError(s"could not find client queue ${id}"),
-              q => ZIO.foreachPar(messages)(q.offer(_))
+              q => ZIO.foreach(messages)(q.offer(_))
             )
         case QueuedServerMessage(messages) =>
           ZIO.foreachPar(messages)(server_response_queue.offer(_))

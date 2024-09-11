@@ -163,7 +163,6 @@ case class WorldBlockInMem(
             "could not retrieve top terrain after expansion"
           )
         )
-//    generated_terrain <- WorldBlockEnvironment.add_terrain(d, d.radius, 10000)
     } yield top_terr
 }
 object WorldBlockInMem extends WorldBlock.Service {

@@ -332,7 +332,11 @@ case class TerrainRegion(
       }
     } yield Chunk.from(res.flatten)
   }
-
+  // Expands current region to be double the size, with existing
+  // terrain structures remaining at the center. New terrain is
+  // all generated as empty.
+  // should produce 56 new empty regions total
+  // (8 new expanded quadrants x 8 subquadrants) - 8 original quadrants
   final override def expandTerrain()
     : IO[TerrainError, Terrain with TerrainManager] =
     for {
@@ -376,9 +380,6 @@ case class TerrainRegion(
           )
         } yield expanded_sub_region
       }
-//      _ <- ZIO.foreachDiscard(quad_regions)(newquad =>
-//        expanded_region.addQuadrant(newquad)
-//      )
       _ <- this.cached.get.flatMap(cachedTerr =>
         expanded_region.cached.update(_ ++ cachedTerr)
       )
@@ -449,13 +450,7 @@ case class TerrainRegion(
           } yield ()
           else
             for {
-              newCenter <- ZIO.succeed(
-                (quad * (radius / 2)) + center
-//                quad
-//                  .map(i => i * radius / 2)
-//                  .zip(center)
-//                  .map(x => x._1 + x._2)
-              )
+              newCenter <- ZIO.succeed((quad * (radius / 2)) + center)
               newQuadLoc <- get_quadrant(u.location, newCenter, radius / 2)
                 .flatMap(ZIO.fromOption(_))
                 .orElseFail(
@@ -473,7 +468,7 @@ case class TerrainRegion(
               _ <- terrain.update(_.updated(quad, newQuad))
               _ <- count.update(_ + 1)
             } yield ()
-        case Some(e: EmptyTerrain) => ZIO.unit // e.fill(Set((id, location)))
+        case Some(e: EmptyTerrain) => ZIO.unit
         case None =>
           for {
             tu <- TerrainUnit.make(id, location)
@@ -560,20 +555,15 @@ case class TerrainRegion(
   ): IO[TerrainError, Seq[Terrain]] = for {
     quadop <- terrain.get
       .map(_.get(quadrant))
-    res <- quadop match {
-      case Some(quad) => quad.get_terrain()
-      case None       => ZIO.succeed(Seq())
-    }
+    res <- ZIO
+      .fromOption(quadop)
+      .foldZIO(_ => ZIO.succeed(Seq.empty[Terrain]), _.get_terrain())
   } yield res
-  // todo add list of uuids to terrain regions to verify that caching is valid
+
   final override def cacheTerrain(
     terr: Chunk[Terrain]
   ): IO[TerrainError, Unit] =
-    ZIO
-      .collectAllPar(
-        terr.map(tm => cached.update(_.updated(tm.uuid, tm)))
-      )
-      .unit
+    ZIO.foreachParDiscard(terr)(tm => cached.update(_.updated(tm.uuid, tm)))
 
   final override def get_cached(
     uuid: UUID
@@ -621,7 +611,7 @@ case class EmptyTerrain(center: Vector[Double], radius: Double)
     } yield tr).when(max_size < radius).map {
       case Some(tr: TerrainRegion) => tr; case None => this
     }
-  // todo add ability for empty terrain to be reduced down to fixed size chunks
+
   final def fill(
     terrain_to_add: Set[(TerrainId, Vector[Double])]
   ): IO[TerrainError, TerrainManager with Terrain] =
