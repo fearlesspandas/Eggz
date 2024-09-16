@@ -2,6 +2,7 @@ package entity
 
 import controller.QueryResponse
 import entity.Terrain.TerrainId
+import entity.TerrainRegion.TERRAIN_KEY
 import zio.json.DeriveJsonDecoder
 import zio.json.DeriveJsonEncoder
 import zio.json.JsonDecoder
@@ -21,7 +22,7 @@ object TerrainModel {
 case class TerrainUnitM(
   location: Vector[Double],
   entities: Map[TerrainId, Int],
-  uuid: UUID
+  uuid: TERRAIN_KEY
 ) extends TerrainModel
 
 object TerrainUnitM {
@@ -32,7 +33,7 @@ object TerrainUnitM {
 }
 
 case class TerrainRegionM(
-  terrain: Set[(Vector[Double], Map[TerrainId, Int], UUID)]
+  terrain: Set[(Vector[Double], Map[TerrainId, Int], TERRAIN_KEY)]
 ) extends TerrainModel
 object TerrainRegionM {
   implicit val decoder: JsonDecoder[TerrainRegionM] =

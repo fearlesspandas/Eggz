@@ -10,6 +10,7 @@ import entity.Terrain.is_within_disance
 import entity.Terrain.is_within_radius
 import entity.Terrain.is_within_range
 import entity.TerrainRegion.GetTerrainByQuadrantError
+import entity.TerrainRegion.TERRAIN_KEY
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz.*
@@ -66,7 +67,7 @@ trait TerrainManager {
 
   def cacheTerrain(terr: Chunk[Terrain]): IO[TerrainError, Unit]
 
-  def get_cached(uuid: UUID): IO[TerrainError, Option[Terrain]]
+  def get_cached(uuid: TERRAIN_KEY): IO[TerrainError, Option[Terrain]]
 
   def get_count(): IO[TerrainError, Int]
 
@@ -106,9 +107,15 @@ trait TerrainManager {
     radius: Double
   ): IO[TerrainError, TerrainRegionM]
 }
-
+enum TerrainType {
+  case REGION
+  case UNIT
+  case EMPTY
+}
 trait Terrain {
 
+  val terrainType: String
+//  val uuid: String = s"[${TerrainType.toString}] + UUID.randomUUID()"
   val uuid: UUID = UUID.randomUUID()
 
   def get_terrain(): IO[TerrainError, Seq[Terrain]]
@@ -223,7 +230,7 @@ case class TerrainRegion(
   radius: Double,
   terrain: Ref[Map[Quadrant, Terrain]],
   count: Ref[Int],
-  cached: Ref[Map[UUID, Terrain]]
+  cached: Ref[Map[TERRAIN_KEY, Terrain]]
 //  terrain_final: Ref[Boolean]
 ) extends Terrain
     with TerrainManager {
@@ -340,6 +347,7 @@ case class TerrainRegion(
   final override def expandTerrain()
     : IO[TerrainError, Terrain with TerrainManager] =
     for {
+      _ <- ZIO.log(s"Expanding Terrain for $uuid , $center $radius")
       expanded_region <- TerrainRegion.make(this.center, this.radius * 2).map {
         case tr: TerrainRegion => tr
       }
@@ -387,6 +395,7 @@ case class TerrainRegion(
       _ <- this.cached.get.flatMap(cachedTerr =>
         expanded_region.cached.update(_ ++ cachedTerr)
       )
+      _ <- ZIO.log("Terrain Expansion completed")
     } yield expanded_region
 
   final override def addQuadrant(
@@ -570,18 +579,21 @@ case class TerrainRegion(
     ZIO.foreachParDiscard(terr)(tm => cached.update(_.updated(tm.uuid, tm)))
 
   final override def get_cached(
-    uuid: UUID
+    uuid: TERRAIN_KEY
   ): IO[TerrainError, Option[Terrain]] = cached.get.map(_.get(uuid))
+
+  override val terrainType: ID = "REGION"
 }
 
 object TerrainRegion {
+  type TERRAIN_KEY = UUID // String
   def make(
     center: Vector[Double],
     radius: Double
   ): IO[Nothing, TerrainManager with Terrain] = for {
     quadrants <- Ref.make(Map.empty[Quadrant, Terrain])
     count <- Ref.make(0)
-    cached <- Ref.make(Map.empty[UUID, Terrain])
+    cached <- Ref.make(Map.empty[TERRAIN_KEY, Terrain])
   } yield TerrainRegion(center, radius, quadrants, count, cached)
 
   def make(
@@ -591,7 +603,7 @@ object TerrainRegion {
   ): IO[Nothing, TerrainManager with Terrain] = for {
     quadrantsRef <- Ref.make(quadrantMap)
     count <- Ref.make(0)
-    cached <- Ref.make(Map.empty[UUID, Terrain])
+    cached <- Ref.make(Map.empty[TERRAIN_KEY, Terrain])
   } yield TerrainRegion(center, radius, quadrantsRef, count, cached)
 
   case class GetTerrainByQuadrantError(msg: String) extends TerrainError
@@ -645,6 +657,8 @@ case class EmptyTerrain(center: Vector[Double], radius: Double)
 
   final override def serialize(): IO[TerrainError, Set[TerrainModel]] =
     ZIO.succeed(Set.empty[TerrainModel])
+
+  override val terrainType: ID = "EMPTY"
 }
 //terrain unit represents the most granular cell of terrain geometry
 //i.e. if two terrain entities are "close enough" they can be considered
@@ -690,6 +704,8 @@ case class TerrainUnit(
     for {
       entities <- entitiesRef.get
     } yield Set(TerrainUnitM(location, entities, uuid))
+
+  override val terrainType: ID = "UNIT"
 }
 object TerrainUnit {
   def make(

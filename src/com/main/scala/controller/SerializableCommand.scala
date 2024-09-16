@@ -13,6 +13,7 @@ import entity.Terrain
 import entity.TerrainChunkM
 import entity.TerrainModel
 import entity.TerrainRegion
+import entity.TerrainRegion.TERRAIN_KEY
 import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.TerrainUnitM
@@ -1415,7 +1416,7 @@ object EXPAND_TERRAIN {
     DeriveJsonDecoder.gen[EXPAND_TERRAIN]
 }
 
-case class FILL_EMPTY_CHUNK(id: UUID, trigger_entity: GLOBZ_ID)
+case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = FILL_EMPTY_CHUNK
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -1507,7 +1508,8 @@ object FILL_EMPTY_CHUNK {
     DeriveJsonDecoder.gen[FILL_EMPTY_CHUNK]
 }
 
-case class GET_CACHED_TERRAIN(id: UUID) extends ResponseQuery[WorldBlock.Block]:
+case class GET_CACHED_TERRAIN(id: TERRAIN_KEY)
+    extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = GET_CACHED_TERRAIN
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {

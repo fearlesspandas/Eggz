@@ -6,6 +6,7 @@ import entity.Terrain.TerrainId
 import entity.Terrain.TerrainManagement
 import entity.Terrain.distance
 import entity.Terrain.is_within_radius
+import entity.TerrainRegion.TERRAIN_KEY
 import zio.Chunk
 import zio.IO
 import zio.Ref
@@ -93,8 +94,6 @@ case class SimpleTerrainBlock(
 
   override def cacheTerrain(terr: Chunk[Terrain]): IO[TerrainError, Unit] = ???
 
-  override def get_cached(UUID: UUID): IO[TerrainError, Option[Terrain]] = ???
-
   override def get_top_terrain(size: Double): IO[TerrainError, Chunk[Terrain]] =
     ???
 
@@ -108,6 +107,12 @@ case class SimpleTerrainBlock(
 
   override def expandTerrain(): IO[TerrainError, Terrain with TerrainManager] =
     ???
+
+  override def get_cached(
+    uuid: TERRAIN_KEY
+  ): IO[TerrainError, Option[Terrain]] = ???
+
+  override val terrainType: TerrainId = ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {
@@ -127,5 +132,7 @@ case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
   ): IO[TerrainError, Set[TerrainModel]] = ???
 
   override def serialize(): IO[TerrainError, Set[TerrainModel]] = ???
+
+  override val terrainType: String = ???
 }
 object SimpleTerrainUnit {}

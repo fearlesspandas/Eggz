@@ -6,6 +6,7 @@ import entity.TerrainModel
 import entity.TerrainRegionM
 import entity.TerrainUnitM
 import entity.Terrain.TerrainId
+import entity.TerrainRegion.TERRAIN_KEY
 import physics.DEST
 import physics.DESTINATION_TYPE
 import physics.DestinationModel
@@ -259,7 +260,7 @@ case class QueuedPhysicsMessage(messages: Chunk[PhysicsCommand])
     extends QueryResponse
 
 case class TerrainUnitm(
-  uuid: UUID,
+  uuid: TERRAIN_KEY,
   location: (Double, Double, Double),
   entities: Map[TerrainId, Int]
 ) extends QueryResponse
@@ -270,7 +271,7 @@ object TerrainUnitm {
     DeriveJsonDecoder.gen[TerrainUnitm]
 }
 case class TerrainChunkm(
-  uuid: UUID,
+  uuid: TERRAIN_KEY,
   location: (Double, Double, Double),
   radius: Double
 ) extends QueryResponse
@@ -281,7 +282,7 @@ object TerrainChunkm {
     DeriveJsonDecoder.gen[TerrainChunkm]
 }
 case class EmptyChunk(
-  uuid: UUID,
+  uuid: TERRAIN_KEY,
   location: (Double, Double, Double),
   radius: Double
 ) extends QueryResponse
@@ -292,7 +293,7 @@ object EmptyChunk {
     DeriveJsonDecoder.gen[EmptyChunk]
 }
 case class TerrainRegionm(
-  terrain: Set[(Vector[Double], Map[TerrainId, Int], UUID)]
+  terrain: Set[(Vector[Double], Map[TerrainId, Int], TERRAIN_KEY)]
 ) extends QueryResponse
 object TerrainRegionm {
   implicit val decoder: JsonDecoder[TerrainRegionm] =
