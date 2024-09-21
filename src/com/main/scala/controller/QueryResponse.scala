@@ -301,3 +301,28 @@ object TerrainRegionm {
   implicit val encoder: JsonEncoder[TerrainRegionm] =
     DeriveJsonEncoder.gen[TerrainRegionm]
 }
+//-------------Abilities--------------
+
+case class DoAbility(entity_id: GLOBZ_ID, ability_id: Int) extends QueryResponse
+object DoAbility {
+  implicit val decoder: JsonDecoder[DoAbility] =
+    DeriveJsonDecoder.gen[DoAbility]
+  implicit val encoder: JsonEncoder[DoAbility] =
+    DeriveJsonEncoder.gen[DoAbility]
+}
+//case class ClientDoAbility(entity_id: GLOBZ_ID, ability_id: Int)
+//    extends QueryResponse
+//object ClientDoAbility {
+//  implicit val decoder: JsonDecoder[ClientDoAbility] =
+//    DeriveJsonDecoder.gen[ClientDoAbility]
+//  implicit val encoder: JsonEncoder[ClientDoAbility] =
+//    DeriveJsonEncoder.gen[ClientDoAbility]
+//}
+case class Fizzle(entity_id: GLOBZ_ID, ability_id: Int, reason: String)
+    extends QueryResponse
+object Fizzle {
+  implicit val decoder: JsonDecoder[Fizzle] =
+    DeriveJsonDecoder.gen[Fizzle]
+  implicit val encoder: JsonEncoder[Fizzle] =
+    DeriveJsonEncoder.gen[Fizzle]
+}

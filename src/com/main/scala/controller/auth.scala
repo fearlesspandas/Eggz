@@ -268,6 +268,11 @@ package object auth {
       } yield true
     case cmd => ZIO.fail(s"$cmd not relevant for GET_CACHED_TERRAIN")
   }
+  val ability: AUTH[String] = { case ABILITY(from, _) =>
+    for {
+      sender <- ZIO.service[String]
+    } yield sender == from
+  }
   val next_cmd: AUTH[String] = {
     case NEXT_CMD() =>
       for {
@@ -322,6 +327,7 @@ object AuthCommandService {
             expand_terrain(server_keys)(op),
             fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
+            ability(op),
             next_cmd(op),
             set_active(op),
             toggle_destinations(op),
@@ -370,6 +376,7 @@ object AuthCommandService {
             expand_terrain(server_keys)(op),
             fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
+            ability(op),
             next_cmd(op),
             set_active(op),
             toggle_destinations(op),

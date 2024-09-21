@@ -37,7 +37,7 @@ import java.util.UUID
 trait Player extends LivingEntity {}
 
 object Player {
-  type Item = String
+  type Item = Int
   type PlayerEnv = Globz
   trait PlayerError
 }

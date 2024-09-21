@@ -35,7 +35,8 @@ import zio.ZLayer
 import java.util.UUID
 
 trait LivingEntity
-    extends StorageEgg[Item]
+    extends Storage.Service[Item]
+    with Eggz.Service
     with Globz
     with PhysicalEntity
     with Destinations {

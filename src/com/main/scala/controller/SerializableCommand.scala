@@ -4,6 +4,8 @@ import controller.CONSOLE.CONSOLE_ENV
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
+import entity.Ability
+import entity.AbilityDoesNotExistError
 import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.LivingEntity
@@ -13,12 +15,12 @@ import entity.Terrain
 import entity.TerrainChunkM
 import entity.TerrainModel
 import entity.TerrainRegion
-import entity.TerrainRegion.TERRAIN_KEY
 import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.TerrainUnitM
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
+import entity.TerrainRegion.TERRAIN_KEY
 import entity.implicits.*
 import physics.DESTINATION_TYPE.GRAVITY
 import physics.DESTINATION_TYPE.TELEPORT
@@ -1542,6 +1544,45 @@ object GET_CACHED_TERRAIN {
     DeriveJsonEncoder.gen[GET_CACHED_TERRAIN]
   implicit val decoder: JsonDecoder[GET_CACHED_TERRAIN] =
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
+}
+//---------------------------------ABILITIES-----------------------------------------------------
+case class ABILITY(from: GLOBZ_ID, ability_id: Int)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (ABILITY, from, ability_id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      entity <- ZIO
+        .serviceWithZIO[WorldBlock.Block](wb =>
+          wb.getBlob(from).flatMap(ZIO.fromOption(_)).map {
+            case li: LivingEntity => li
+          }
+        )
+        .orElseFail(GenericCommandError(s"No entity found with Id $from"))
+      res <- Ability
+        .make(ability_id, from)
+        .flatMap(_.run)
+        .whenZIO(entity.getInventory().map(_.contains(ability_id)))
+        .flatMap(ZIO.fromOption(_))
+        .foldZIO(
+          {
+            case AbilityDoesNotExistError => ZIO.succeed(QueryResponse.Empty)
+            case _ =>
+              ZIO.succeed(
+                Fizzle(
+                  from,
+                  ability_id,
+                  "Item for ability not found in inventory"
+                )
+              )
+          },
+          ZIO.succeed(_)
+        )
+
+    } yield res
+}
+object ABILITY {
+  implicit val encoder: JsonEncoder[ABILITY] = DeriveJsonEncoder.gen[ABILITY]
+  implicit val decoder: JsonDecoder[ABILITY] = DeriveJsonDecoder.gen[ABILITY]
 }
 //---------------------------------CONSOLE--------------------------------------------------------
 case class NEXT_CMD() extends ResponseQuery[WorldBlock.Block] {
