@@ -17,6 +17,7 @@ import src.com.main.scala
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Eggz.EggzError
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
@@ -71,10 +72,10 @@ case class BasicPlayer(
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
     for {
-      health <- health
-      energy <- energy
+      health <- health.orElseFail(PlayerStatsNotFound)
+      energy <- energy.orElseFail(PlayerStatsNotFound)
       stats = Stats(id, health, energy)
-      loc <- getLocation.orElseFail(???)
+      loc <- getLocation.orElseFail(PlayerStatsNotFound)
       location <- ZIO
         .succeed(loc(0))
         .zip(ZIO.succeed(loc(1)))
@@ -112,3 +113,4 @@ object BasicPlayer extends Globz.Service {
     } yield BasicPlayer(id, ss, stor)(href, eref, pe, g, dests)
 
 }
+case object PlayerStatsNotFound extends EggzError

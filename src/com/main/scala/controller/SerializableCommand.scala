@@ -8,6 +8,7 @@ import entity.Ability
 import entity.AbilityDoesNotExistError
 import entity.EmptyTerrain
 import entity.GlobzModel
+import entity.Health
 import entity.LivingEntity
 import entity.PhysicalEntity
 import entity.Player
@@ -203,14 +204,11 @@ case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
     (for {
       res <- WorldBlock.getAllBlobs()
       nested <- ZIO
-        .collectAllPar(res.map(_.getAll()))
-        .map(d => d.flatMap(x => x))
-      stats <- ZIO.collectAllPar(
-        nested.map(egg => egg.serializeEgg)
-      )
-    } yield EggSet(stats)).mapError(_ =>
-      GenericCommandError("Error retrieving blobs")
-    )
+        .foreachPar(res)(_.getAll())
+        .map(d => d.flatten)
+      stats <- ZIO.foreachPar(nested)(egg => egg.serializeEgg)
+    } yield EggSet(stats))
+      .orElseFail(GenericCommandError("Error retrieving blobs"))
 }
 object GET_ALL_EGGZ {
   implicit val encoder: JsonEncoder[GET_ALL_EGGZ] =
@@ -225,19 +223,16 @@ case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
     (for {
       res <- WorldBlock.getAllBlobs()
       nested <- ZIO
-        .collectAllPar(res.map(_.getAll()))
-        .map(d => d.flatMap(x => x))
-      s <- ZIO.collectAllPar(
-        nested.map(x =>
-          for {
-            health <- x.health
-            energy <- x.energy
-          } yield Stats(x.id, health, energy)
-        )
-      )
-    } yield AllStats(s)).mapError(_ =>
-      GenericCommandError("Error retrieving blobs")
-    )
+        .foreachPar(res)(_.getAll())
+        .map(d => d.flatten)
+      s <- ZIO.foreachPar(nested) { case x: Health =>
+        for {
+          health <- x.health
+          energy <- x.energy
+        } yield Stats(x.id, health, energy)
+      }
+    } yield AllStats(s))
+      .orElseFail(GenericCommandError("Error retrieving blobs stats"))
 }
 object GET_ALL_STATS {
   implicit val encoder: JsonEncoder[GET_ALL_STATS] =
@@ -252,15 +247,13 @@ case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .service[WorldBlock.Block]
-        .flatMap(_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .flatMap(ZIO.fromOption(_))
-        .map { case li: LivingEntity => li }
-        .mapError(_ => GenericCommandError(""))
+        .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
       _ <- glob.health
         .flatMap(h => glob.setHealth(h + value))
-        .mapError(_ => GenericCommandError(""))
-      h <- glob.health.mapError(_ => GenericCommandError(""))
+        .orElseFail(GenericCommandError(""))
+      h <- glob.health.orElseFail(GenericCommandError(""))
     } yield MultiResponse(
       Chunk(
         HealthSet(id, h),
@@ -280,15 +273,13 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .service[WorldBlock.Block]
-        .flatMap(_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .flatMap(ZIO.fromOption(_))
-        .map { case li: LivingEntity => li }
-        .mapError(_ => GenericCommandError(""))
+        .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
       _ <- glob.health
         .flatMap(h => glob.setHealth(h - value))
-        .mapError(_ => GenericCommandError(""))
-      h <- glob.health.mapError(_ => GenericCommandError(""))
+        .orElseFail(GenericCommandError(""))
+      h <- glob.health.orElseFail(GenericCommandError(""))
     } yield MultiResponse(
       Chunk(
         HealthSet(id, h),
@@ -310,7 +301,7 @@ case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
       egg <- RepairEgg.make(eggId, 1000, 20)
       glob <- WorldBlock.getBlob(globId)
       res <- ZIO.fromOption(glob).flatMap(_.update(egg))
-    } yield ()).mapError(_ => GenericCommandError("Error Creating egg"))
+    } yield ()).orElseFail(GenericCommandError("Error Creating egg"))
 }
 object CREATE_REPAIR_EGG {
   implicit val encoder: JsonEncoder[CREATE_REPAIR_EGG] =
@@ -326,7 +317,7 @@ case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
       g <- WorldBlock.getBlob(id)
       x <- ZIO.fromOption(g).flatMap(glob => glob.serializeGlob)
     } yield Blob(Some(x)))
-      .mapError(_ => GenericCommandError(s"Error finding blob with $id"))
+      .orElseFail(GenericCommandError(s"Error finding blob with $id"))
       .fold(err => Blob(None), x => x)
 }
 object GET_BLOB {
@@ -364,8 +355,7 @@ case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
       _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity =>
         pe.teleport(location)
       }
-    } yield ())
-      .mapError(_ => GenericCommandError("Error setting glob location"))
+    } yield ()).orElseFail(GenericCommandError("Error setting glob location"))
 
 }
 object SET_GLOB_LOCATION {
@@ -389,7 +379,7 @@ case class RELATE_EGGS(
       e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
       e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
       _ <- glob.relate(e1, e2, bidirectional)
-    } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
+    } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
 object RELATE_EGGS {
   implicit val encoder: JsonEncoder[RELATE_EGGS] =
@@ -412,7 +402,7 @@ case class UNRELATE_EGGS(
       e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
       e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
       _ <- glob.unrelate(e1, e2, bidirectional)
-    } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
+    } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
 object UNRELATE_EGGS {
   implicit val encoder: JsonEncoder[UNRELATE_EGGS] =
@@ -430,7 +420,7 @@ case class UNRELATE_ALL(egg1: ID, globId: GLOBZ_ID, direction: Int)
       glob <- ZIO.fromOption(globOp)
       e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
       _ <- glob.unrelateAll(e1, direction)
-    } yield ()).mapError(_ => GenericCommandError("Error relating eggz"))
+    } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
 object UNRELATE_ALL {
   implicit val encoder: JsonEncoder[UNRELATE_ALL] =

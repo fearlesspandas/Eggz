@@ -27,9 +27,9 @@ trait AbilityError
 case class SmackAbilityError(msg: String) extends AbilityError
 case object AbilityRequirementsNotMetError extends AbilityError
 case object AbilityDoesNotExistError extends AbilityError
+
 case class Smack(from: GLOBZ_ID) extends Ability {
   override val id: ABILITY_ID = 0
-
   override def run
     : ZIO[WorldBlock.Block, SerializableCommand.CommandError, QueryResponse] =
     for {

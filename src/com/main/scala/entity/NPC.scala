@@ -14,6 +14,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Eggz.EggzError
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
 import src.com.main.scala.entity.basicStorage
@@ -57,10 +58,10 @@ case class Prowler(
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
     for {
-      health <- health
-      energy <- energy
+      health <- health.orElseFail(NPCStatsNotFoundError)
+      energy <- energy.orElseFail(NPCStatsNotFoundError)
       stats = Stats(id, health, energy)
-      loc <- getLocation.orElseFail(???)
+      loc <- getLocation.orElseFail(NPCStatsNotFoundError)
       location <- ZIO
         .succeed(loc(0))
         .zip(ZIO.succeed(loc(1)))
@@ -115,3 +116,5 @@ object Prowler extends Globz.Service {
     } yield res
 
 }
+
+case object NPCStatsNotFoundError extends EggzError

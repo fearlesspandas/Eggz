@@ -39,6 +39,7 @@ trait LivingEntity
     with Eggz.Service
     with Globz
     with PhysicalEntity
+    with Health
     with Destinations {
 
   def doAction[E, B](
@@ -80,19 +81,19 @@ trait LivingEntity
   def getInventory(): IO[Storage.ServiceError, Set[Item]] =
     inventory.get.flatMap(_.getInventory())
 
-  def setHealth(health: Double): IO[Eggz.EggzError, Eggz.Service] =
+  def setHealth(health: Double): IO[HealthError, Health] =
     for {
       _ <- healthRef.update(_ => health)
     } yield this
 
-  def setEnergy(value: Double): IO[Eggz.EggzError, Eggz.Service] =
+  def setEnergy(value: Double): IO[HealthError, Health] =
     for {
       _ <- healthRef.update(_ => value)
     } yield this
 
-  def health: IO[Eggz.EggzError, Double] = healthRef.get
+  def health: IO[HealthError, Double] = healthRef.get
 
-  def energy: IO[Eggz.EggzError, Double] = energyRef.get
+  def energy: IO[HealthError, Double] = energyRef.get
 
   def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
     glob.update(eggz)
