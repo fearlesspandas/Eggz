@@ -148,9 +148,10 @@ case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
       glob <- Globz.create(globId)
       _ <- WorldBlock.spawnBlob(glob, location)
       _ <- glob match {
-        case pe: PhysicalEntity => pe.teleport(location); case _ => ZIO.unit
+        case pe: PhysicalEntity => pe.teleport(location);
+        case _                  => ZIO.unit
       }
-    } yield ()).mapError(_ => GenericCommandError("error creating glob"))
+    } yield ()).orElseFail(GenericCommandError("error creating glob"))
 }
 object CREATE_GLOB {
   implicit val encoder: JsonEncoder[CREATE_GLOB] =
@@ -164,16 +165,15 @@ case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock.getAllBlobs()
-      models <- ZIO.collectAllPar(res.map(_.serializeGlob))
+      models <- ZIO.foreachPar(res)(_.serializeGlob)
       ser_mods = Chunk.from(
         models
           .collect { case g: GlobzModel => g }
           .grouped(5)
           .map(globs => GlobSet(globs))
       )
-    } yield PaginatedResponse(ser_mods)).mapError(_ =>
-      GenericCommandError("Error retrieving blobs")
-    )
+    } yield PaginatedResponse(ser_mods))
+      .orElseFail(GenericCommandError("Error retrieving blobs"))
 }
 object GET_ALL_GLOBS {
   implicit val encoder: JsonEncoder[GET_ALL_GLOBS] =
@@ -434,8 +434,7 @@ case class TICK_WORLD() extends SimpleCommandSerializable[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     WorldBlock
       .tickAllBlobs()
-      .mapError(_ => GenericCommandError("Error ticking world"))
-      .map(_ => ())
+      .mapBoth(_ => GenericCommandError("Error ticking world"), _ => ())
 }
 object TICK_WORLD {
   implicit val encoder: JsonEncoder[TICK_WORLD] =
@@ -460,13 +459,13 @@ case class START_EGG(eggId: ID, globId: GLOBZ_ID)
               .flatMap((egg: GLOBZ_IN) =>
                 glob.scheduleEgg(
                   egg,
-                  egg.op.provide(ZLayer.succeed(glob)).map(_ => ())
+                  egg.op.provide(ZLayer.succeed(glob)).unit
                 )
               )
           } yield ()
         )
 
-    } yield ()).mapError(_ => GenericCommandError("error starting egg"))
+    } yield ()).orElseFail(GenericCommandError("error starting egg"))
 }
 object START_EGG {
   implicit val encoder: JsonEncoder[START_EGG] =
@@ -483,12 +482,18 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
       blob <- wb
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .mapBoth(_ => ???, { case destinations: Destinations => destinations })
+        .mapBoth(
+          _ =>
+            GenericCommandError("Could not find blob while toggling gravitate"),
+          { case destinations: Destinations => destinations }
+        )
       gravitate <- blob
         .toggleGravitate()
         .zipRight(blob.isGravitating())
-        .orElseFail(???)
-      isActive <- blob.isActive().orElseFail(???)
+        .orElseFail(GenericCommandError("Error while toggling gravitate"))
+      isActive <- blob
+        .isActive()
+        .orElseFail(GenericCommandError("Error trying to retrieve isActive"))
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !gravitate))),
@@ -513,12 +518,24 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
       blob <- wb
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .mapBoth(_ => ???, { case destinations: Destinations => destinations })
+        .mapBoth(
+          _ =>
+            GenericCommandError(
+              "Could not find blob while trying to set gravitate"
+            ),
+          { case destinations: Destinations => destinations }
+        )
       res <- blob
         .setGravitate(value)
         .zipRight(blob.isGravitating())
-        .orElseFail(???)
-      isActive <- blob.isActive().orElseFail(???)
+        .orElseFail(GenericCommandError("Could not set gravitate"))
+      isActive <- blob
+        .isActive()
+        .orElseFail(
+          GenericCommandError(
+            "Could not retrieve is active after setting gravitate"
+          )
+        )
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !res))),
@@ -562,7 +579,9 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
           s"Error while retrieving active for $id due to $err"
         )
       )
-    gravitate <- blob.isGravitating().orElseFail(???)
+    gravitate <- blob
+      .isGravitating()
+      .orElseFail(GenericCommandError("Could not retrieve isGravitating"))
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
@@ -595,13 +614,15 @@ case class SET_ACTIVE(id: ID, value: Boolean)
       )
     isactive <- blob
       .setIsActive(value)
-      .flatMap(_ => blob.isActive())
+      .zipRight(blob.isActive())
       .mapError(err =>
         GenericCommandError(
           s"Error while toggling destinations for $id due to $err"
         )
       )
-    gravitate <- blob.isGravitating().orElseFail(???)
+    gravitate <- blob
+      .isGravitating()
+      .orElseFail(GenericCommandError("Could not retrieve isGravitating"))
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
@@ -1042,13 +1063,16 @@ case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
       glob <- WorldBlock
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .map { case pe: PhysicalEntity => pe }
-        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+        .mapBoth(
+          _ => GenericCommandError(s"Could not find entity $id"),
+          { case pe: PhysicalEntity => pe }
+        )
 //      _ <- glob.adjustMaxSpeed(delta.max_speed_delta)
       _ <- glob.adjustSpeed(delta.speed_delta)
-      ms <- glob.getMaxSpeed
-        .mapError(_ => GenericCommandError("Could not retrieve max speed"))
-      speed <- glob.getSpeed.mapError(_ =>
+      ms <- glob.getMaxSpeed.orElseFail(
+        GenericCommandError("Could not retrieve max speed")
+      )
+      speed <- glob.getSpeed.orElseFail(
         GenericCommandError("Could not retrieve speed")
       )
     } yield MultiResponse(
@@ -1074,13 +1098,16 @@ case class SET_SPEED(id: GLOBZ_ID, value: Double)
       glob <- WorldBlock
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .map { case pe: PhysicalEntity => pe }
-        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+        .mapBoth(
+          _ => GenericCommandError(s"Could not find entity $id"),
+          { case pe: PhysicalEntity => pe }
+        )
       speed <- glob.getSpeed
       _ <- glob.adjustSpeed(-speed + value)
-      ms <- glob.getMaxSpeed
-        .mapError(_ => GenericCommandError("Could not retrieve max speed"))
-      speed <- glob.getSpeed.mapError(_ =>
+      ms <- glob.getMaxSpeed.orElseFail(
+        GenericCommandError("Could not retrieve max speed")
+      )
+      speed <- glob.getSpeed.orElseFail(
         GenericCommandError("Could not retrieve speed")
       )
     } yield MultiResponse(
@@ -1105,12 +1132,15 @@ case class ADJUST_MAX_SPEED(id: GLOBZ_ID, delta: Double)
       glob <- WorldBlock
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .map { case pe: PhysicalEntity => pe }
-        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+        .mapBoth(
+          _ => GenericCommandError(s"Could not find entity $id"),
+          { case pe: PhysicalEntity => pe }
+        )
       _ <- glob.adjustMaxSpeed(delta)
-      ms <- glob.getMaxSpeed
-        .mapError(_ => GenericCommandError("Could not retrieve max speed"))
-      speed <- glob.getSpeed.mapError(_ =>
+      ms <- glob.getMaxSpeed.orElseFail(
+        GenericCommandError("Could not retrieve max speed")
+      )
+      speed <- glob.getSpeed.orElseFail(
         GenericCommandError("Could not retrieve speed")
       )
     } yield MultiResponse(
@@ -1135,8 +1165,10 @@ case class GET_PHYSICAL_STATS(id: GLOBZ_ID)
       glob <- WorldBlock
         .getBlob(id)
         .flatMap(ZIO.fromOption(_))
-        .map { case pe: PhysicalEntity => pe }
-        .mapError(_ => GenericCommandError(s"Could not find entity $id"))
+        .mapBoth(
+          _ => GenericCommandError(s"Could not find entity $id"),
+          { case pe: PhysicalEntity => pe }
+        )
       maxspeed <- glob.getMaxSpeed
       speed <- glob.getSpeed
     } yield PhysStat(id, maxspeed, speed))
@@ -1161,8 +1193,12 @@ case class ADD_TERRAIN(id: String, location: Vector[Double])
       _ <- ZIO.log("successfully retrieved terrain manager")
       _ <- t
         .add_terrain(id, location)
-        .mapError(_ => GenericCommandError("Could not add terrain"))
-      r <- t.get_terrain().mapError(_ => ???)
+        .orElseFail(GenericCommandError("Could not add terrain"))
+      r <- t
+        .get_terrain()
+        .orElseFail(
+          GenericCommandError("Could not get terrain after adding terrain")
+        )
       _ <- ZIO.log(s"successfully added terrain : ${r}")
     } yield ()
 }
@@ -1185,7 +1221,7 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
           case Some(g: Player) => g.getLocation;
           case None            => ZIO.succeed(Vector(0.0, 0, 0))
         }
-        .mapError(_ => GenericCommandError("failed to find player location"))
+        .orElseFail(GenericCommandError("failed to find player location"))
         .debug
         .fold(_ => Vector(0.0, 0, 0), x => x)
       // .flatMapError(err => ZIO.log(err.msg))
@@ -1195,7 +1231,7 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
         .flatMap(
           _.serializeMini(loc, non_relative, 1000)
         )
-        .mapError(_ => ???)
+        .orElseFail(GenericCommandError("Could not serialize all terrain"))
       rr = Chunk.from(
         r3.terrain.toSeq
           .grouped(100)
@@ -1283,10 +1319,10 @@ case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
     for {
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
-        .mapError(_ => ???)
+        .orElseFail(GenericCommandError("Could not get terrain for worldblock"))
       top_terr <- terrain
         .get_top_terrain(1024)
-        .mapError(_ => ???)
+        .orElseFail(GenericCommandError("Error while getting All top terrain"))
       _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
       res_unit = top_terr.filter {
         case t: TerrainUnit => true; case _ => false
@@ -1303,9 +1339,13 @@ case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
             t.radius
           )
         }
-
-      _ <- terrain.cacheTerrain(top_terr).mapError(_ => ???)
-//      ress = res.grouped(100).map(c => TerrainSet(c.toSet))
+      _ <- terrain
+        .cacheTerrain(top_terr)
+        .orElseFail {
+          GenericCommandError(
+            "Error while caching terrain after retrieving all top terrain"
+          )
+        }
     } yield PaginatedResponse(res)
 }
 object GET_TOP_LEVEL_TERRAIN {
@@ -1398,7 +1438,7 @@ case class EXPAND_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
       .serviceWithZIO[WorldBlock.Block](
         _.expandTerrain *> ZIO.log("Terrain Expanded for worldblock")
       )
-      .mapError(_ => ???)
+      .orElseFail(GenericCommandError("Error while expanding terrain"))
   } yield MultiResponse(Chunk())
 }
 object EXPAND_TERRAIN {
