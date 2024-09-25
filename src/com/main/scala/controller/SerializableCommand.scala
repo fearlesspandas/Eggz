@@ -258,7 +258,7 @@ case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
     } yield MultiResponse(
       Chunk(
         HealthSet(id, h),
-        QueuedClientMessage(id, Chunk(MSG(id, HealthSet(id, h))))
+        QueuedClientBroadcast(Chunk(MSG(id, HealthSet(id, h))))
       )
     )
 object ADD_HEALTH {
@@ -284,7 +284,7 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
     } yield MultiResponse(
       Chunk(
         HealthSet(id, h),
-        QueuedClientMessage(id, Chunk(MSG(id, HealthSet(id, h))))
+        QueuedClientBroadcast(Chunk(MSG(id, HealthSet(id, h))))
       )
     )
 object REMOVE_HEALTH {

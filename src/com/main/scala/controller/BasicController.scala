@@ -116,6 +116,14 @@ case class Control(
               _ => ZIO.logError(s"could not find client queue ${id}"),
               q => ZIO.foreach(messages)(q.offer(_))
             )
+        case QueuedClientBroadcast(messages) =>
+          client_response_queues.get
+            .map(_.values)
+            .flatMap(
+              ZIO.foreachPar(_)(q =>
+                ZIO.foreach(messages)(message => q.offer(message))
+              )
+            )
         case QueuedServerMessage(messages) =>
           ZIO.foreachPar(messages)(server_response_queue.offer(_))
         case QueuedPhysicsMessage(messages) =>

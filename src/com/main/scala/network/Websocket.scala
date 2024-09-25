@@ -9,7 +9,6 @@ import controller.CONSOLE
 import controller.CREATE_GLOB
 import controller.Completed
 import controller.Control
-import controller.Control.CONTROLLER_ENV
 import controller.GET_ALL_GLOBS
 import controller.GET_BLOB
 import controller.GET_GLOB_LOCATION
@@ -17,6 +16,7 @@ import controller.MultiResponse
 import controller.PaginatedResponse
 import controller.Query
 import controller.QueryResponse
+import controller.QueuedClientBroadcast
 import controller.QueuedClientMessage
 import controller.QueuedPhysicsMessage
 import controller.QueuedServerMessage
@@ -27,6 +27,7 @@ import controller.SimpleCommandSerializable
 import controller.SocketSubscribe
 import controller.StartPagination
 import controller.Subscription
+import controller.Control.CONTROLLER_ENV
 import controller.auth.AUTH
 import entity.WorldBlock
 import network.WebSocketServer.AUTH_ID
@@ -217,9 +218,10 @@ case class BasicWebSocket(
             channel.send(Read(WebSocketFrame.text(response.toJson)))
           )
           .unit
-      case x: QueuedPhysicsMessage => controller.queueQuery(ZIO.succeed(x))
-      case x: QueuedServerMessage  => controller.queueQuery(ZIO.succeed(x))
-      case x: QueuedClientMessage  => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedPhysicsMessage  => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedServerMessage   => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedClientMessage   => controller.queueQuery(ZIO.succeed(x))
+      case x: QueuedClientBroadcast => controller.queueQuery(ZIO.succeed(x))
       case response => channel.send(Read(WebSocketFrame.text(response.toJson)))
     }
 

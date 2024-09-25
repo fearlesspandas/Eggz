@@ -257,6 +257,8 @@ case class QueuedServerMessage(responses: Chunk[QueryResponse])
     extends QueryResponse
 case class QueuedClientMessage(id: ID, responses: Chunk[QueryResponse])
     extends QueryResponse
+case class QueuedClientBroadcast(messages: Chunk[QueryResponse])
+    extends QueryResponse
 case class QueuedPhysicsMessage(messages: Chunk[PhysicsCommand])
     extends QueryResponse
 
