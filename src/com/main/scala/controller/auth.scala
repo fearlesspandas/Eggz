@@ -275,6 +275,20 @@ package object auth {
       } yield sender == from
     case cmd => ZIO.fail(s"$cmd not relevant for ABILITY")
   }
+  val add_item: Set[String] => AUTH[String] = server_keys => {
+    case ADD_ITEM(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for ADD_ITEM")
+  }
+  val get_inventory: AUTH[String] = {
+    case GET_INVENTORY(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_INVENTORY")
+  }
   val next_cmd: AUTH[String] = {
     case NEXT_CMD() =>
       for {
@@ -330,6 +344,8 @@ object AuthCommandService {
             fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
             ability(op),
+            add_item(server_keys)(op),
+            get_inventory(op),
             next_cmd(op),
             set_active(op),
             toggle_destinations(op),
@@ -379,6 +395,8 @@ object AuthCommandService {
             fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
             ability(op),
+            add_item(server_keys)(op),
+            get_inventory(op),
             next_cmd(op),
             set_active(op),
             toggle_destinations(op),

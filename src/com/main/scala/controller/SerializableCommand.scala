@@ -10,6 +10,7 @@ import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.Health
 import entity.LivingEntity
+import entity.LivingEntity.Item
 import entity.PhysicalEntity
 import entity.Player
 import entity.Terrain
@@ -1614,6 +1615,60 @@ object ABILITY {
   implicit val encoder: JsonEncoder[ABILITY] = DeriveJsonEncoder.gen[ABILITY]
   implicit val decoder: JsonDecoder[ABILITY] = DeriveJsonDecoder.gen[ABILITY]
 }
+case class ADD_ITEM(id: GLOBZ_ID, item: Item)
+    extends ResponseQuery[WorldBlock.Block] {
+
+  override val REF_TYPE: Any = (ADD_ITEM, id)
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .service[WorldBlock.Block]
+        .flatMap(_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .map { case li: LivingEntity => li }
+        .mapError(_ => AbilitiesError(s"Could not find living entity for $id"))
+      _ <- glob
+        .add(item)
+        .mapError(_ =>
+          AbilitiesError(s"Error while adding item to inventory for id $id")
+        )
+    } yield MultiResponse(
+      Chunk(
+        QueuedClientMessage(id, Chunk(ItemAdded(id, item)))
+      )
+    )
+}
+object ADD_ITEM {
+  implicit val encoder: JsonEncoder[ADD_ITEM] = DeriveJsonEncoder.gen[ADD_ITEM]
+  implicit val decoder: JsonDecoder[ADD_ITEM] = DeriveJsonDecoder.gen[ADD_ITEM]
+}
+case class GET_INVENTORY(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_INVENTORY, id)
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .service[WorldBlock.Block]
+        .flatMap(_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .map { case li: LivingEntity => li }
+        .mapError(_ => InventoryError(s"Could not find living entity $id "))
+      res <- glob
+        .getInventory()
+        .mapError(_ =>
+          InventoryError(s"Error while trying to get inventory for $id")
+        )
+    } yield Inventory(id, res)
+}
+object GET_INVENTORY {
+  implicit val encoder: JsonEncoder[GET_INVENTORY] =
+    DeriveJsonEncoder.gen[GET_INVENTORY]
+  implicit val decoder: JsonDecoder[GET_INVENTORY] =
+    DeriveJsonDecoder.gen[GET_INVENTORY]
+}
+case class AbilitiesError(msg: String) extends CommandError
+case class InventoryError(msg: String) extends CommandError
 //---------------------------------CONSOLE--------------------------------------------------------
 case class NEXT_CMD() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = NEXT_CMD

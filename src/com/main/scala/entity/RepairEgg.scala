@@ -23,7 +23,7 @@ case class RepairEgg(
   repairValue: Double,
   energyRef: Ref[Double],
   cost: Double,
-  inventory: Ref[Storage.Service[String]]
+  inventory: Storage.Service[String]
 ) extends StorageEgg[String]
     with Health {
   override def op: ZIO[Globz, String, ExitCode] = ???
@@ -41,26 +41,15 @@ case class RepairEgg(
   override def add(
     item: String*
   ): IO[Storage.ServiceError, Storage.Service[String]] =
-    (for {
-      i <- inventory.get
-      iUP <- i.add(item: _*)
-      r <- inventory.update(_ => iUP)
-    } yield this).mapError(_ => GenericServiceError(""))
+    inventory.add(item: _*)
 
   override def remove(
     item: String*
   ): IO[Storage.ServiceError, Storage.Service[String]] =
-    (for {
-      i <- inventory.get
-      iUp <- i.remove(item: _*)
-      r <- inventory.update(_ => iUp)
-    } yield this).mapError(_ => GenericServiceError(""))
+    inventory.remove(item: _*)
 
   override def getInventory(): IO[Storage.ServiceError, Set[String]] =
-    (for {
-      i <- inventory.get
-      inv <- i.getInventory()
-    } yield inv).mapError(_ => GenericServiceError("error fetching inventory"))
+    inventory.getInventory()
 
   override def health: IO[HealthError, Double] = healthRef.get
 
@@ -83,14 +72,14 @@ object RepairEgg {
     for {
       h <- Ref.make(health)
       e <- Ref.make(10000.0)
-      bs <- Ref.make(basicStorage[String](Set()))
+      bs <- Storage.make[String]
     } yield RepairEgg(
       id,
       h,
       repairValue,
       e,
       20,
-      bs.asInstanceOf[Ref[Storage.Service[String]]]
+      bs
     )
 
   def op(egg: Eggz.Service): ZIO[Globz, GLOBZ_ERR, ExitCode] = egg.op

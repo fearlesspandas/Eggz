@@ -46,7 +46,7 @@ object Player {
 case class BasicPlayer(
   id: ID,
   skillset: SkillSet,
-  inventory: Ref[Storage.Service[Item]]
+  inventory: Storage.Service[Item]
 )(
   val healthRef: Ref[Double],
   val energyRef: Ref[Double],
@@ -104,7 +104,7 @@ object BasicPlayer extends Globz.Service {
   ): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
-      stor <- Storage.make[Item](() => basicStorage[Item](Set()))
+      stor <- Storage.make[Item]
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
       pe <- BasicPhysicalEntity.make

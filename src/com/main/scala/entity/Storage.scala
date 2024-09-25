@@ -2,7 +2,9 @@ package src.com.main.scala.entity
 
 import src.com.main.scala.entity.Storage.GenericServiceError
 import src.com.main.scala.entity.Storage.REF_STORE
+import zio.Chunk
 import zio.Ref
+import zio.UIO
 import zio.ZIO
 //import zio.Has
 import zio.IO
@@ -15,10 +17,10 @@ trait storage {
 
 object Storage {
 //  type Storage[I] = Has[Storage.Service[I]]
-  type REF_STORE[I] = Set[I]
+  type REF_STORE[I] = Ref[Chunk[I]]
 
   trait Service[I] {
-    //val refs: REF_STORE[I]
+    // val refs: REF_STORE[I]
 
     def add(item: I*): IO[ServiceError, Storage.Service[I]]
 
@@ -27,12 +29,8 @@ object Storage {
     def getInventory(): IO[ServiceError, Set[I]]
   }
 
-  def make[A](f: () => Service[A]): ZIO[Any, Nothing, Ref[Service[A]]] =
-    for {
-      res <- Ref.make(f())
-    } yield res
-//    def add[I](item:I*):ZIO[Storage[I],ServiceError,Storage.Service[I]] = ZIO.accessM(_.get.add(item:_*))
-//    def remove[I](item:I*):ZIO[Storage[I],ServiceError,Storage.Service[I]] = ZIO.accessM(_.get.remove(item:_*))
+  def make[A]: UIO[Service[A]] =
+    Ref.make(Chunk.empty[A]).map(r => basicStorage[A](r))
 
   trait ServiceError extends Error
 
@@ -40,40 +38,33 @@ object Storage {
 
 }
 
-case class basicStorage[I](refs: REF_STORE[I] = Set()) extends Storage.Service[I] {
+case class basicStorage[I](refs: REF_STORE[I]) extends Storage.Service[I] {
   // val refs:REF_STORE[I] = HashSet()
   override def add(item: I*): IO[Storage.ServiceError, Storage.Service[I]] =
-    ZIO
-      .succeed {
-        basicStorage(refs ++ item)
-        //.mapError( GenericServiceError("whoopsie"))
-      }
-  //.mapError(_ => GenericServiceError("whoopsie"))
+    refs.update(_ ++ item).as(this)
 
   override def remove(item: I*): IO[Storage.ServiceError, Storage.Service[I]] =
-    ZIO
-      .succeed {
-        basicStorage(refs.filter(i => !item.toSet.contains(i)))
-      }
-  //.mapError(_ => GenericServiceError("whoopsie"))
+    refs.update(_.filter(i => !item.contains(i))).as(this)
 
   override def getInventory(): IO[Storage.ServiceError, Set[I]] =
-    ZIO
-      .succeed {
-        this.refs.toSet[I]
-      }
-  //.mapError(_ => GenericServiceError("error fetching inventory"))
+    refs.get.map(_.toSet)
+  // .mapError(_ => GenericServiceError("error fetching inventory"))
 }
 
 object basicStorage {
   //  def apply()
 }
 
-case class BasicStorage(sizeLimit: Int, weightLimit: Double, contents: Set[Any] = Set())
-    extends storage {
+case class BasicStorage(
+  sizeLimit: Int,
+  weightLimit: Double,
+  contents: Set[Any] = Set()
+) extends storage {
   def setContents(value: Set[Any]): storage = this.copy(contents = value)
 
   def addContents(value: Set[Any]): storage =
-    this.copy(contents = this.contents ++ value) //definitely fix this to be true addition (currently overwrites dups)
+    this.copy(contents =
+      this.contents ++ value
+    ) // definitely fix this to be true addition (currently overwrites dups)
   def removeContents() = ???
 }

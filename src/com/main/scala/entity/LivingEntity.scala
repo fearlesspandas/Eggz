@@ -1,7 +1,6 @@
 package entity
 
 import controller.Stats
-import entity.Player.Item
 import entity.Player.PlayerError
 import entity.Skill.Experience
 import entity.Skill.Level
@@ -18,19 +17,14 @@ import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
-import src.com.main.scala.entity.StorageEgg
-import src.com.main.scala.entity.basicStorage
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
-import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
 import zio.ExitCode
 import zio.IO
 import zio.Ref
 import zio.ZIO
-import zio.ZLayer
 
 import java.util.UUID
 
@@ -52,7 +46,7 @@ trait LivingEntity
 
   val skillset: SkillSet
 
-  val inventory: Ref[Storage.Service[Item]]
+  val inventory: Storage.Service[Item]
 
   val healthRef: Ref[Double]
 
@@ -71,15 +65,14 @@ trait LivingEntity
   def add(
     item: Item*
   ): IO[Storage.ServiceError, Storage.Service[Item]] =
-    inventory.get.flatMap(_.add(item: _*))
-
+    inventory.add(item: _*)
   def remove(
     item: Item*
   ): IO[Storage.ServiceError, Storage.Service[Item]] =
-    inventory.get.flatMap(_.remove(item: _*))
+    inventory.remove(item: _*)
 
   def getInventory(): IO[Storage.ServiceError, Set[Item]] =
-    inventory.get.flatMap(_.getInventory())
+    inventory.getInventory()
 
   def setHealth(health: Double): IO[HealthError, Health] =
     for {
@@ -229,7 +222,7 @@ trait LivingEntity
 }
 
 object LivingEntity {
-  type Item = String
+  type Item = Int
   type LivingEntityEnv = Globz with WorldBlock.Block
   trait PlayerError
 }

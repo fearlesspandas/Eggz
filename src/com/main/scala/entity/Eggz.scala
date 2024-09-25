@@ -17,5 +17,5 @@ object Eggz {
   case class GenericEggzError(msg: String) extends EggzError
 }
 trait StorageEgg[I] extends Eggz.Service with Storage.Service[I] {
-  val inventory: Ref[Storage.Service[I]]
+  val inventory: Storage.Service[I]
 }

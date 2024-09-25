@@ -2,6 +2,7 @@ package controller
 
 import entity.EggzModel
 import entity.GlobzModel
+import entity.LivingEntity.Item
 import entity.TerrainModel
 import entity.TerrainRegionM
 import entity.TerrainUnitM
@@ -325,4 +326,18 @@ object Fizzle {
     DeriveJsonDecoder.gen[Fizzle]
   implicit val encoder: JsonEncoder[Fizzle] =
     DeriveJsonEncoder.gen[Fizzle]
+}
+case class ItemAdded(id: GLOBZ_ID, item: Item) extends QueryResponse
+object ItemAdded {
+  implicit val decoder: JsonDecoder[ItemAdded] =
+    DeriveJsonDecoder.gen[ItemAdded]
+  implicit val encoder: JsonEncoder[ItemAdded] =
+    DeriveJsonEncoder.gen[ItemAdded]
+}
+case class Inventory(id: GLOBZ_ID, items: Set[Item]) extends QueryResponse
+object Inventory {
+  implicit val decoder: JsonDecoder[Inventory] =
+    DeriveJsonDecoder.gen[Inventory]
+  implicit val encoder: JsonEncoder[Inventory] =
+    DeriveJsonEncoder.gen[Inventory]
 }

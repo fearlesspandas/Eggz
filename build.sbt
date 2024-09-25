@@ -11,7 +11,7 @@ libraryDependencies += "dev.zio" %% "zio-streams" % "2.1.6"
 libraryDependencies += compilerPlugin(
   "dev.zio" %% "zio-profiling-tagging-plugin" % "0.3.1"
 )
-scalacOptions ++= Seq("-Xmax-inlines", "50")
+scalacOptions ++= Seq("-Xmax-inlines", "100")
 //// https://mvnrepository.com/artifact/dev.zio/zio-streams
 Compile / mainClass := Some("network.WebSocketAdvanced")
 //Compile / run / fork := true
