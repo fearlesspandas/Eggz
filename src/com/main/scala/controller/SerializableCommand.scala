@@ -863,8 +863,12 @@ case class GET_ALL_DESTINATIONS(id: ID)
           )
       dests <- ZIO.foreachPar(allDestinations)(dest => dest.serialize)
       index <- blob.getIndex()
+      active_dest <- blob.getDestAtIndex(index).map {
+        case Some(dest) => Chunk(ActiveDestination(id, dest.uuid));
+        case _          => Chunk()
+      }
     } yield PaginatedResponse(
-      Chunk(AllDestinations(id, dests), NextIndex(id, index))
+      Chunk(AllDestinations(id, dests), NextIndex(id, index)) ++ active_dest
     ))
       .orElseFail(
         GenericCommandError(s"Error retrieving destination for id $id")
