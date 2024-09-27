@@ -1,5 +1,6 @@
 package controller
 
+import controller.ADD_DESTINATION.AddDestinationError
 import controller.CONSOLE.CONSOLE_ENV
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
@@ -645,16 +646,24 @@ case class ADD_DESTINATION(id: ID, dest: destination)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       blob <- WorldBlock.getBlob(id)
-      res <- ZIO
-        .fromOption(blob)
-        .flatMap { case entity: Destinations =>
-          for {
-            newDest <- dest.deserialize
-            _ <- entity.addDestination(newDest)
-            ret <- newDest.serialize
-          } yield ret
-        }
-    } yield NewDestination(id, res)).orElseFail(
+      b <- WorldBlock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .map { case de: Destinations => de }
+        .mapError(_ =>
+          AddDestinationError(s"Could not find destinations entity with id $id")
+        )
+      res <- for {
+        newDest <- dest.deserialize
+        _ <- b.addDestination(newDest)
+        ret <- newDest.serialize
+      } yield ret
+      ind_maybe <- b.getAllDestinations().map(_.size).map {
+        case 1 => Chunk(ActiveDestination(id, res.uuid)); case _ => Chunk()
+      }
+    } yield PaginatedResponse(
+      Chunk(NewDestination(id, res)) ++ ind_maybe
+    )).orElseFail(
       GenericCommandError(s"Error adding destination to entity $id")
     )
 }
@@ -663,6 +672,8 @@ object ADD_DESTINATION {
     .gen[ADD_DESTINATION]
   implicit val decoder: JsonDecoder[ADD_DESTINATION] =
     DeriveJsonDecoder.gen[ADD_DESTINATION]
+
+  case class AddDestinationError(msg: String) extends CommandError
 }
 case class DELETE_DESTINATION(id: ID, uuid: UUID)
     extends ResponseQuery[WorldBlock.Block]:
