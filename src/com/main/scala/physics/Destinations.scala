@@ -127,12 +127,10 @@ case class BasicDestinations(
     ind: Int
   ): IO[DestinationsError, Option[Destination]] =
     destinations.get.map(_.lift(ind))
+
   override def getDestAtCurrentIndex()
     : IO[DestinationsError, Option[Destination]] =
-    for {
-      dest_ch <- destinations.get
-      ind <- index.get
-    } yield dest_ch.lift(ind)
+    index.get.flatMap(getDestAtIndex)
 
   override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
     destinations.get.flatMap(ch =>
@@ -141,13 +139,15 @@ case class BasicDestinations(
           .fromOption(ch.find(_.uuid == id).map(ch.indexOf(_)))
           .mapError(_ => ???)
         _ <- index.update(_ => newindex)
-
       } yield ()
     )
 
   override def deleteDest(uuid: UUID): IO[DestinationsError, Unit] =
     for {
       _ <- destinations.update(ch => ch.filterNot(_.uuid == uuid))
+      _ <- destinations.get.flatMap(dests =>
+        index.update(math.min(_, dests.size))
+      )
     } yield ()
 
   override def setIsActive(value: Boolean): IO[DestinationsError, Unit] =

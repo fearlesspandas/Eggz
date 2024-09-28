@@ -2,6 +2,7 @@ package controller
 
 import controller.ADD_DESTINATION.AddDestinationError
 import controller.CONSOLE.CONSOLE_ENV
+import controller.DELETE_DESTINATION.DeleteDestinationError
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
@@ -696,17 +697,27 @@ case class DELETE_DESTINATION(id: ID, uuid: UUID)
         .orElseFail(
           GenericCommandError(s"Error while deleting destination with id $uuid")
         )
-      _ <- glob
-        .getAllDestinations()
-        .flatMap(d => ZIO.log(s"all destinations post delete $d"))
-        .orElseFail(GenericCommandError(""))
-    } yield DeleteDestination(id, uuid)
+      active_dest <- glob
+        .getDestAtCurrentIndex()
+        .mapBoth(
+          _ =>
+            DeleteDestinationError("Error while retrieving active destination"),
+          {
+            case Some(dest) => Chunk(ActiveDestination(id, dest.uuid));
+            case _          => Chunk()
+          }
+        )
+    } yield PaginatedResponse(
+      Chunk(DeleteDestination(id, uuid)) ++ active_dest
+    )
 
 object DELETE_DESTINATION {
   implicit val encoder: JsonEncoder[DELETE_DESTINATION] = DeriveJsonEncoder
     .gen[DELETE_DESTINATION]
   implicit val decoder: JsonDecoder[DELETE_DESTINATION] =
     DeriveJsonDecoder.gen[DELETE_DESTINATION]
+
+  case class DeleteDestinationError(msg: String) extends CommandError
 }
 case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_INDEX, id)
