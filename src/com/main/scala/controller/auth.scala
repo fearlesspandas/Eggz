@@ -13,6 +13,7 @@ package object auth {
   // to create a live validation service.
   // We use ZIO.validate for easy parallelism
   type AUTH[SENDER] = Any => ZIO[SENDER, String, Boolean]
+  type ServerKeys = Set[String]
 
   val get_glob_location: AUTH[String] = {
     case GET_GLOB_LOCATION(id) => ZIO.succeed(true)
@@ -31,9 +32,22 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant to RELATE_EGGS")
   }
 
+  val create_prowler: ServerKeys => AUTH[String] = server_keys => {
+    case CREATE_PROWLER(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to CREATE_PROWLER")
+  }
+
   val get_all_globs: AUTH[String] = {
     case GET_ALL_GLOBS() => ZIO.succeed(true)
     case cmd             => ZIO.fail(s"$cmd not relevant to GET_ALL_GLOBS")
+  }
+
+  val get_glob: AUTH[String] = {
+    case GET_GLOB(_) => ZIO.succeed(true)
+    case cmd         => ZIO.fail(s"$cmd not relevant to GET_GLOB")
   }
 
   val add_health: Set[String] => AUTH[String] = server_keys => {
@@ -136,11 +150,11 @@ package object auth {
       } yield senderId == id
     case cmd => ZIO.fail(s"$cmd not relevant to SET_ACTIVE")
   }
-  val clear_destinations: AUTH[String] = {
+  val clear_destinations: ServerKeys => AUTH[String] = server_keys => {
     case CLEAR_DESTINATIONS(id) =>
       for {
         senderid <- ZIO.service[String]
-      } yield senderid == id
+      } yield senderid == id || server_keys.contains(senderid)
     case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATION")
   }
   val delete_destination: AUTH[String] = {
@@ -315,6 +329,8 @@ object AuthCommandService {
             set_glob_location(server_keys)(op),
             get_glob_location(op),
             relate_eggs(op),
+            create_prowler(server_keys)(op),
+            get_glob(op),
             get_all_globs(op),
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
@@ -326,7 +342,7 @@ object AuthCommandService {
             get_all_destinations(op),
             apply_vector(op),
             get_input_vector(server_keys)(op),
-            clear_destinations(op),
+            clear_destinations(server_keys)(op),
             delete_destination(op),
             set_lv(server_keys)(op),
             lazy_lv(op),
@@ -366,6 +382,8 @@ object AuthCommandService {
             set_glob_location(server_keys)(op),
             get_glob_location(op),
             relate_eggs(op),
+            create_prowler(server_keys)(op),
+            get_glob(op),
             get_all_globs(op),
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
@@ -377,7 +395,7 @@ object AuthCommandService {
             get_all_destinations(op),
             apply_vector(op),
             get_input_vector(server_keys)(op),
-            clear_destinations(op),
+            clear_destinations(server_keys)(op),
             delete_destination(op),
             set_lv(server_keys)(op),
             lazy_lv(op),

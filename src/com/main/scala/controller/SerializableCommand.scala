@@ -12,9 +12,9 @@ import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.Health
 import entity.LivingEntity
-import entity.LivingEntity.Item
 import entity.PhysicalEntity
 import entity.Player
+import entity.Prowler
 import entity.Terrain
 import entity.TerrainChunkM
 import entity.TerrainModel
@@ -24,6 +24,7 @@ import entity.TerrainUnit
 import entity.TerrainUnitM
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
+import entity.LivingEntity.Item
 import entity.TerrainRegion.TERRAIN_KEY
 import entity.implicits.*
 import physics.DESTINATION_TYPE.GRAVITY
@@ -163,6 +164,28 @@ object CREATE_GLOB {
     DeriveJsonDecoder.gen[CREATE_GLOB]
 }
 
+case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
+    extends SimpleCommandSerializable[WorldBlock.Block] {
+  val REF_TYPE: Any = CREATE_PROWLER
+
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    (for {
+      glob <- Globz.create(globId).provide(ZLayer.succeed(Prowler))
+      _ <- WorldBlock.spawnBlob(glob, location)
+      _ <- glob match {
+        case pe: PhysicalEntity => pe.teleport(location);
+        case _                  => ZIO.unit
+      }
+    } yield ()).orElseFail(GenericCommandError("error creating glob"))
+}
+
+object CREATE_PROWLER {
+  implicit val encoder: JsonEncoder[CREATE_PROWLER] =
+    DeriveJsonEncoder.gen[CREATE_PROWLER]
+  implicit val decoder: JsonDecoder[CREATE_PROWLER] =
+    DeriveJsonDecoder.gen[CREATE_PROWLER]
+}
+
 case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_ALL_GLOBS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -183,6 +206,25 @@ object GET_ALL_GLOBS {
     DeriveJsonEncoder.gen[GET_ALL_GLOBS]
   implicit val decoder: JsonDecoder[GET_ALL_GLOBS] =
     DeriveJsonDecoder.gen[GET_ALL_GLOBS]
+}
+
+case class GET_GLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = GET_GLOB
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      res <- WorldBlock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .flatMap(_.serializeGlob)
+    } yield GlobSet(Set(res)))
+      .orElseFail(GenericCommandError("Error retrieving blobs"))
+}
+
+object GET_GLOB {
+  implicit val encoder: JsonEncoder[GET_GLOB] =
+    DeriveJsonEncoder.gen[GET_GLOB]
+  implicit val decoder: JsonDecoder[GET_GLOB] =
+    DeriveJsonDecoder.gen[GET_GLOB]
 }
 
 case class GET_ALL_ENTITY_IDS() extends ResponseQuery[WorldBlock.Block] {
