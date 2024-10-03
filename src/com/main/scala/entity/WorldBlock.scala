@@ -203,7 +203,12 @@ object WorldBlockInMem extends WorldBlock.Service {
       terrain <- TerrainRegion.make(Vector(0, 0, 0), radius).map {
         case tr: TerrainRegion => tr
       }
-      terrain <- WorldBlockEnvironment.add_terrain(terrain, terrain.radius, num)
+      terrain <- WorldBlockEnvironment.add_terrain(
+        terrain,
+        terrain.radius,
+        num,
+        num_prowlers
+      )
       _ <- terrain // add spawn block to terrain
         .add_terrain("9", Vector(0, -20, 0))
         .orElseFail(
@@ -270,7 +275,9 @@ object WorldBlockEnvironment {
   def add_terrain(
     terrain: TerrainManager with Terrain,
     radius: Double,
-    num: Int
+    num: Int,
+    num_prowlers: Int = 0,
+    prowler_radius: Double = 1000
   ): IO[GenericWorldBlockError, TerrainManager & Terrain] = for {
     terrain_types <- ZIO.succeed(List("6", "11"))
     _ <- ZIO
@@ -292,11 +299,28 @@ object WorldBlockEnvironment {
           s"Failed to add terrain to worldblock due to : $err"
         )
       )
+//    _ <- ZIO
+//      .foreachPar(0 to num_prowlers) { i =>
+//        for {
+//          x <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+//          y <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+//          z <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+//          terrain_type <- ZIO.succeed("12")
+//          _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
+//          _ <-
+//            ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+//        } yield ()
+//      }
+//      .mapError(err =>
+//        GenericWorldBlockError(
+//          s"Failed to add prowler terrain to worldblock because $err"
+//        )
+//      )
   } yield terrain
 
   def add_prowlers(worldblock: WorldBlockInMem, count: Int, radius: Double) =
     for {
-      prowlers <- ZIO.foreachPar(1 to count) { i =>
+      prowlers <- ZIO.foreachPar(0 to count) { i =>
         for {
           prowler <- Globz
             .create(s"Prowler_$i")
