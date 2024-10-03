@@ -136,18 +136,18 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant to TOGGLE_DESTINATIONS")
   }
-  val set_gravitate: AUTH[String] = {
+  val set_gravitate: ServerKeys => AUTH[String] = server_keys => {
     case SET_GRAVITATE(id, _) =>
       for {
         sender <- ZIO.service[String]
-      } yield sender == id
+      } yield sender == id || server_keys.contains(sender)
     case cmd => ZIO.fail(s"$cmd not relevant to SET_GRAVITATE")
   }
-  val set_active: AUTH[String] = {
+  val set_active: ServerKeys => AUTH[String] = server_keys => {
     case SET_ACTIVE(id, _) =>
       for {
         senderId <- ZIO.service[String]
-      } yield senderId == id
+      } yield senderId == id || server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to SET_ACTIVE")
   }
   val clear_destinations: ServerKeys => AUTH[String] = server_keys => {
@@ -164,11 +164,11 @@ package object auth {
       } yield senderid == id
     case cmd => ZIO.fail(s"$cmd not relevant to DELETE_DESTINATION")
   }
-  val set_mode_destinations: AUTH[String] = {
+  val set_mode_destinations: ServerKeys => AUTH[String] = server_keys => {
     case SET_MODE_DESTINATIONS(id, mode) =>
       for {
         sender <- ZIO.service[String]
-      } yield sender == id
+      } yield sender == id || server_keys.contains(sender)
     case cmd => ZIO.fail(s"$cmd not relevant for SET_MODE_DESTINATIONS")
   }
   val set_lv: Set[String] => AUTH[String] = server_keys => {
@@ -363,11 +363,11 @@ object AuthCommandService {
             add_item(server_keys)(op),
             get_inventory(op),
             next_cmd(op),
-            set_active(op),
+            set_active(server_keys)(op),
             toggle_destinations(op),
-            set_gravitate(op),
+            set_gravitate(server_keys)(op),
             toggle_gravity(op),
-            set_mode_destinations(op)
+            set_mode_destinations(server_keys)(op)
           )
         ) { x =>
           x
@@ -416,11 +416,11 @@ object AuthCommandService {
             add_item(server_keys)(op),
             get_inventory(op),
             next_cmd(op),
-            set_active(op),
+            set_active(server_keys)(op),
             toggle_destinations(op),
-            set_gravitate(op),
+            set_gravitate(server_keys)(op),
             toggle_gravity(op),
-            set_mode_destinations(op)
+            set_mode_destinations(server_keys)(op)
           )
         ) { x =>
           x

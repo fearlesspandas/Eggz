@@ -51,8 +51,9 @@ trait PhysicsChannel {
     loc: (Double, Double, Double)
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
+      _ <- ZIO.log(s"Input set for ${id} as $loc")
       _ <- send(
-        s""" {"type":"SET_GLOB_LOCATION", "body":{"id": "$id","loc":[${loc._1},${loc._2},${loc._3}]}} """
+        s""" {"type":"SET_GLOB_LOCATION", "body":{"id": "$id","location":[${loc._1},${loc._2},${loc._3}]}} """
       )
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
@@ -69,18 +70,15 @@ trait PhysicsChannel {
     } yield ()
 
   def lock_input(id: String): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"LOCK_INPUT","body":{"id":"$id"}}""") *> ZIO.log(
-      s"Input locked! $id"
-    )
+    send(s"""{"type":"LOCK_INPUT","body":{"id":"$id"}}""")
 
   def unlock_input(
     id: String
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""") *> ZIO.log(
-      s"Input unlocked! $id"
-    )
+    send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""")
+
   def send_noop(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send("NOOP")
+    send("Echo:NOOP")
 
     // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
     // todo remove interval on loop and see how unthrottled processing handles
@@ -89,7 +87,8 @@ trait PhysicsChannel {
       Handler
         .webSocket { channel =>
           channel.receiveAll {
-            case Read(WebSocketFrame.Text(txt)) if txt == "0" => ZIO.unit
+            case Read(WebSocketFrame.Text(txt)) if txt == "0"    => ZIO.unit
+            case Read(WebSocketFrame.Text(txt)) if txt == "NOOP" => ZIO.unit
             case Read(WebSocketFrame.Text(txt)) =>
               (for {
                 r <- ZIO
@@ -109,11 +108,17 @@ trait PhysicsChannel {
             case UserEventTriggered(UserEvent.HandshakeComplete) =>
               (for {
                 blobs <- wb.getAllBlobs().mapError(_ => ???)
-                interval <- ZIO
-                  .succeed(
-                    if (blobs.size > 0) math.max(50 / blobs.size, 1) else 10
+//                interval <- ZIO
+//                  .succeed(
+//                    if (blobs.size > 0) math.max(50 / blobs.size, 1) else 10
+//                  )
+//                  .map(_.toLong)
+                _ <- start_queue_stream()
+                  .provide(ZLayer.succeed(channel))
+                  .foldZIO(
+                    err => ZIO.logError(s"Error processing queue stream $err"),
+                    ZIO.succeed(_)
                   )
-                  .map(_.toLong)
                 xx <- this
                   .loop(10)
                   .provide(ZLayer.succeed(channel))
@@ -121,9 +126,6 @@ trait PhysicsChannel {
                     ZIO.log(s"Error while processing loop ${err.toString}")
                   )
                   .fork
-                _ <- start_queue_stream()
-                  .provide(ZLayer.succeed(channel))
-                  .mapError(_ => ???)
               } yield ()) *> ZIO.log("Channel Connected")
             case ExceptionCaught(cause) =>
               ZIO.logError(s"Error while handling physics socket $cause")
@@ -185,8 +187,8 @@ case class BasicPhysicsChannel(
   worldBlock: WorldBlock.Block
 ) extends PhysicsChannel {
 
-  def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
-    (for {
+  def process_id_queue() =
+    for {
       q <- id_queue.get
       next_id <- ZIO
         .fromOption(q.headOption)
@@ -195,22 +197,29 @@ case class BasicPhysicsChannel(
             for {
               ids <- worldBlock.getAllBlobs().map(_.map(g => g.id))
               _ <- id_queue.update(_ => ids.toSeq)
-//              _ <- ZIO.log(s"Checking inner loop $ids")
-              n <- ZIO
-                .succeed(ids.headOption)
-            } yield n,
+            } yield ids.headOption,
           x => ZIO.some(x)
         )
-        .foldZIO(
-          _ => (ZIO.log("Sending noop liveness probe") *> send_noop()).as(None),
-          ZIO.succeed(_)
-        )
-
-      _ <- ZIO
-        .fromOption(next_id)
-        .flatMap(id => get_location(id))
-        .orElse(ZIO.log("Sending noop liveness probe") *> send_noop())
+      _ <- next_id match {
+        case Some(id) => get_location(id);
+        case _        => send_noop()
+      }
+      //      _ <- ZIO
+      //        .fromOption(next_id)
+      //        .flatMap(id => get_location(id))
+      //        .foldZIO(
+      //          _ => ZIO.log("Sending noop liveness probe") *> send_noop(),
+      //          ZIO.succeed(_)
+      //        )
       _ <- id_queue.update(_.tail)
+    } yield ()
+
+  def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
+    (for {
+      non_empty <- worldBlock.getNumBlobs()
+      _ <-
+        if (non_empty > 0) { process_id_queue() }
+        else { send_noop() }
     } yield ())
       .repeat(Schedule.spaced(Duration.fromNanos(interval)))
       .mapError(err => FailedSend(s"Error inside loop ${err.toString}"))

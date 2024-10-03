@@ -35,6 +35,7 @@ import physics.Destination
 import physics.DestinationModel
 import physics.Destinations
 import physics.Mode
+import physics.Mode.FORWARD
 import physics.PhysicsTeleport
 import physics.SetInputLock
 import physics.destination
@@ -189,8 +190,12 @@ case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
       }
       maxspeed <- prowler.getMaxSpeed
       speed <- prowler.getSpeed
-      _ <- prowler.adjustMaxSpeed(-maxspeed + 30)
-      - <- prowler.adjustSpeed(-speed + 30)
+      // cant do this yet because we dont completely scan state on entity load... doesn't propogate to server
+//      _ <- prowler.setMode(FORWARD)
+//      _ <- prowler.setGravitate(true)
+//      _ <- prowler.setIsActive(true)
+      _ <- prowler.adjustMaxSpeed(-maxspeed + 100)
+      - <- prowler.adjustSpeed(-speed + 100)
       loc <- ZIO
         .succeed(location(0))
         .zip(ZIO.succeed(location(1)))

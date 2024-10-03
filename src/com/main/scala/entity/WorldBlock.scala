@@ -39,6 +39,7 @@ object WorldBlock {
       coords: Vector[Double]
     ): ZIO[Globz, WorldBlockError, ExitCode]
     def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
+    def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
     def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
     def tickAllBlobs(): ZIO[Any, WorldBlockError, ExitCode]
     def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz]]
@@ -111,6 +112,9 @@ case class WorldBlockInMem(
     for {
       db <- dbRef.get
     } yield db.values.toSet
+
+  override def getNumBlobs(): ZIO[Any, WorldBlockError, RuntimeFlags] =
+    dbRef.get.map(_.size)
 
   override def removeBlob(
     blob: Globz
@@ -305,6 +309,7 @@ object WorldBlockEnvironment {
           x <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
           y <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
           z <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          _ <- ZIO.log(s"prowler created $x , $y , $z")
           terrain_type <- ZIO.succeed("16")
           _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
           _ <-
