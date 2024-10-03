@@ -66,11 +66,11 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant to REMOVE_HEALTH")
   }
 
-  val add_destination: AUTH[String] = {
+  val add_destination: ServerKeys => AUTH[String] = server_keys => {
     case ADD_DESTINATION(id, _) =>
       for {
         senderId <- ZIO.service[String]
-      } yield senderId == id
+      } yield senderId == id || server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to ADD_DESTINATION")
   }
   val get_next_destination: Set[String] => AUTH[String] = server_keys => {
@@ -334,7 +334,7 @@ object AuthCommandService {
             get_all_globs(op),
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
-            add_destination(op),
+            add_destination(server_keys)(op),
             get_next_destination(server_keys)(op),
             get_next_destination_client(op),
             set_active_destination(op),
@@ -387,7 +387,7 @@ object AuthCommandService {
             get_all_globs(op),
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
-            add_destination(op),
+            add_destination(server_keys)(op),
             get_next_destination(server_keys)(op),
             get_next_destination_client(op),
             set_active_destination(op),

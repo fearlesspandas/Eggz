@@ -2,6 +2,7 @@ package controller
 
 import controller.ADD_DESTINATION.AddDestinationError
 import controller.CONSOLE.CONSOLE_ENV
+import controller.CREATE_PROWLER.CreateProwlerError
 import controller.DELETE_DESTINATION.DeleteDestinationError
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
@@ -34,6 +35,7 @@ import physics.Destination
 import physics.DestinationModel
 import physics.Destinations
 import physics.Mode
+import physics.PhysicsTeleport
 import physics.SetInputLock
 import physics.destination
 import src.com.main.scala.entity.EggzOps.ID
@@ -165,18 +167,36 @@ object CREATE_GLOB {
 }
 
 case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
-    extends SimpleCommandSerializable[WorldBlock.Block] {
+    extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = CREATE_PROWLER
 
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      glob <- Globz.create(globId).provide(ZLayer.succeed(Prowler))
-      _ <- WorldBlock.spawnBlob(glob, location)
-      _ <- glob match {
+      prowler <- Globz
+        .create(globId)
+        .provide(ZLayer.succeed(Prowler))
+        .mapBoth(
+          _ =>
+            CreateProwlerError(
+              s"failed to create prowler glob with id $globId"
+            ),
+          { case pr: Prowler => pr }
+        )
+      _ <- WorldBlock.spawnBlob(prowler, location)
+      _ <- prowler match {
         case pe: PhysicalEntity => pe.teleport(location);
         case _                  => ZIO.unit
       }
-    } yield ()).orElseFail(GenericCommandError("error creating glob"))
+      maxspeed <- prowler.getMaxSpeed
+      speed <- prowler.getSpeed
+      _ <- prowler.adjustMaxSpeed(-maxspeed + 30)
+      - <- prowler.adjustSpeed(-speed + 30)
+      loc <- ZIO
+        .succeed(location(0))
+        .zip(ZIO.succeed(location(1)))
+        .zip(ZIO.succeed(location(2)))
+    } yield QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))))
+      .orElseFail(GenericCommandError("error creating glob"))
 }
 
 object CREATE_PROWLER {
@@ -184,6 +204,8 @@ object CREATE_PROWLER {
     DeriveJsonEncoder.gen[CREATE_PROWLER]
   implicit val decoder: JsonDecoder[CREATE_PROWLER] =
     DeriveJsonDecoder.gen[CREATE_PROWLER]
+
+  case class CreateProwlerError(msg: String) extends CommandError
 }
 
 case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {

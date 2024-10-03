@@ -234,13 +234,13 @@ object WorldBlockInMem extends WorldBlock.Service {
           GenericWorldBlockError("Failed to create woldblock on startup")
         )
       _ <- res.expandTerrain
-      _ <- WorldBlockEnvironment
-        .add_prowlers(res, num_prowlers, 1000)
-        .mapError(err =>
-          GenericWorldBlockError(
-            s"Errow while adding prowlers to worldblock : $err"
-          )
-        )
+//      _ <- WorldBlockEnvironment
+//        .add_prowlers(res, num_prowlers, 1000)
+//        .mapError(err =>
+//          GenericWorldBlockError(
+//            s"Errow while adding prowlers to worldblock : $err"
+//          )
+//        )
     } yield res
 }
 object WorldBlockEnvironment {
@@ -299,23 +299,23 @@ object WorldBlockEnvironment {
           s"Failed to add terrain to worldblock due to : $err"
         )
       )
-//    _ <- ZIO
-//      .foreachPar(0 to num_prowlers) { i =>
-//        for {
-//          x <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
-//          y <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
-//          z <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
-//          terrain_type <- ZIO.succeed("12")
-//          _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
-//          _ <-
-//            ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
-//        } yield ()
-//      }
-//      .mapError(err =>
-//        GenericWorldBlockError(
-//          s"Failed to add prowler terrain to worldblock because $err"
-//        )
-//      )
+    _ <- ZIO
+      .foreachPar(0 to num_prowlers) { i =>
+        for {
+          x <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          y <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          z <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          terrain_type <- ZIO.succeed("16")
+          _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
+          _ <-
+            ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+        } yield ()
+      }
+      .mapError(err =>
+        GenericWorldBlockError(
+          s"Failed to add prowler terrain to worldblock because $err"
+        )
+      )
   } yield terrain
 
   def add_prowlers(worldblock: WorldBlockInMem, count: Int, radius: Double) =

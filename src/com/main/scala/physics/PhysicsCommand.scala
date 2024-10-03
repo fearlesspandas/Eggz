@@ -17,6 +17,8 @@ object SendLocation {
     DeriveJsonDecoder.gen[SendLocation]
 }
 case class SetInputLock(id: String, value: Boolean) extends PhysicsCommand
+case class PhysicsTeleport(id: String, location: (Double, Double, Double))
+    extends PhysicsCommand
 object serializationTest {
 
   import zio.json._

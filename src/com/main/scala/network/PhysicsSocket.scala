@@ -4,6 +4,7 @@ import entity.PhysicalEntity
 import entity.WorldBlock
 import network.PhysicsChannel.PHYSICS_COMMAND
 import physics.PhysicsCommand
+import physics.PhysicsTeleport
 import physics.SendLocation
 import physics.SetInputLock
 import src.com.main.scala.entity.Globz.GLOBZ_ID
@@ -23,9 +24,12 @@ trait PhysicsChannel {
       queue <- get_queue()
       _ <- ZStream
         .fromQueue(queue)
-        .foreach { case SetInputLock(id, value) =>
-          if (value) { lock_input(id) }
-          else unlock_input(id)
+        .foreach {
+          case SetInputLock(id, value) =>
+            if (value) { lock_input(id) }
+            else unlock_input(id)
+
+          case PhysicsTeleport(id, location) => set_location(id, location)
         }
         .fork
     } yield ()
@@ -37,6 +41,19 @@ trait PhysicsChannel {
       channel <- ZIO.service[WebSocketChannel]
       _ <- channel
         .send(Read(WebSocketFrame.text(msg)))
+        .mapError(err =>
+          FailedSend(s"Error while sending to physics server : $err")
+        )
+    } yield ()
+
+  def set_location(
+    id: String,
+    loc: (Double, Double, Double)
+  ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
+    for {
+      _ <- send(
+        s""" {"type":"SET_GLOB_LOCATION", "body":{"id": "$id","loc":[${loc._1},${loc._2},${loc._3}]}} """
+      )
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
         )
