@@ -166,7 +166,9 @@ case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))),
-        QueuedServerMessage(Chunk(Entity(glob_ser))),
+        QueuedServerMessage(
+          Chunk(Entity(glob_ser), TeleportToNext(globId, loc))
+        ),
         QueuedClientBroadcast(Chunk(Entity(glob_ser)))
       )
     )).orElseFail(GenericCommandError("error creating glob"))
