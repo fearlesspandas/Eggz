@@ -147,10 +147,10 @@ case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
 }
 
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
-    extends SimpleCommandSerializable[Globz.Service with WorldBlock.Block] {
+    extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   val REF_TYPE: Any = CREATE_GLOB
   override def run
-    : ZIO[Globz.Service with WorldBlock.Block, CommandError, Unit] =
+    : ZIO[Globz.Service with WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- Globz.create(globId)
       _ <- WorldBlock.spawnBlob(glob, location)
@@ -158,7 +158,18 @@ case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
         case pe: PhysicalEntity => pe.teleport(location);
         case _                  => ZIO.unit
       }
-    } yield ()).orElseFail(GenericCommandError("error creating glob"))
+      loc <- ZIO
+        .succeed(location(0))
+        .zip(ZIO.succeed(location(1)))
+        .zip(ZIO.succeed(location(2)))
+      glob_ser <- glob.serializeGlob
+    } yield MultiResponse(
+      Chunk(
+        QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))),
+        QueuedServerMessage(Chunk(Entity(glob_ser))),
+        QueuedClientBroadcast(Chunk(Entity(glob_ser)))
+      )
+    )).orElseFail(GenericCommandError("error creating glob"))
 }
 object CREATE_GLOB {
   implicit val encoder: JsonEncoder[CREATE_GLOB] =

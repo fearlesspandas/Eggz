@@ -155,25 +155,27 @@ case class BasicWebSocket(
 //      case _                            => Seq()
 //    }
 
-  val initialize_session: ZIO[Any, Object, Unit] =
-    for {
-      _ <- Console.printLine(s"authenticating session for $id")
-      glob <- controller
-        .runQuery(GET_BLOB(id).run)
-        .map { case Blob(blob) =>
-          blob
-        }
-        .fold(_ => None, x => x)
-      _ <- (for {
-        _ <- Console.printLine(s"No blob found for $id creating new one")
-        randx <- Random.nextIntBetween(-10, 10)
-        randz <- Random.nextIntBetween(-10, 10)
-        res <- controller.runCommand(
-          CREATE_GLOB(id, Vector(0 + randx, 5, 0 + randz)).run
-        )
-        _ <- Console.printLine(s"blob successfully created for $id")
-      } yield ()).when(glob.isEmpty && !server_keys.contains(id))
-    } yield ()
+  val initialize_session: WebSocketChannel => ZIO[Any, Object, Unit] =
+    channel =>
+      for {
+        _ <- Console.printLine(s"authenticating session for $id")
+        glob <- controller
+          .runQuery(GET_BLOB(id).run)
+          .map { case Blob(blob) =>
+            blob
+          }
+          .fold(_ => None, x => x)
+        _ <- (for {
+          _ <- Console.printLine(s"No blob found for $id creating new one")
+          randx <- Random.nextIntBetween(-10, 10)
+          randz <- Random.nextIntBetween(-10, 10)
+          res <- controller.runQuery(
+            CREATE_GLOB(id, Vector(0 + randx, 5, 0 + randz)).run
+          )
+          _ <- handle_query_response(channel, res)
+          _ <- Console.printLine(s"blob successfully created for $id")
+        } yield ()).when(glob.isEmpty && !server_keys.contains(id))
+      } yield ()
 
   val parse_message: (String) => ZIO[Any, Nothing, SerializableCommand[_, _]] =
     text =>
@@ -264,7 +266,7 @@ case class BasicWebSocket(
     // println(s"Received Text ${text}")
     text match {
       case _ if initializing =>
-        initialize_session
+        initialize_session(channel)
       case "end" =>
         channel.shutdown
       case text =>
