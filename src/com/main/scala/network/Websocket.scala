@@ -168,7 +168,7 @@ case class BasicWebSocket(
         _ <- Console.printLine(s"No blob found for $id creating new one")
         randx <- Random.nextIntBetween(-10, 10)
         randz <- Random.nextIntBetween(-10, 10)
-        _ <- controller.runCommand(
+        res <- controller.runCommand(
           CREATE_GLOB(id, Vector(0 + randx, 5, 0 + randz)).run
         )
         _ <- Console.printLine(s"blob successfully created for $id")

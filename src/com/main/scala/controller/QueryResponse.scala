@@ -188,6 +188,11 @@ object Blob {
   implicit val encoder: JsonEncoder[Blob] = DeriveJsonEncoder.gen[Blob]
   implicit val decoder: JsonDecoder[Blob] = DeriveJsonDecoder.gen[Blob]
 }
+case class Entity(entity: GlobzModel) extends QueryResponse
+object Entity {
+  implicit val encoder: JsonEncoder[Entity] = DeriveJsonEncoder.gen[Entity]
+  implicit val decoder: JsonDecoder[Entity] = DeriveJsonDecoder.gen[Entity]
+}
 case class LV(id: GLOBZ_ID, lv: (Double, Double, Double)) extends QueryResponse
 object LV {
   implicit val encoder: JsonEncoder[LV] = DeriveJsonEncoder.gen[LV]

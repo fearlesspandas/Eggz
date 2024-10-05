@@ -200,7 +200,14 @@ case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
         .succeed(location(0))
         .zip(ZIO.succeed(location(1)))
         .zip(ZIO.succeed(location(2)))
-    } yield QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))))
+      prowler_ser <- prowler.serializeGlob
+    } yield MultiResponse(
+      Chunk(
+        QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))),
+        QueuedServerMessage(Chunk(Entity(prowler_ser))),
+        QueuedClientBroadcast(Chunk(Entity(prowler_ser)))
+      )
+    ))
       .orElseFail(GenericCommandError("error creating glob"))
 }
 
