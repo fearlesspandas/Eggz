@@ -4,6 +4,7 @@ import controller.Command
 import controller.DoAbility
 import controller.MultiResponse
 import controller.QueryResponse
+import controller.QueuedClientBroadcast
 import controller.QueuedClientMessage
 import controller.QueuedServerMessage
 import controller.SerializableCommand
@@ -38,7 +39,7 @@ case class Smack(from: GLOBZ_ID) extends Ability {
           MultiResponse(
             Chunk(
               QueuedServerMessage(Chunk(DoAbility(from, 0))),
-              QueuedClientMessage(from, Chunk(DoAbility(from, 0)))
+              QueuedClientBroadcast(Chunk(DoAbility(from, 0)))
             )
           )
         )
