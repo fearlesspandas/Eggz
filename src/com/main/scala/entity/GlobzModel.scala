@@ -49,3 +49,14 @@ object ProwlerModel {
   implicit val decoder: JsonDecoder[ProwlerModel] =
     DeriveJsonDecoder.gen[ProwlerModel]
 }
+case class AxisSpiderModel(
+  id: String,
+  stats: Stats,
+  location: (Double, Double, Double)
+) extends GlobzModel
+object AxisSpiderModel {
+  implicit val encoder: JsonEncoder[AxisSpiderModel] =
+    DeriveJsonEncoder.gen[AxisSpiderModel]
+  implicit val decoder: JsonDecoder[AxisSpiderModel] =
+    DeriveJsonDecoder.gen[AxisSpiderModel]
+}

@@ -3,6 +3,7 @@ package controller
 import controller.ADD_DESTINATION.AddDestinationError
 import controller.CONSOLE.CONSOLE_ENV
 import controller.CREATE_PROWLER.CreateProwlerError
+import controller.CREATE_SPIDER.CreateSPIDERError
 import controller.DELETE_DESTINATION.DeleteDestinationError
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
@@ -16,6 +17,7 @@ import entity.LivingEntity
 import entity.PhysicalEntity
 import entity.Player
 import entity.Prowler
+import entity.Spider
 import entity.Terrain
 import entity.TerrainChunkM
 import entity.TerrainModel
@@ -231,6 +233,58 @@ object CREATE_PROWLER {
     DeriveJsonDecoder.gen[CREATE_PROWLER]
 
   case class CreateProwlerError(msg: String) extends CommandError
+}
+
+case class CREATE_SPIDER(globId: GLOBZ_ID, location: Vector[Double])
+    extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = CREATE_SPIDER
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      spider <- Globz
+        .create(globId)
+        .provide(ZLayer.succeed(Spider))
+        .mapBoth(
+          _ =>
+            CreateSPIDERError(
+              s"failed to create prowler glob with id $globId"
+            ),
+          { case sp: Spider => sp }
+        )
+      _ <- WorldBlock.spawnBlob(spider, location)
+      _ <- spider match {
+        case pe: PhysicalEntity => pe.teleport(location);
+        case _                  => ZIO.unit
+      }
+      maxspeed <- spider.getMaxSpeed
+      speed <- spider.getSpeed
+      // cant do this yet because we dont completely scan state on entity load... doesn't propogate to server
+      //      _ <- prowler.setMode(FORWARD)
+      //      _ <- prowler.setGravitate(true)
+      //      _ <- prowler.setIsActive(true)
+      _ <- spider.adjustMaxSpeed(-maxspeed + 10)
+      - <- spider.adjustSpeed(-speed + 10)
+      loc <- ZIO
+        .succeed(location(0))
+        .zip(ZIO.succeed(location(1)))
+        .zip(ZIO.succeed(location(2)))
+      spider_ser <- spider.serializeGlob
+    } yield MultiResponse(
+      Chunk(
+        QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))),
+        QueuedServerMessage(Chunk(Entity(spider_ser))),
+        QueuedClientBroadcast(Chunk(Entity(spider_ser)))
+      )
+    ))
+      .orElseFail(CreateSPIDERError("error creating axis spider"))
+}
+
+object CREATE_SPIDER {
+  implicit val encoder: JsonEncoder[CREATE_SPIDER] =
+    DeriveJsonEncoder.gen[CREATE_SPIDER]
+  implicit val decoder: JsonDecoder[CREATE_SPIDER] =
+    DeriveJsonDecoder.gen[CREATE_SPIDER]
+
+  case class CreateSPIDERError(msg: String) extends CommandError
 }
 
 case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {

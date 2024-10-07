@@ -51,7 +51,6 @@ trait PhysicsChannel {
     loc: (Double, Double, Double)
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
-      _ <- ZIO.log(s"Input set for ${id} as $loc")
       _ <- send(
         s""" {"type":"SET_GLOB_LOCATION", "body":{"id": "$id","location":[${loc._1},${loc._2},${loc._3}]}} """
       )

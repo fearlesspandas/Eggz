@@ -40,6 +40,14 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant to CREATE_PROWLER")
   }
 
+  val create_axis_spider: ServerKeys => AUTH[String] = server_keys => {
+    case CREATE_SPIDER(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to CREATE_SPIDER")
+  }
+
   val get_all_globs: AUTH[String] = {
     case GET_ALL_GLOBS() => ZIO.succeed(true)
     case cmd             => ZIO.fail(s"$cmd not relevant to GET_ALL_GLOBS")
@@ -330,6 +338,7 @@ object AuthCommandService {
             get_glob_location(op),
             relate_eggs(op),
             create_prowler(server_keys)(op),
+            create_axis_spider(server_keys)(op),
             get_glob(op),
             get_all_globs(op),
             add_health(server_keys)(op),
@@ -383,6 +392,7 @@ object AuthCommandService {
             get_glob_location(op),
             relate_eggs(op),
             create_prowler(server_keys)(op),
+            create_axis_spider(server_keys)(op),
             get_glob(op),
             get_all_globs(op),
             add_health(server_keys)(op),
