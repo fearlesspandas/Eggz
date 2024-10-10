@@ -2,9 +2,11 @@ package controller
 
 import controller.ADD_DESTINATION.AddDestinationError
 import controller.CONSOLE.CONSOLE_ENV
+import controller.CONSOLE.en
 import controller.CREATE_PROWLER.CreateProwlerError
 import controller.CREATE_SPIDER.CreateSPIDERError
 import controller.DELETE_DESTINATION.DeleteDestinationError
+import controller.FOLLOW_ENTITY.FollowEntityError
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
@@ -205,10 +207,6 @@ case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
       }
       maxspeed <- prowler.getMaxSpeed
       speed <- prowler.getSpeed
-      // cant do this yet because we dont completely scan state on entity load... doesn't propogate to server
-//      _ <- prowler.setMode(FORWARD)
-//      _ <- prowler.setGravitate(true)
-//      _ <- prowler.setIsActive(true)
       _ <- prowler.adjustMaxSpeed(-maxspeed + 100)
       - <- prowler.adjustSpeed(-speed + 100)
       loc <- ZIO
@@ -257,12 +255,8 @@ case class CREATE_SPIDER(globId: GLOBZ_ID, location: Vector[Double])
       }
       maxspeed <- spider.getMaxSpeed
       speed <- spider.getSpeed
-      // cant do this yet because we dont completely scan state on entity load... doesn't propogate to server
-      //      _ <- prowler.setMode(FORWARD)
-      //      _ <- prowler.setGravitate(true)
-      //      _ <- prowler.setIsActive(true)
-      _ <- spider.adjustMaxSpeed(-maxspeed + 10)
-      - <- spider.adjustSpeed(-speed + 10)
+      _ <- spider.adjustMaxSpeed(-maxspeed)
+      - <- spider.adjustSpeed(-speed)
       loc <- ZIO
         .succeed(location(0))
         .zip(ZIO.succeed(location(1)))
@@ -522,9 +516,7 @@ case class RELATE_EGGS(
     (for {
       globOp <- WorldBlock.getBlob(globId)
       glob <- ZIO.fromOption(globOp)
-      e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
-      e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
-      _ <- glob.relate(e1, e2, bidirectional)
+      _ <- glob.relate(egg1, egg2, bidirectional, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
 object RELATE_EGGS {
@@ -783,7 +775,55 @@ object SET_ACTIVE {
   implicit val decoder: JsonDecoder[SET_ACTIVE] =
     DeriveJsonDecoder.gen[SET_ACTIVE]
 }
+case class FOLLOW_ENTITY(id: ID, target: ID)
+    extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (FOLLOW_ENTITY, id, target)
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    for {
+      worldblock <- ZIO.service[WorldBlock.Block]
+      entity <- worldblock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          _ => FollowEntityError(s"Could not find entity with id $id"),
+          { case li: LivingEntity =>
+            li
+          }
+        )
+      _ <- worldblock
+        .npc_handler()
+        .flatMap(_.add_entity_as_npc(entity))
+        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
+      // should maybe be in npc handler and not entity
+      _ <- entity
+        .relate(
+          id,
+          target,
+          false,
+          worldblock
+            .npc_handler()
+            .flatMap(
+              _.scheduleEgg(
+                entity,
+                entity
+                  .follow_player(target)
+                  .provide(ZLayer.succeed(worldblock))
+                  .mapError(err => err.toString)
+              )
+            )
+            .orElseFail("Error while scheduling")
+        )
+        .orElseFail(FollowEntityError("Error while following entity"))
+    } yield ()
+}
+object FOLLOW_ENTITY {
+  implicit val encoder: JsonEncoder[FOLLOW_ENTITY] = DeriveJsonEncoder
+    .gen[FOLLOW_ENTITY]
+  implicit val decoder: JsonDecoder[FOLLOW_ENTITY] =
+    DeriveJsonDecoder.gen[FOLLOW_ENTITY]
 
+  case class FollowEntityError(msg: String) extends CommandError
+}
 case class ADD_DESTINATION(id: ID, dest: destination)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ADD_DESTINATION, id)

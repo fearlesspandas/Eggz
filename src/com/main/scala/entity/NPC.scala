@@ -68,25 +68,25 @@ case class Prowler(
         .zip(ZIO.succeed(loc(2)))
     } yield PROWLER_EGG(id, stats, location)
 
-  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
-    worldblock <- ZIO.service[WorldBlock.Block]
-    player <- worldblock
-      .getBlob(id)
-      .flatMap { l =>
-        ZIO.fromOption(l)
-      }
-      .mapError(_ => GenericNPCError(s"Player not found for $id"))
-    _ <- player match {
-      case l: LivingEntity =>
-        for {
-          loc <- l.physics.getLocation.mapError(_ => ???)
-          _ <- destinations.clearDestinations().mapError(_ => ???)
-          _ <- destinations
-            .addDestination(WaypointDestination(loc, 0))
-            .mapError(_ => ???)
-        } yield ()
-    }
-  } yield ()
+//  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
+//    worldblock <- ZIO.service[WorldBlock.Block]
+//    player <- worldblock
+//      .getBlob(id)
+//      .flatMap { l =>
+//        ZIO.fromOption(l)
+//      }
+//      .mapError(_ => GenericNPCError(s"Player not found for $id"))
+//    _ <- player match {
+//      case l: LivingEntity =>
+//        for {
+//          loc <- l.physics.getLocation.mapError(_ => ???)
+//          _ <- destinations.clearDestinations().mapError(_ => ???)
+//          _ <- destinations
+//            .addDestination(WaypointDestination(loc, 0))
+//            .mapError(_ => ???)
+//        } yield ()
+//    }
+//  } yield ()
 
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
@@ -156,25 +156,25 @@ case class Spider(
         .zip(ZIO.succeed(loc(2)))
     } yield PROWLER_EGG(id, stats, location)
 
-  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
-    worldblock <- ZIO.service[WorldBlock.Block]
-    player <- worldblock
-      .getBlob(id)
-      .flatMap { l =>
-        ZIO.fromOption(l)
-      }
-      .mapError(_ => GenericNPCError(s"Player not found for $id"))
-    _ <- player match {
-      case l: LivingEntity =>
-        for {
-          loc <- l.physics.getLocation.mapError(_ => ???)
-          _ <- destinations.clearDestinations().mapError(_ => ???)
-          _ <- destinations
-            .addDestination(WaypointDestination(loc, 0))
-            .mapError(_ => ???)
-        } yield ()
-    }
-  } yield ()
+//  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
+//    worldblock <- ZIO.service[WorldBlock.Block]
+//    player <- worldblock
+//      .getBlob(id)
+//      .flatMap { l =>
+//        ZIO.fromOption(l)
+//      }
+//      .mapError(_ => GenericNPCError(s"Player not found for $id"))
+//    _ <- player match {
+//      case l: LivingEntity =>
+//        for {
+//          loc <- l.physics.getLocation.mapError(_ => ???)
+//          _ <- destinations.clearDestinations().mapError(_ => ???)
+//          _ <- destinations
+//            .addDestination(WaypointDestination(loc, 0))
+//            .mapError(_ => ???)
+//        } yield ()
+//    }
+//  } yield ()
 
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 

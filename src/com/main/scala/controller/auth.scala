@@ -172,6 +172,13 @@ package object auth {
       } yield senderid == id
     case cmd => ZIO.fail(s"$cmd not relevant to DELETE_DESTINATION")
   }
+  val follow_entity: ServerKeys => AUTH[String] = server_keys => {
+    case FOLLOW_ENTITY(id, target) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield id != target && (id == sender || server_keys.contains(sender))
+    case cmd => ZIO.fail(s"$cmd not relevant to FOLLOW_ENTITY")
+  }
   val set_mode_destinations: ServerKeys => AUTH[String] = server_keys => {
     case SET_MODE_DESTINATIONS(id, mode) =>
       for {
@@ -200,11 +207,11 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_PHYSICAL_STATS")
   }
-  val set_speed: AUTH[String] = {
+  val set_speed: ServerKeys => AUTH[String] = server_keys => {
     case SET_SPEED(id, _) =>
       for {
         sender <- ZIO.service[String]
-      } yield sender == id
+      } yield sender == id || server_keys.contains(sender)
     case cmd => ZIO.fail(s"$cmd not relevant for SET_SPEED")
   }
   val adjust_max_speed: Set[String] => AUTH[String] = server_keys => {
@@ -353,10 +360,11 @@ object AuthCommandService {
             get_input_vector(server_keys)(op),
             clear_destinations(server_keys)(op),
             delete_destination(op),
+            follow_entity(server_keys)(op),
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
-            set_speed(op),
+            set_speed(server_keys)(op),
             adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),
@@ -407,10 +415,11 @@ object AuthCommandService {
             get_input_vector(server_keys)(op),
             clear_destinations(server_keys)(op),
             delete_destination(op),
+            follow_entity(server_keys)(op),
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
-            set_speed(op),
+            set_speed(server_keys)(op),
             adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
             get_all_terrain(server_keys)(op),

@@ -8,6 +8,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
 import zio.ExitCode
+import zio.Fiber
 import zio.Schedule
 //import zio.Has
 import zio.IO
@@ -29,9 +30,10 @@ trait Globz {
   def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode]
 
   def relate(
-    egg1: Eggz.Service,
-    egg2: Eggz.Service,
-    bidirectional: Boolean
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit]
   def unrelate(
     egg1: Eggz.Service,

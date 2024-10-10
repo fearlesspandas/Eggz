@@ -51,6 +51,7 @@ object WorldBlock {
 //      ZIO.succeed(terrain)
 
     def expandTerrain: IO[WorldBlockError, Chunk[Terrain]]
+    def npc_handler(): IO[WorldBlockError, NPCHandler]
   }
 
   trait Service {
@@ -97,7 +98,7 @@ object WorldBlock {
 case class WorldBlockInMem(
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   terrain: Ref[TerrainManager with Terrain],
-  npc_handler: NPCHandler
+  _npc_handler: NPCHandler
 ) extends WorldBlock.Block {
 
   override def spawnBlob(
@@ -169,6 +170,9 @@ case class WorldBlockInMem(
           )
         )
     } yield top_terr
+
+  override def npc_handler(): IO[WorldBlockError, NPCHandler] =
+    ZIO.succeed(_npc_handler)
 }
 object WorldBlockInMem extends WorldBlock.Service {
   override def make: IO[WorldBlock.WorldBlockError, WorldBlock.Block] =
@@ -344,8 +348,8 @@ object WorldBlockEnvironment {
           z <- Random.nextDouble.map(t => (t * radius) - radius / 2)
           _ <- worldblock.spawnBlob(p, Vector(x, y, z))
           _ <- p.teleport(Vector(x, y, z))
-          _ <- worldblock.npc_handler.add_entity_as_npc(p)
-          _ <- worldblock.npc_handler
+          _ <- worldblock._npc_handler.add_entity_as_npc(p)
+          _ <- worldblock._npc_handler
             .scheduleEgg(
               p,
               p.follow_player("2")

@@ -11,6 +11,7 @@ import physics.Destination
 import physics.Destinations
 import physics.DestinationsError
 import physics.Mode
+import physics.WaypointDestination
 import src.com.main
 import src.com.main.scala
 import src.com.main.scala.entity
@@ -19,9 +20,11 @@ import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
 import zio.ExitCode
+import zio.Fiber
 import zio.IO
 import zio.Ref
 import zio.ZIO
@@ -104,11 +107,12 @@ trait LivingEntity
     glob.tickAll()
 
   def relate(
-    egg1: Eggz.Service,
-    egg2: Eggz.Service,
-    bidirectional: Boolean
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
-    glob.relate(egg1, egg2, bidirectional)
+    glob.relate(egg1, egg2, bidirectional, process)
 
   def neighbors(
     egg: Eggz.Service,
@@ -175,6 +179,30 @@ trait LivingEntity
 
   def getDestAtIndex(ind: Int): IO[DestinationsError, Option[Destination]] =
     destinations.getDestAtIndex(ind)
+
+  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
+    worldblock <- ZIO.service[WorldBlock.Block]
+    player <- worldblock
+      .getBlob(id)
+      .flatMap { l =>
+        ZIO.fromOption(l)
+      }
+      .orElseFail(GenericNPCError(s"Player not found for $id"))
+    _ <- player match {
+      case l: LivingEntity =>
+        for {
+          loc <- l.physics.getLocation.orElseFail(
+            GenericNPCError(s"Could not find location for entity ${l.id}")
+          )
+          _ <- destinations
+            .clearDestinations()
+            .orElseFail(GenericNPCError(s"Error trying to clear destinations"))
+          _ <- destinations
+            .addDestination(WaypointDestination(loc, 0))
+            .orElseFail(GenericNPCError("Error while adding destination"))
+        } yield ()
+    }
+  } yield ()
 
   override def getDestAtCurrentIndex()
     : IO[DestinationsError, Option[Destination]] =
