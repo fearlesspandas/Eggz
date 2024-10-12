@@ -36,16 +36,22 @@ trait Globz {
     process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit]
   def unrelate(
-    egg1: Eggz.Service,
-    egg2: Eggz.Service,
-    bidirectional: Boolean
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit]
-  def unrelateAll(egg: Eggz.Service, direction: Int): IO[GLOBZ_ERR, Unit]
+
+  def unrelateAll(
+    egg: GLOBZ_ID,
+    direction: Int,
+    cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit]
   // direction indicates whether we want nodes pointing to, from or either relative to our glob
   def neighbors(
-    egg: Eggz.Service,
+    egg: GLOBZ_ID,
     direction: Int
-  ): IO[GLOBZ_ERR, Vector[Eggz.Service]]
+  ): IO[GLOBZ_ERR, Vector[GLOBZ_ID]]
   def serializeGlob: IO[GLOBZ_ERR, GlobzModel]
   def scheduleEgg(
     egg: GLOBZ_IN,

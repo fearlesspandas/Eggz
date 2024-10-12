@@ -40,14 +40,8 @@ case class GlobzInMem(
 
   override def remove(id: ID): IO[GLOBZ_ERR, Unit] =
     for {
-
-      egg <- dbref.get
-        .map(_.get(id))
-        .flatMap(x => ZIO.fromOption(x))
-        .flatMapError(_ => ???)
-      _ <- unrelateAll(egg, 0)
+      _ <- unrelateAll(id, 0, ZIO.unit)
       _ <- dbref.update(_.removed(id))
-
     } yield ()
 
   override def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
@@ -74,7 +68,10 @@ case class GlobzInMem(
     bidirectional: Boolean,
     process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
-    for {
+    // curently we dont restart a process for a key pair that's already present
+    // instead we just keep the existing one
+    // may change this in the future
+    (for {
       f <- process.fork
       _ <- {
         relationRef
@@ -84,55 +81,58 @@ case class GlobzInMem(
           _ <- relationRef.update(_.updated((egg2, egg1), f))
         } yield ()).when(bidirectional)
       }
-    } yield ()
+    } yield ()).whenZIO(relationRef.get.map(!_.contains((egg1, egg2)))).unit
 
   override def unrelate(
-    egg1: scala.entity.Globz.GLOBZ_IN,
-    egg2: scala.entity.Globz.GLOBZ_IN,
-    bidirectional: Boolean
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
     for {
       f <- relationRef.get
-        .flatMap(rels => ZIO.fromOption(rels.get((egg1.id, egg2.id))))
-        .orElseFail(
-          s"Could not find relations between ${egg1.id} and ${egg2.id}"
-        )
-      _ <- f.interrupt
+        .map(_.get((egg1, egg2)))
+      _ <- ZIO.fromOption(f).foldZIO(_ => ZIO.unit, _.interrupt)
       _ <- relationRef.update(
-        _.removed((egg1.id, egg2.id))
+        _.removed((egg1, egg2))
       ) *> relationRef
-        .update(_.removed((egg2.id, egg1.id)))
+        .update(_.removed((egg2, egg1)))
     } yield ()
 
   override def unrelateAll(
-    egg: entity.Globz.GLOBZ_IN,
-    direction: Int
+    egg: GLOBZ_ID,
+    direction: Int,
+    cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
     for {
+//      eg <- get(egg)
+//        .flatMap(ZIO.fromOption(_))
+//        .mapError(_ =>
+//          s"Error" +
+//            s" looking for egg with id $egg during unrelateAll"
+//        )
       neighbors <- neighbors(egg, direction)
       _ <- ZIO.foreachParDiscard(neighbors) { n =>
         if (direction > 0) {
-          unrelate(egg, n, false)
+          unrelate(egg, n, false, cleanup_process)
         } else if (direction < 0) {
-          unrelate(n, egg, false)
-        } else unrelate(egg, n, true)
+          unrelate(n, egg, false, cleanup_process)
+        } else unrelate(egg, n, true, cleanup_process)
       }
     } yield ()
 
   override def neighbors(
-    egg: Eggz.Service,
+    egg: GLOBZ_ID,
     direction: Int
-  ): IO[GLOBZ_ERR, Vector[GLOBZ_IN]] =
-    (for {
+  ): IO[GLOBZ_ERR, Vector[GLOBZ_ID]] =
+    for {
       rels <- relationRef.get
       tasks = rels.toVector
         .collect {
-          case ((id1, id2), related) if id1 == egg.id => id2
-          case ((id1, id2), related) if id2 == egg.id => id1
+          case ((id1, id2), related) if id1 == egg => id2
+          case ((id1, id2), related) if id2 == egg => id1
         }
-        .map(x => get(x))
-      k <- ZIO.collectAllPar(tasks)
-    } yield k.collect { case Some(g) => g }).orElseFail("whoops")
+    } yield tasks
 
   override def scheduleEgg(
     egg: GLOBZ_IN,

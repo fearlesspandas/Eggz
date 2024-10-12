@@ -115,9 +115,9 @@ trait LivingEntity
     glob.relate(egg1, egg2, bidirectional, process)
 
   def neighbors(
-    egg: Eggz.Service,
+    egg: GLOBZ_ID,
     direction: Int
-  ): IO[GLOBZ_ERR, Vector[Eggz.Service]] =
+  ): IO[GLOBZ_ERR, Vector[GLOBZ_ID]] =
     glob.neighbors(egg, direction)
 
   def scheduleEgg(
@@ -218,15 +218,17 @@ trait LivingEntity
     destinations.decrement()
 
   def unrelate(
-    egg1: scala.entity.Globz.GLOBZ_IN,
-    egg2: scala.entity.Globz.GLOBZ_IN,
-    bidirectional: Boolean
-  ): IO[GLOBZ_ERR, Unit] = glob.unrelate(egg1, egg2, bidirectional)
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    process: ZIO[Any, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] = glob.unrelate(egg1, egg2, bidirectional, process)
 
   def unrelateAll(
-    egg: scala.entity.Globz.GLOBZ_IN,
-    direction: Level
-  ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction)
+    egg: GLOBZ_ID,
+    direction: Level,
+    cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction, cleanup_process)
 
   def setInputVec(vec: Vector[Experience]): IO[PhysicsError, Unit] =
     physics.setInputVec(vec)

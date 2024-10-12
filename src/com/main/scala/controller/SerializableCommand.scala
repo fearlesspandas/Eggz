@@ -16,6 +16,7 @@ import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.Health
 import entity.LivingEntity
+import entity.NPC
 import entity.PhysicalEntity
 import entity.Player
 import entity.Prowler
@@ -537,9 +538,7 @@ case class UNRELATE_EGGS(
     (for {
       globOp <- WorldBlock.getBlob(globId)
       glob <- ZIO.fromOption(globOp)
-      e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
-      e2 <- glob.get(egg2).flatMap(ZIO.fromOption(_))
-      _ <- glob.unrelate(e1, e2, bidirectional)
+      _ <- glob.unrelate(egg1, egg2, bidirectional, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
 object UNRELATE_EGGS {
@@ -556,8 +555,7 @@ case class UNRELATE_ALL(egg1: ID, globId: GLOBZ_ID, direction: Int)
     (for {
       globOp <- WorldBlock.getBlob(globId)
       glob <- ZIO.fromOption(globOp)
-      e1 <- glob.get(egg1).flatMap(ZIO.fromOption(_))
-      _ <- glob.unrelateAll(e1, direction)
+      _ <- glob.unrelateAll(egg1, direction, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
 object UNRELATE_ALL {
@@ -632,12 +630,21 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
       isActive <- blob
         .isActive()
         .orElseFail(GenericCommandError("Error trying to retrieve isActive"))
+      client_messages <- blob match {
+        case _: NPC => ZIO.succeed(Chunk())
+        case _: Player =>
+          ZIO.succeed(
+            Chunk(
+              QueuedClientMessage(id, Chunk(GravityActive(id, gravitate)))
+            )
+          )
+        case _ => ZIO.succeed(Chunk())
+      }
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !gravitate))),
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, gravitate)))),
-        QueuedClientMessage(id, Chunk(GravityActive(id, gravitate)))
-      )
+        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, gravitate))))
+      ) ++ client_messages
     )
 }
 object TOGGLE_GRAVITATE {
@@ -674,12 +681,19 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
             "Could not retrieve is active after setting gravitate"
           )
         )
+      client_messages <- blob match {
+        case _: NPC => ZIO.succeed(Chunk())
+        case _: Player =>
+          ZIO.succeed(
+            Chunk(QueuedClientMessage(id, Chunk(GravityActive(id, res))))
+          )
+        case _ => ZIO.succeed(Chunk())
+      }
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !res))),
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res)))),
-        QueuedClientMessage(id, Chunk(GravityActive(id, res)))
-      )
+        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res))))
+      ) ++ client_messages
     )
 }
 object SET_GRAVITATE {
@@ -720,12 +734,21 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
     gravitate <- blob
       .isGravitating()
       .orElseFail(GenericCommandError("Could not retrieve isGravitating"))
+    client_messages <- blob match {
+      case _: NPC => ZIO.succeed(Chunk())
+      case _: Player =>
+        ZIO.succeed(
+          Chunk(
+            QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
+          )
+        )
+      case _ => ZIO.succeed(Chunk())
+    }
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
-      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive)))),
-      QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
-    )
+      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+    ) ++ client_messages
   )
 }
 object TOGGLE_DESTINATIONS {
@@ -761,12 +784,21 @@ case class SET_ACTIVE(id: ID, value: Boolean)
     gravitate <- blob
       .isGravitating()
       .orElseFail(GenericCommandError("Could not retrieve isGravitating"))
+    client_messages <- blob match {
+      case _: NPC => ZIO.succeed(Chunk())
+      case _: Player =>
+        ZIO.succeed(
+          Chunk(
+            QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
+          )
+        )
+      case _ => ZIO.succeed(Chunk())
+    }
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
-      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive)))),
-      QueuedClientMessage(id, Chunk(DestinationsActive(id, isactive)))
-    )
+      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+    ) ++ client_messages
   )
 }
 object SET_ACTIVE {
@@ -821,6 +853,44 @@ object FOLLOW_ENTITY {
     .gen[FOLLOW_ENTITY]
   implicit val decoder: JsonDecoder[FOLLOW_ENTITY] =
     DeriveJsonDecoder.gen[FOLLOW_ENTITY]
+
+  case class FollowEntityError(msg: String) extends CommandError
+}
+case class UNFOLLOW_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
+    extends SimpleCommandSerializable[WorldBlock.Block] {
+  override val REF_TYPE: Any = (FOLLOW_ENTITY, id, target)
+  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+    for {
+      worldblock <- ZIO.service[WorldBlock.Block]
+      entity <- worldblock
+        .getBlob(id)
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          _ => FollowEntityError(s"Could not find entity with id $id"),
+          { case li: LivingEntity =>
+            li
+          }
+        )
+      _ <- worldblock
+        .npc_handler()
+        .flatMap(_.add_entity_as_npc(entity))
+        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
+      // should maybe be in npc handler and not entity
+      _ <- entity
+        .unrelate(
+          id,
+          target,
+          false,
+          ZIO.unit
+        )
+        .orElseFail(FollowEntityError("Error while following entity"))
+    } yield ()
+}
+object UNFOLLOW_ENTITY {
+  implicit val encoder: JsonEncoder[UNFOLLOW_ENTITY] = DeriveJsonEncoder
+    .gen[UNFOLLOW_ENTITY]
+  implicit val decoder: JsonDecoder[UNFOLLOW_ENTITY] =
+    DeriveJsonDecoder.gen[UNFOLLOW_ENTITY]
 
   case class FollowEntityError(msg: String) extends CommandError
 }
@@ -1320,11 +1390,20 @@ case class SET_SPEED(id: GLOBZ_ID, value: Double)
       speed <- glob.getSpeed.orElseFail(
         GenericCommandError("Could not retrieve speed")
       )
+      client_messages <- glob match {
+        case _: NPC => ZIO.succeed(Chunk())
+        case _: Player =>
+          ZIO.succeed(
+            Chunk(
+              QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
+            )
+          )
+        case _ => ZIO.succeed(Chunk())
+      }
     } yield MultiResponse(
       Chunk(
-        PhysStat(id, ms, speed),
-        QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
-      )
+        PhysStat(id, ms, speed)
+      ) ++ client_messages
     ))
       .orElseFail(GenericCommandError(s"Error adjusting speed for $id"))
 }
@@ -1353,11 +1432,20 @@ case class ADJUST_MAX_SPEED(id: GLOBZ_ID, delta: Double)
       speed <- glob.getSpeed.orElseFail(
         GenericCommandError("Could not retrieve speed")
       )
+      client_messages <- glob match {
+        case _: NPC => ZIO.succeed(Chunk())
+        case _: Player =>
+          ZIO.succeed(
+            Chunk(
+              QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
+            )
+          )
+        case _ => ZIO.succeed(Chunk())
+      }
     } yield MultiResponse(
       Chunk(
-        PhysStat(id, ms, speed),
-        QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
-      )
+        PhysStat(id, ms, speed)
+      ) ++ client_messages
     ))
       .orElseFail(GenericCommandError(s"Error adjusting speed for $id"))
 }
@@ -1826,20 +1914,19 @@ object ABILITY {
 }
 case class ADD_ITEM(id: GLOBZ_ID, item: Item)
     extends ResponseQuery[WorldBlock.Block] {
-
   override val REF_TYPE: Any = (ADD_ITEM, id)
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .service[WorldBlock.Block]
-        .flatMap(_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .flatMap(ZIO.fromOption(_))
-        .map { case li: LivingEntity => li }
-        .mapError(_ => AbilitiesError(s"Could not find living entity for $id"))
+        .mapBoth(
+          _ => AbilitiesError(s"Could not find living entity for $id"),
+          { case li: LivingEntity => li }
+        )
       _ <- glob
         .add(item)
-        .mapError(_ =>
+        .orElseFail(
           AbilitiesError(s"Error while adding item to inventory for id $id")
         )
     } yield MultiResponse(
