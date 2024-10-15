@@ -11,12 +11,14 @@ import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
 import entity.Ability
+import entity.AbilityArgs
 import entity.AbilityDoesNotExistError
 import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.Health
 import entity.LivingEntity
 import entity.NPC
+import entity.NoArgs
 import entity.PhysicalEntity
 import entity.Player
 import entity.Prowler
@@ -1874,7 +1876,7 @@ object GET_CACHED_TERRAIN {
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
 //---------------------------------ABILITIES-----------------------------------------------------
-case class ABILITY(from: GLOBZ_ID, ability_id: Int)
+case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ABILITY, from, ability_id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =

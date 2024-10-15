@@ -177,15 +177,25 @@ case class BasicWebSocket(
         } yield ()).when(glob.isEmpty && !server_keys.contains(id))
       } yield ()
 
-  val parse_message: (String) => ZIO[Any, Nothing, SerializableCommand[_, _]] =
+  val parse_message
+    : (String) => ZIO[Any, Nothing, Option[SerializableCommand[_, _]]] =
     text =>
       ZIO
         .fromEither(text.fromJson[SerializableCommand[_, _]])
-        .flatMapError(err =>
-          ZIO.log(
-            s"Error while deserializing command $text, error : $err"
-          ) *> ZIO.never
+        .foldZIO(
+          err =>
+            ZIO
+              .log(
+                s"Error while deserializing command $text, error : $err"
+              )
+              .as(None),
+          ZIO.some(_)
         )
+//        .flatMapError(err =>
+//          ZIO.log(
+//            s"Error while deserializing command $text, error : $err"
+//          ) *> ZIO.never
+//        )
 
   val authorizeMsg: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
     cmd =>
@@ -271,7 +281,7 @@ case class BasicWebSocket(
         channel.shutdown
       case text =>
         (for {
-          msg <- parse_message(text)
+          msg <- parse_message(text).flatMap(ZIO.fromOption(_))
           authorized <- authorizeMsg(msg)
           _ <-
             handle_request(msg)

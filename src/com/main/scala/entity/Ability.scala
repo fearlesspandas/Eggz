@@ -11,6 +11,7 @@ import controller.SerializableCommand
 import entity.Ability.ABILITY_ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.*
+import zio.json._
 
 trait Ability extends Command[WorldBlock.Block, QueryResponse] {
   val id: ABILITY_ID
@@ -18,7 +19,11 @@ trait Ability extends Command[WorldBlock.Block, QueryResponse] {
 object Ability {
   type ABILITY_ID = Int
   private val ability_config = Chunk(Smack)
-  def make(id: ABILITY_ID, from: GLOBZ_ID): IO[AbilityError, Ability] =
+  def make(
+    id: ABILITY_ID,
+    from: GLOBZ_ID,
+    args: AbilityArgs = NoArgs
+  ): IO[AbilityError, Ability] =
     id match {
       case 0 => ZIO.succeed(Smack(from))
       case _ => ZIO.fail(AbilityDoesNotExistError)
@@ -45,3 +50,34 @@ case class Smack(from: GLOBZ_ID) extends Ability {
         )
     } yield res
 }
+
+case class GlobularTeleport(
+  from: GLOBZ_ID,
+  points: Shape
+) extends Ability {
+  override val id: ABILITY_ID = 0
+  override def run
+    : ZIO[WorldBlock.Block, SerializableCommand.CommandError, QueryResponse] =
+    for {
+      res <- ZIO
+        .succeed(
+          MultiResponse(
+            Chunk(
+              QueuedServerMessage(Chunk(DoAbility(from, 0, points))),
+              QueuedClientBroadcast(Chunk(DoAbility(from, 0, points)))
+            )
+          )
+        )
+    } yield res
+}
+sealed trait AbilityArgs
+object AbilityArgs {
+  implicit val encoder: JsonEncoder[AbilityArgs] =
+    DeriveJsonEncoder.gen[AbilityArgs]
+  implicit val decoder: JsonDecoder[AbilityArgs] =
+    DeriveJsonDecoder.gen[AbilityArgs]
+}
+
+case object NoArgs extends AbilityArgs
+
+case class Shape(points: Set[(Double, Double, Double)]) extends AbilityArgs

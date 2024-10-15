@@ -305,7 +305,7 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant for GET_CACHED_TERRAIN")
   }
   val ability: AUTH[String] = {
-    case ABILITY(from, _) =>
+    case ABILITY(from, _, _) =>
       for {
         sender <- ZIO.service[String]
       } yield sender == from

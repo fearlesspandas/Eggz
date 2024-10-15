@@ -68,26 +68,6 @@ case class Prowler(
         .zip(ZIO.succeed(loc(2)))
     } yield PROWLER_EGG(id, stats, location)
 
-//  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
-//    worldblock <- ZIO.service[WorldBlock.Block]
-//    player <- worldblock
-//      .getBlob(id)
-//      .flatMap { l =>
-//        ZIO.fromOption(l)
-//      }
-//      .mapError(_ => GenericNPCError(s"Player not found for $id"))
-//    _ <- player match {
-//      case l: LivingEntity =>
-//        for {
-//          loc <- l.physics.getLocation.mapError(_ => ???)
-//          _ <- destinations.clearDestinations().mapError(_ => ???)
-//          _ <- destinations
-//            .addDestination(WaypointDestination(loc, 0))
-//            .mapError(_ => ???)
-//        } yield ()
-//    }
-//  } yield ()
-
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
   override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
@@ -122,12 +102,12 @@ case class Spider(
   skillset: SkillSet,
   inventory: Storage.Service[Item]
 )(
-  val healthRef: Ref[Double],
-  val energyRef: Ref[Double],
+  val healthRef: Ref[Map[GLOBZ_ID, Double]],
+  val energyRef: Ref[Map[GLOBZ_ID, Double]],
   val physics: PhysicalEntity,
   val glob: Globz,
   val destinations: Destinations
-) extends NPC {
+) extends InstanceEntity {
   override def doAction[E, B](
     action: ZIO[LivingEntityEnv, E, B]
   ): ZIO[LivingEntity, E, B] =
@@ -135,8 +115,8 @@ case class Spider(
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
-      health <- this.health
-      energy <- this.energy
+      health <- ZIO.succeed(this.starting_health)
+      energy <- ZIO.succeed(this.starting_energy)
       stats = Stats(this.id, health, energy)
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
@@ -146,8 +126,8 @@ case class Spider(
 
   override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
     for {
-      health <- health.orElseFail(NPCStatsNotFoundError)
-      energy <- energy.orElseFail(NPCStatsNotFoundError)
+      health <- ZIO.succeed(this.starting_health)
+      energy <- ZIO.succeed(this.starting_energy)
       stats = Stats(id, health, energy)
       loc <- getLocation.orElseFail(NPCStatsNotFoundError)
       location <- ZIO
@@ -155,26 +135,6 @@ case class Spider(
         .zip(ZIO.succeed(loc(1)))
         .zip(ZIO.succeed(loc(2)))
     } yield PROWLER_EGG(id, stats, location)
-
-//  def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
-//    worldblock <- ZIO.service[WorldBlock.Block]
-//    player <- worldblock
-//      .getBlob(id)
-//      .flatMap { l =>
-//        ZIO.fromOption(l)
-//      }
-//      .mapError(_ => GenericNPCError(s"Player not found for $id"))
-//    _ <- player match {
-//      case l: LivingEntity =>
-//        for {
-//          loc <- l.physics.getLocation.mapError(_ => ???)
-//          _ <- destinations.clearDestinations().mapError(_ => ???)
-//          _ <- destinations
-//            .addDestination(WaypointDestination(loc, 0))
-//            .mapError(_ => ???)
-//        } yield ()
-//    }
-//  } yield ()
 
   override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
 
@@ -185,6 +145,9 @@ case class Spider(
 
   override def setIndex(index: Int): IO[DestinationsError, Unit] =
     destinations.setIndex(index)
+
+  override val starting_health: Double = 100000
+  override val starting_energy: Double = 100000
 }
 
 object Spider extends Globz.Service {
@@ -194,8 +157,8 @@ object Spider extends Globz.Service {
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
       stor <- Storage.make[Item]
-      href <- Ref.make(1000.0)
-      eref <- Ref.make(1000.0)
+      href <- Ref.make(Map.empty[GLOBZ_ID, Double])
+      eref <- Ref.make(Map.empty[GLOBZ_ID, Double])
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()

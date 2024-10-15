@@ -1,11 +1,13 @@
 package controller
 
+import entity.AbilityArgs
 import entity.EggzModel
 import entity.GlobzModel
-import entity.LivingEntity.Item
+import entity.NoArgs
 import entity.TerrainModel
 import entity.TerrainRegionM
 import entity.TerrainUnitM
+import entity.LivingEntity.Item
 import entity.Terrain.TerrainId
 import entity.TerrainRegion.TERRAIN_KEY
 import physics.DEST
@@ -311,7 +313,11 @@ object TerrainRegionm {
 }
 //-------------Abilities--------------
 
-case class DoAbility(entity_id: GLOBZ_ID, ability_id: Int) extends QueryResponse
+case class DoAbility(
+  entity_id: GLOBZ_ID,
+  ability_id: Int,
+  args: AbilityArgs = NoArgs
+) extends QueryResponse
 object DoAbility {
   implicit val decoder: JsonDecoder[DoAbility] =
     DeriveJsonDecoder.gen[DoAbility]
