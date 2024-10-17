@@ -1889,21 +1889,21 @@ case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
         )
         .orElseFail(GenericCommandError(s"No entity found with Id $from"))
       res <- Ability
-        .make(ability_id, from)
+        .make(ability_id, from, args)
         .flatMap(_.run)
         .whenZIO(entity.getInventory().map(_.contains(ability_id)))
         .flatMap(ZIO.fromOption(_))
         .foldZIO(
           {
             case AbilityDoesNotExistError => ZIO.succeed(QueryResponse.Empty)
-            case _ =>
-              ZIO.succeed(
+            case err =>
+              ZIO.logError(s"Ability fizzled due to $err").as {
                 Fizzle(
                   from,
                   ability_id,
                   "Item for ability not found in inventory"
                 )
-              )
+              }
           },
           ZIO.succeed(_)
         )

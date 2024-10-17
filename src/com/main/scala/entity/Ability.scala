@@ -26,6 +26,14 @@ object Ability {
   ): IO[AbilityError, Ability] =
     id match {
       case 0 => ZIO.succeed(Smack(from))
+      case 1 =>
+        args match {
+          case s: Shape => ZIO.succeed(GlobularTeleport(from, s))
+          case _ =>
+            ZIO.logError(s"wrong args $args") *> ZIO.fail(
+              WrongArgsForAbilityError
+            )
+        }
       case _ => ZIO.fail(AbilityDoesNotExistError)
     }
 }
@@ -33,6 +41,7 @@ trait AbilityError
 case class SmackAbilityError(msg: String) extends AbilityError
 case object AbilityRequirementsNotMetError extends AbilityError
 case object AbilityDoesNotExistError extends AbilityError
+case object WrongArgsForAbilityError extends AbilityError
 
 case class Smack(from: GLOBZ_ID) extends Ability {
   override val id: ABILITY_ID = 0
@@ -63,8 +72,8 @@ case class GlobularTeleport(
         .succeed(
           MultiResponse(
             Chunk(
-              QueuedServerMessage(Chunk(DoAbility(from, 0, points))),
-              QueuedClientBroadcast(Chunk(DoAbility(from, 0, points)))
+              QueuedServerMessage(Chunk(DoAbility(from, 1, points))),
+              QueuedClientBroadcast(Chunk(DoAbility(from, 1, points)))
             )
           )
         )
@@ -80,4 +89,13 @@ object AbilityArgs {
 
 case object NoArgs extends AbilityArgs
 
-case class Shape(points: Set[(Double, Double, Double)]) extends AbilityArgs
+case class Shape(
+  points: Set[(Double, Double, Double)],
+  location: (Double, Double, Double)
+) extends AbilityArgs
+//object Shape {
+//  implicit val encoder: JsonEncoder[Shape] =
+//    DeriveJsonEncoder.gen[Shape]
+//  implicit val decoder: JsonDecoder[Shape] =
+//    DeriveJsonDecoder.gen[Shape]
+//}
