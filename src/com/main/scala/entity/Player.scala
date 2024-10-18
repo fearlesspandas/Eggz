@@ -50,6 +50,7 @@ case class BasicPlayer(
 )(
   val healthRef: Ref[Double],
   val energyRef: Ref[Double],
+  val ability_data_ref: Ref[Map[DATA_TYPE, DATA]],
   val physics: PhysicalEntity,
   val glob: Globz,
   val destinations: Destinations
@@ -110,7 +111,8 @@ object BasicPlayer extends Globz.Service {
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
-    } yield BasicPlayer(id, ss, stor)(href, eref, pe, g, dests)
+      ability_data <- Ref.make(Map.empty[DATA_TYPE, DATA])
+    } yield BasicPlayer(id, ss, stor)(href, eref, ability_data, pe, g, dests)
 
 }
 case object PlayerStatsNotFound extends EggzError

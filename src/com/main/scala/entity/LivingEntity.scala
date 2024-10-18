@@ -37,6 +37,7 @@ trait LivingEntity
     with Globz
     with PhysicalEntity
     with Health
+    with AbilityData
     with Destinations {
 
   def doAction[E, B](
