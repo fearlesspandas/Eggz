@@ -16,6 +16,8 @@ import zio.*
 import zio.json.*
 import implicits._
 
+//todo copy this structure somewhat to handle progress data management
+// maybe keep at worldblock level implementation for global data handling (no reliance on the glob api)
 trait Ability extends Command[WorldBlock.Block, QueryResponse] {
   val id: ABILITY_ID
 }
@@ -96,7 +98,7 @@ case class GlobularTeleport(
           for {
             data <- get_data(from).orElseFail(GlobularTeleportExecuteError)
             points <- data.points.get
-            mapped_points <- ZIO.foreachPar(points.take(3))(v =>
+            mapped_points <- ZIO.foreachPar(points.take(4))(v =>
               ZIO
                 .succeed(v(0))
                 .zip(ZIO.succeed(v(1)))

@@ -1,6 +1,9 @@
 package network
 
+import entity.InstanceEntity
+import entity.NPC
 import entity.PhysicalEntity
+import entity.Player
 import entity.WorldBlock
 import network.PhysicsChannel.PHYSICS_COMMAND
 import physics.PhysicsCommand
@@ -176,26 +179,41 @@ object PhysicsChannel {
   def make: ZIO[WorldBlock.Block, PhysicsChannelError, PhysicsChannel] =
     for {
       id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
+      npc_id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
       queue <- Queue.unbounded[PHYSICS_COMMAND]
       wb <- ZIO.service[WorldBlock.Block]
-    } yield BasicPhysicsChannel(id_queue, queue, wb)
+    } yield BasicPhysicsChannel(id_queue, npc_id_queue, queue, wb)
 }
 case class BasicPhysicsChannel(
-  id_queue: Ref[Seq[GLOBZ_ID]],
+  player_id_queue: Ref[Seq[GLOBZ_ID]],
+  npc_id_queue: Ref[Seq[GLOBZ_ID]],
   cmd_queue: Queue[PHYSICS_COMMAND],
   worldBlock: WorldBlock.Block
 ) extends PhysicsChannel {
 
-  def process_id_queue() =
+  private def process_id_queue() =
     for {
-      q <- id_queue.get
+      q <- player_id_queue.get
       next_id <- ZIO
         .fromOption(q.headOption)
         .foldZIO(
           err =>
             for {
               ids <- worldBlock.getAllBlobs().map(_.map(g => g.id))
-              _ <- id_queue.update(_ => ids.toSeq)
+//              player_ids <- worldBlock
+//                .getAllBlobs()
+//                .flatMap(ZIO.filterPar(_) {
+//                  case pl: Player             => ZIO.succeed(true);
+//                  case entity: InstanceEntity => ZIO.succeed(true);
+//                  case _                      => ZIO.succeed(false)
+//                })
+//              npc_ids <- worldBlock
+//                .getAllBlobs()
+//                .flatMap(ZIO.filterPar(_) {
+//                  case npc: NPC => ZIO.succeed(true);
+//                  case _        => ZIO.succeed(false)
+//                })
+              _ <- player_id_queue.update(_ => ids.toSeq)
             } yield ids.headOption,
           x => ZIO.some(x)
         )
@@ -210,7 +228,7 @@ case class BasicPhysicsChannel(
       //          _ => ZIO.log("Sending noop liveness probe") *> send_noop(),
       //          ZIO.succeed(_)
       //        )
-      _ <- id_queue.update(_.tail)
+      _ <- player_id_queue.update(_.tail)
     } yield ()
 
   def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
