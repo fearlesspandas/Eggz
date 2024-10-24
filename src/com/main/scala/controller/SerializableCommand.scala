@@ -1,6 +1,10 @@
 package controller
 
 import controller.ADD_DESTINATION.AddDestinationError
+import controller.BIND_ENTITY.BindEntityError
+import controller.BIND_ENTITY.BindingEntityNotFoundError
+import controller.BIND_ENTITY.BindingMaxSpeedAdjustError
+import controller.BIND_ENTITY.NonBindableEntityError
 import controller.CONSOLE.CONSOLE_ENV
 import controller.CONSOLE.en
 import controller.CREATE_PROWLER.CreateProwlerError
@@ -54,6 +58,8 @@ import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.RepairEgg
 import zio.Chunk
+import zio.Duration
+import zio.Schedule
 import zio.ZIO
 import zio.ZLayer
 import zio.http.ChannelEvent.Read
@@ -836,18 +842,12 @@ case class FOLLOW_ENTITY(id: ID, target: ID)
           id,
           target,
           false,
-          worldblock
-            .npc_handler()
-            .flatMap(
-              _.scheduleEgg(
-                entity,
-                entity
-                  .follow_player(target)
-                  .provide(ZLayer.succeed(worldblock))
-                  .mapError(err => err.toString)
-              )
-            )
-            .orElseFail("Error while scheduling")
+          entity
+            .follow_player(target)
+            .provide(ZLayer.succeed(worldblock))
+            .repeat(Schedule.spaced(Duration.fromMillis(300)))
+            .orElseFail("Error while scheduling entity follow")
+            .unit
         )
         .orElseFail(FollowEntityError("Error while following entity"))
     } yield ()
@@ -875,10 +875,10 @@ case class UNFOLLOW_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
             li
           }
         )
-      _ <- worldblock
-        .npc_handler()
-        .flatMap(_.add_entity_as_npc(entity))
-        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
+//      _ <- worldblock
+//        .npc_handler()
+//        .flatMap(_.add_entity_as_npc(entity))
+//        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
       // should maybe be in npc handler and not entity
       _ <- entity
         .unrelate(
@@ -897,6 +897,45 @@ object UNFOLLOW_ENTITY {
     DeriveJsonDecoder.gen[UNFOLLOW_ENTITY]
 
   case class FollowEntityError(msg: String) extends CommandError
+}
+case class BIND_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (BIND_ENTITY, id, target)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      following <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          _ => BindingEntityNotFoundError,
+          { case li: LivingEntity => li }
+        )
+      target_entity <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(target))
+        .flatMap(ZIO.fromOption(_))
+        .orElseFail(BindEntityError(s"Could not find blob with id $id"))
+        .flatMap {
+          case li: LivingEntity => ZIO.succeed(li);
+          case _                => ZIO.fail(NonBindableEntityError)
+        }
+      fms <- following.getMaxSpeed.orElseFail(BindingMaxSpeedAdjustError)
+      tms <- target_entity.getMaxSpeed.orElseFail(BindingMaxSpeedAdjustError)
+      ts <- target_entity.getSpeed.orElseFail(BindingMaxSpeedAdjustError)
+      follow <- FOLLOW_ENTITY(id, target).run
+      max_speed_adjust <- ADJUST_MAX_SPEED(id, -fms + tms).run
+      speed_adjust <- SET_SPEED(id, ts).run
+    } yield MultiResponse(Chunk(max_speed_adjust, speed_adjust))
+}
+object BIND_ENTITY {
+  implicit val encoder: JsonEncoder[BIND_ENTITY] = DeriveJsonEncoder
+    .gen[BIND_ENTITY]
+  implicit val decoder: JsonDecoder[BIND_ENTITY] =
+    DeriveJsonDecoder.gen[BIND_ENTITY]
+
+  case class BindEntityError(msg: String) extends CommandError
+  case object BindingEntityNotFoundError extends CommandError
+  case object NonBindableEntityError extends CommandError
+  case object BindingMaxSpeedAdjustError extends CommandError
 }
 case class ADD_DESTINATION(id: ID, dest: destination)
     extends ResponseQuery[WorldBlock.Block] {

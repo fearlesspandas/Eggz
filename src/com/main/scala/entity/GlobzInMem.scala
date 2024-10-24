@@ -150,7 +150,7 @@ case class GlobzInMem(
         err => (),
         x => x
       )
-      .repeat(Schedule.spaced(fromMillis(1000)))
+      .repeat(Schedule.spaced(fromMillis(300)))
       .unit
     // .provide(ZLayer.succeed(this))
 //      .fork
