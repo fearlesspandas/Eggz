@@ -1,6 +1,7 @@
 package entity
 
 import controller.Command
+import controller.ItemAdded
 import controller.MultiResponse
 import controller.ProgressUpdate
 import controller.QueryResponse
@@ -32,7 +33,10 @@ trait ProgressData {
       case _ => ZIO.fail(ArgsNotRecognizedError)
     }
 
-  def tutorialStage(id: GLOBZ_ID, stage: Int): ZIO[Any, ProgressError, Unit]
+  def tutorialStage(
+    id: GLOBZ_ID,
+    stage: Int
+  ): ZIO[WorldBlock.Block, ProgressError, Chunk[QueryResponse]]
 }
 object ProgressData {
   def make: UIO[ProgressData] = for {
@@ -41,13 +45,31 @@ object ProgressData {
 }
 trait ProgressError extends CommandError
 case object ArgsNotRecognizedError extends ProgressError
+case object NoIdFoundError extends ProgressError
+case object CouldNotAddToInventory extends ProgressError
 
 case class BasicProgressData() extends ProgressData {
 
   override def tutorialStage(
     id: GLOBZ_ID,
     stage: Int
-  ): ZIO[Any, ProgressError, Unit] = ZIO.unit
+  ): ZIO[WorldBlock.Block, ProgressError, Chunk[QueryResponse]] =
+    stage match {
+      case 0 =>
+        for {
+          _ <- ZIO
+            .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+            .flatMap(ZIO.fromOption(_))
+            .flatMap {
+              case li: LivingEntity => ZIO.succeed(li);
+              case _                => ZIO.fail(NoIdFoundError)
+            }
+            .orElseFail(NoIdFoundError)
+            .flatMap(_.add(1).orElseFail(CouldNotAddToInventory))
+        } yield Chunk(
+          QueuedClientMessage(id, Chunk(ItemAdded(id, 1)))
+        )
+    }
 }
 
 trait Progress
@@ -63,12 +85,12 @@ case class Tutorial(id: GLOBZ_ID, args: ProgressArgs) extends Progress {
       case TutorialComplete(stage) =>
         ZIO
           .serviceWithZIO[ProgressData](_.tutorialStage(id, stage))
-          .as(
+          .map(res =>
             MultiResponse(
               Chunk(
                 QueuedServerMessage(Chunk(ProgressUpdate(id, args))),
                 QueuedClientMessage(id, Chunk(ProgressUpdate(id, args)))
-              )
+              ) ++ res
             )
           )
       case _ => ZIO.fail(ArgsNotRecognizedError)
