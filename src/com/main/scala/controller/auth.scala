@@ -187,6 +187,13 @@ package object auth {
       } yield id != target && (id == sender || server_keys.contains(sender))
     case cmd => ZIO.fail(s"$cmd not relevant to UNFOLLOW_ENTITY")
   }
+  val bind_entity: ServerKeys => AUTH[String] = server_keys => {
+    case BIND_ENTITY(id, target) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield id != target && (id == sender || server_keys.contains(sender))
+    case cmd => ZIO.fail(s"$cmd not relevant to BIND_ENTITY")
+  }
   val set_mode_destinations: ServerKeys => AUTH[String] = server_keys => {
     case SET_MODE_DESTINATIONS(id, mode) =>
       for {
@@ -383,6 +390,8 @@ object AuthCommandService {
             clear_destinations(server_keys)(op),
             delete_destination(op),
             follow_entity(server_keys)(op),
+            unfollow_entity(server_keys)(op),
+            bind_entity(server_keys)(op),
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),
@@ -439,6 +448,8 @@ object AuthCommandService {
             clear_destinations(server_keys)(op),
             delete_destination(op),
             follow_entity(server_keys)(op),
+            unfollow_entity(server_keys)(op),
+            bind_entity(server_keys)(op),
             set_lv(server_keys)(op),
             lazy_lv(op),
             adjust_physical_stats(op),

@@ -6,7 +6,7 @@ import entity.WorldBlock.WorldBlockError
 import network.BasicPhysicsChannel
 import network.PhysicsChannel
 import physics.PhysicsCommand
-import physics.SendLocation
+import physics.Loc
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Eggz

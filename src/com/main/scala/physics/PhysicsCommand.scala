@@ -8,13 +8,13 @@ object PhysicsCommand {
   implicit val decoder: JsonDecoder[PhysicsCommand] =
     DeriveJsonDecoder.gen[PhysicsCommand]
 }
-case class SendLocation(id: String, loc: Vector[Double]) extends PhysicsCommand
-object SendLocation {
-  implicit val encoder: JsonEncoder[SendLocation] =
-    DeriveJsonEncoder.gen[SendLocation]
+case class Loc(id: String, loc: Vector[Double]) extends PhysicsCommand
+object Loc {
+  implicit val encoder: JsonEncoder[Loc] =
+    DeriveJsonEncoder.gen[Loc]
 
-  implicit val decoder: JsonDecoder[SendLocation] =
-    DeriveJsonDecoder.gen[SendLocation]
+  implicit val decoder: JsonDecoder[Loc] =
+    DeriveJsonDecoder.gen[Loc]
 }
 case class SetInputLock(id: String, value: Boolean) extends PhysicsCommand
 case class PhysicsTeleport(id: String, location: (Double, Double, Double))
@@ -24,7 +24,7 @@ object serializationTest {
   import zio.json._
 
   def main(args: Array[String]): Unit = {
-    val str = SendLocation("test", Vector(0, 0, 0))
+    val str = Loc("test", Vector(0, 0, 0))
     println(str.toJson)
     val cmd =
       """{

@@ -8,7 +8,7 @@ import entity.WorldBlock
 import network.PhysicsChannel.PHYSICS_COMMAND
 import physics.PhysicsCommand
 import physics.PhysicsTeleport
-import physics.SendLocation
+import physics.Loc
 import physics.SetInputLock
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.*
@@ -55,7 +55,7 @@ trait PhysicsChannel {
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
       _ <- send(
-        s""" {"type":"SET_GLOB_LOCATION", "body":{"id": "$id","location":[${loc._1},${loc._2},${loc._3}]}} """
+        s""" {"type":"SET_LOC", "body":{"id": "$id","location":[${loc._1},${loc._2},${loc._3}]}} """
       )
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
@@ -65,7 +65,7 @@ trait PhysicsChannel {
     id: String
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
-      _ <- send(s""" {"type":"GET_GLOB_LOCATION", "body":{"id": "$id"}} """)
+      _ <- send(s""" {"type":"GET_LOC", "body":{"id": "$id"}} """)
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
         )
@@ -98,7 +98,7 @@ trait PhysicsChannel {
                   .flatMapError(err =>
                     ZIO.log(s"Could not map $txt due to $err")
                   )
-                  .map(_.asInstanceOf[SendLocation])
+                  .map(_.asInstanceOf[Loc])
                 _ <- wb.getBlob(r.id).flatMap(ZIO.fromOption(_)).flatMap {
                   case pe: PhysicalEntity =>
                     pe.teleport(r.loc)
