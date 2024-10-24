@@ -4,6 +4,7 @@ import entity.AbilityArgs
 import entity.EggzModel
 import entity.GlobzModel
 import entity.NoArgs
+import entity.ProgressArgs
 import entity.TerrainModel
 import entity.TerrainRegionM
 import entity.TerrainUnitM
@@ -323,6 +324,16 @@ object DoAbility {
     DeriveJsonDecoder.gen[DoAbility]
   implicit val encoder: JsonEncoder[DoAbility] =
     DeriveJsonEncoder.gen[DoAbility]
+}
+case class ProgressUpdate(
+  id: GLOBZ_ID,
+  args: ProgressArgs
+) extends QueryResponse
+object ProgressUpdate {
+  implicit val decoder: JsonDecoder[ProgressUpdate] =
+    DeriveJsonDecoder.gen[ProgressUpdate]
+  implicit val encoder: JsonEncoder[ProgressUpdate] =
+    DeriveJsonEncoder.gen[ProgressUpdate]
 }
 //case class ClientDoAbility(entity_id: GLOBZ_ID, ability_id: Int)
 //    extends QueryResponse

@@ -21,6 +21,8 @@ import entity.NPC
 import entity.NoArgs
 import entity.PhysicalEntity
 import entity.Player
+import entity.ProgressArgs
+import entity.ProgressData
 import entity.Prowler
 import entity.Spider
 import entity.Terrain
@@ -1967,6 +1969,20 @@ object GET_INVENTORY {
 }
 case class AbilitiesError(msg: String) extends CommandError
 case class InventoryError(msg: String) extends CommandError
+//---------------------------------PROGRESS-----------------------------------------------
+case class PROGRESS(id: GLOBZ_ID, args: ProgressArgs)
+    extends ResponseQuery[WorldBlock.Block with ProgressData] {
+  override val REF_TYPE: Any = (PROGRESS, id, args)
+  override def run
+    : ZIO[WorldBlock.Block with ProgressData, CommandError, QueryResponse] =
+    ZIO.service[ProgressData].flatMap(_.handle(id, args))
+}
+object PROGRESS {
+  implicit val encoder: JsonEncoder[PROGRESS] =
+    DeriveJsonEncoder.gen[PROGRESS]
+  implicit val decoder: JsonDecoder[PROGRESS] =
+    DeriveJsonDecoder.gen[PROGRESS]
+}
 //---------------------------------CONSOLE--------------------------------------------------------
 case class NEXT_CMD() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = NEXT_CMD

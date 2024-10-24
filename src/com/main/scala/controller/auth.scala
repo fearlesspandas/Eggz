@@ -1,6 +1,7 @@
 package controller
 
 import controller.auth.*
+import entity.TutorialComplete
 import zio.Ref
 import zio.ZIO
 
@@ -325,6 +326,20 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for GET_INVENTORY")
   }
+  val progress: ServerKeys => AUTH[String] = server_keys => {
+    case PROGRESS(id, args) =>
+      args match {
+        case TutorialComplete(stage) if stage == 0 =>
+          for {
+            sender <- ZIO.service[String]
+          } yield sender == id
+        case _ =>
+          for {
+            sender <- ZIO.service[String]
+          } yield server_keys.contains(sender)
+      }
+    case cmd => ZIO.fail(s"$cmd not relevant for PROGRESS")
+  }
   val next_cmd: AUTH[String] = {
     case NEXT_CMD() =>
       for {
@@ -386,6 +401,7 @@ object AuthCommandService {
             ability(op),
             add_item(server_keys)(op),
             get_inventory(op),
+            progress(server_keys)(op),
             next_cmd(op),
             set_active(server_keys)(op),
             toggle_destinations(op),
@@ -441,6 +457,7 @@ object AuthCommandService {
             ability(op),
             add_item(server_keys)(op),
             get_inventory(op),
+            progress(server_keys)(op),
             next_cmd(op),
             set_active(server_keys)(op),
             toggle_destinations(op),
@@ -497,8 +514,8 @@ case class AuthenticationService(
               ZIO.succeed(r)
             case None =>
               for {
-                _ <- ZIO.log(s"creating cached for $command , $sender")
                 rres <- authorizer(cmd)
+                _ <- ZIO.log(s"creating cached for $command , $sender , $rres")
                 _ <- cachedAuth.update(
                   _.updated((command.REF_TYPE, sender), rres)
                 )

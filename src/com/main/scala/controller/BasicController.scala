@@ -3,6 +3,7 @@ package controller
 import controller.Control.CONTROLLER_ENV
 import implicits.*
 import entity.BasicPlayer
+import entity.ProgressData
 import entity.WorldBlock
 import entity.WorldBlockInMem
 import network.PhysicsChannel
@@ -51,24 +52,27 @@ object BasicController {
     def make: IO[ControllerError, BasicController[Env, Queue[QueryResponse]]]
   }
   type DEFINED = Globz.Service with WorldBlock.Block
-  def make
-    : ZIO[Service[DEFINED], ControllerError, BasicController[DEFINED, Queue[
+  def make: ZIO[Service[CONTROLLER_ENV], ControllerError, BasicController[
+    CONTROLLER_ENV,
+    Queue[
       QueryResponse
-    ]]] =
-    ZIO.service[Service[DEFINED]].flatMap(_.make)
+    ]
+  ]] =
+    ZIO.serviceWithZIO[Service[CONTROLLER_ENV]](_.make)
 }
 
 case class Control(
   glob: Globz.Service,
   worldBlock: Ref[WorldBlock.Block],
+  progress: ProgressData,
   server_response_queue: Queue[QueryResponse],
   client_response_queues: Ref[Map[GLOBZ_ID, Queue[QueryResponse]]],
   physics_channel: PhysicsChannel
-) extends BasicController[Globz.Service with WorldBlock.Block, Queue[
+) extends BasicController[CONTROLLER_ENV, Queue[
       QueryResponse
     ]] {
   override def runCommand[E](
-    comm: ZIO[Globz.Service with WorldBlock.Block, E, Unit]
+    comm: ZIO[CONTROLLER_ENV, E, Unit]
   ): ZIO[Any, E, BasicController[CONTROLLER_ENV, Queue[
     QueryResponse
   ]]] =
@@ -76,7 +80,7 @@ case class Control(
       wb <- worldBlock.get
       _ <- comm.provide(ZLayer(ZIO.succeed(glob)) ++ ZLayer {
         ZIO.succeed(wb)
-      })
+      } ++ ZLayer.succeed(progress))
     } yield this
 
   override def runQuery[Q, E](
@@ -85,12 +89,12 @@ case class Control(
     worldBlock.get.flatMap(wb =>
       query.provide(ZLayer(ZIO.succeed(glob)) ++ ZLayer {
         ZIO.succeed(wb)
-      })
+      } ++ ZLayer.succeed(progress))
     )
-
+  @deprecated
   override def runProcess[Q, E](
     query: ZIO[
-      Globz.Service with WorldBlock.Block,
+      CONTROLLER_ENV,
       E,
       ZIO[CONTROLLER_ENV, E, Q]
     ]
@@ -99,8 +103,16 @@ case class Control(
   ]]] =
     for {
       world <- worldBlock.get
-      op <- query.provide(ZLayer.succeed(world) ++ ZLayer.succeed(glob))
-      _ <- op.provide(ZLayer.succeed(world) ++ ZLayer.succeed(glob))
+      op <- query.provide(
+        ZLayer.succeed(world) ++ ZLayer.succeed(glob) ++ ZLayer.succeed(
+          progress
+        )
+      )
+      _ <- op.provide(
+        ZLayer.succeed(world) ++ ZLayer.succeed(glob) ++ ZLayer.succeed(
+          progress
+        )
+      )
     } yield this
 
   override def queueQuery[Q, E](
@@ -150,9 +162,9 @@ case class Control(
 }
 
 object Control extends BasicController.Service[CONTROLLER_ENV] {
-  type CONTROLLER_ENV = Globz.Service with WorldBlock.Block
+  type CONTROLLER_ENV = Globz.Service with WorldBlock.Block with ProgressData
   override def make: IO[ControllerError, BasicController[
-    Globz.Service with WorldBlock.Block,
+    CONTROLLER_ENV,
     Queue[QueryResponse]
   ]] =
     for {
@@ -163,8 +175,9 @@ object Control extends BasicController.Service[CONTROLLER_ENV] {
       queue <- Queue.unbounded[QueryResponse]
       client_queues <- Ref.make(Map.empty[GLOBZ_ID, Queue[QueryResponse]])
       pc <- PhysicsChannel.make.provide(ZLayer.succeed(w)).mapError(_ => ???)
+      progress <- ProgressData.make
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- pc.start_socket().mapError(_ => ???)
       _ <- ZIO.log("Physics Socket Started")
-    } yield Control(BasicPlayer, r, queue, client_queues, pc)
+    } yield Control(BasicPlayer, r, progress, queue, client_queues, pc)
 }

@@ -1,6 +1,7 @@
 package network
 
 import controller.BasicController
+import controller.Control.CONTROLLER_ENV
 import controller.QueryResponse
 import entity.WorldBlock
 import network.WebSocketServer.AUTH_ID
@@ -21,7 +22,7 @@ object WebSocketControlServer {
 
     def make(
       authID: AUTH_ID
-    ): ZIO[BasicController[Globz.Service with WorldBlock.Block, Queue[
+    ): ZIO[BasicController[CONTROLLER_ENV, Queue[
       QueryResponse
     ]]
       with Ref[SESSION_MAP]
