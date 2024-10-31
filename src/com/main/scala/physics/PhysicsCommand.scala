@@ -1,5 +1,18 @@
 package physics
-import zio.json._
+import src.com.main.scala.entity.Globz.GLOBZ_ID
+import zio.json.*
+case class PhysicsData(
+  typ: GLOBZ_ID,
+  id: GLOBZ_ID,
+  vec: Vector[Double]
+)
+object PhysicsData {
+  implicit val encoder: JsonEncoder[PhysicsData] =
+    DeriveJsonEncoder.gen[PhysicsData]
+
+  implicit val decoder: JsonDecoder[PhysicsData] =
+    DeriveJsonDecoder.gen[PhysicsData]
+}
 sealed trait PhysicsCommand {}
 object PhysicsCommand {
   implicit val encoder: JsonEncoder[PhysicsCommand] =

@@ -6,9 +6,10 @@ import entity.PhysicalEntity
 import entity.Player
 import entity.WorldBlock
 import network.PhysicsChannel.PHYSICS_COMMAND
-import physics.PhysicsCommand
-import physics.PhysicsTeleport
 import physics.Loc
+import physics.PhysicsCommand
+import physics.PhysicsData
+import physics.PhysicsTeleport
 import physics.SetInputLock
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.*
@@ -55,7 +56,7 @@ trait PhysicsChannel {
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
       _ <- send(
-        s""" {"type":"SET_LOC", "body":{"id": "$id","location":[${loc._1},${loc._2},${loc._3}]}} """
+        s""" {"type":"SET_LOC", "body":{"id": "$id","vec":[${loc._1},${loc._2},${loc._3}]}} """
       )
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
@@ -94,14 +95,16 @@ trait PhysicsChannel {
             case Read(WebSocketFrame.Text(txt)) =>
               (for {
                 r <- ZIO
-                  .fromEither(txt.fromJson[PhysicsCommand])
+                  .fromEither(txt.fromJson[PhysicsData])
                   .flatMapError(err =>
                     ZIO.log(s"Could not map $txt due to $err")
                   )
-                  .map(_.asInstanceOf[Loc])
                 _ <- wb.getBlob(r.id).flatMap(ZIO.fromOption(_)).flatMap {
                   case pe: PhysicalEntity =>
-                    pe.teleport(r.loc)
+                    r.typ match {
+                      case "Loc" => pe.teleport(r.vec)
+                      case _     => ZIO.unit
+                    }
                 }
               } yield ()).foldZIO(
                 err => ZIO.log(s"processing failed on $txt with err $err"),
