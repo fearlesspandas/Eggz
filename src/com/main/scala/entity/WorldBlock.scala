@@ -37,6 +37,12 @@ object WorldBlock {
       blob: Globz,
       coords: Vector[Double]
     ): IO[WorldBlockError, ExitCode]
+
+    def get_controller()
+      : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
+        QueryResponse
+      ]]]
+
     // deprecated
     def spawnFreshBlob(
       coords: Vector[Double]
@@ -70,6 +76,13 @@ object WorldBlock {
     ]
   ): ZIO[WorldBlock.Service, WorldBlockError, WorldBlock.Block] =
     ZIO.service[WorldBlock.Service].flatMap(_.make(controller))
+
+  def get_controller(): ZIO[WorldBlock.Block, WorldBlockError, BasicController[
+    CONTROLLER_ENV,
+    Queue[
+      QueryResponse
+    ]
+  ]] = ZIO.environmentWithZIO(_.get.get_controller())
 
   def spawnBlob(
     blob: Globz,
@@ -115,6 +128,15 @@ case class WorldBlockInMem(
   _npc_handler: NPCHandler
 ) extends WorldBlock.Block {
 
+  def get_controller()
+    : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
+      QueryResponse
+    ]]] =
+    controller.get
+      .flatMap(ZIO.fromOption(_))
+      .orElseFail(
+        GenericWorldBlockError("Could not retrieve controller from world block")
+      )
   override def spawnBlob(
     blob: Globz,
     coords: Vector[Double]

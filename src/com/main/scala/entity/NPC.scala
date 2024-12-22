@@ -55,6 +55,7 @@ trait NPC extends LivingEntity {
         s"Couldn't get target entity location for $target"
       )
     )
+    controller <- WorldBlock.get_controller().mapError(_ => ???)
     res <- ability.run
       .orElseFail(
         AttackWithinDistancError("Error while attempting ability")
@@ -62,6 +63,7 @@ trait NPC extends LivingEntity {
       .when((target_loc - loc).length <= 10)
       .flatMap(ZIO.fromOption(_))
       .orElseFail(AttackWithinDistancError("Ability not within distance"))
+    _ <- controller.queueQuery(ZIO.succeed(res))
   } yield res
 }
 trait NPC_ERROR
