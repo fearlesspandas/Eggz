@@ -140,6 +140,10 @@ case class Control(
           ZIO.foreachPar(messages)(server_response_queue.offer(_))
         case QueuedPhysicsMessage(messages) =>
           ZIO.foreach(messages)(physics_channel.add_to_queue)
+        case MultiResponse(responses) =>
+          ZIO.foreach(responses)(response =>
+            queueQuery[QueryResponse, E](ZIO.succeed(response))
+          )
       }
     } yield ()
 
