@@ -817,6 +817,8 @@ object SET_ACTIVE {
   implicit val decoder: JsonDecoder[SET_ACTIVE] =
     DeriveJsonDecoder.gen[SET_ACTIVE]
 }
+//todo if player is already following entity
+// make the existing process stop
 case class FOLLOW_ENTITY(id: ID, target: ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (FOLLOW_ENTITY, id, target)

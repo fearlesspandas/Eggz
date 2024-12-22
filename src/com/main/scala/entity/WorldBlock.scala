@@ -1,5 +1,8 @@
 package entity
 
+import controller.BasicController
+import controller.QueryResponse
+import controller.Control.CONTROLLER_ENV
 import entity.Terrain.TerrainId
 import entity.WorldBlock.GenericWorldBlockError
 import entity.WorldBlock.WorldBlockError
@@ -55,10 +58,18 @@ object WorldBlock {
   }
 
   trait Service {
-    def make: IO[WorldBlockError, WorldBlock.Block]
+    def make(
+      control: Ref[
+        Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
+      ]
+    ): IO[WorldBlockError, WorldBlock.Block]
   }
-  def make: ZIO[WorldBlock.Service, WorldBlockError, WorldBlock.Block] =
-    ZIO.service[WorldBlock.Service].flatMap(_.make)
+  def make(
+    controller: Ref[
+      Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
+    ]
+  ): ZIO[WorldBlock.Service, WorldBlockError, WorldBlock.Block] =
+    ZIO.service[WorldBlock.Service].flatMap(_.make(controller))
 
   def spawnBlob(
     blob: Globz,
@@ -96,6 +107,9 @@ object WorldBlock {
 }
 
 case class WorldBlockInMem(
+  controller: Ref[
+    Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
+  ],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   terrain: Ref[TerrainManager with Terrain],
   _npc_handler: NPCHandler
@@ -175,7 +189,9 @@ case class WorldBlockInMem(
     ZIO.succeed(_npc_handler)
 }
 object WorldBlockInMem extends WorldBlock.Service {
-  override def make: IO[WorldBlock.WorldBlockError, WorldBlock.Block] =
+  override def make(
+    control: Ref[Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]]
+  ): IO[WorldBlock.WorldBlockError, WorldBlock.Block] =
     for {
       radius <- System
         .env("WORLDBLOCK_RADIUS")
@@ -237,7 +253,7 @@ object WorldBlockInMem extends WorldBlock.Service {
 
       globz_map <- Ref.make(Map.empty[GLOBZ_ID, Globz])
       res <- ZIO
-        .attempt(WorldBlockInMem(globz_map, terrain_ref, npchandler))
+        .attempt(WorldBlockInMem(control, globz_map, terrain_ref, npchandler))
         .orElseFail(
           GenericWorldBlockError("Failed to create woldblock on startup")
         )

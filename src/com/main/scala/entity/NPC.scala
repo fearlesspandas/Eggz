@@ -25,10 +25,48 @@ import zio.ZIO
 import zio.ZLayer
 
 import java.util.UUID
-
-trait NPC extends LivingEntity
+import Ability.ABILITY_ID
+import network.PhysicsChannel
+import implicits.*
+trait NPC extends LivingEntity {
+  def attack_within_distance(
+    ability_id: ABILITY_ID,
+    target: GLOBZ_ID
+  ): ZIO[WorldBlock.Block with PhysicsChannel, NPC_ERROR, Unit] = for {
+    ability <- Ability
+      .make(ability_id, this.id)
+      .orElseFail {
+        AttackWithinDistancError(
+          s"Error while trying to create ability with id : $ability_id"
+        )
+      }
+    loc <- this.physics.getLocation.orElseFail(
+      AttackWithinDistancError(s"Couldn't get location for id ${this.id}")
+    )
+    target_entity <- WorldBlock
+      .getBlob(target)
+      .flatMap(ZIO.fromOption(_))
+      .mapBoth(
+        _ => AttackWithinDistancError(s"Could not find target entity $target"),
+        { case li: LivingEntity => li }
+      )
+    target_loc <- target_entity.physics.getLocation.orElseFail(
+      AttackWithinDistancError(
+        s"Couldn't get target entity location for $target"
+      )
+    )
+    res <- ability.run
+      .orElseFail(
+        AttackWithinDistancError("Error while attempting ability")
+      )
+      .when((target_loc - loc).length <= 10)
+      .flatMap(ZIO.fromOption(_))
+      .orElseFail(AttackWithinDistancError("Ability not within distance"))
+  } yield res
+}
 trait NPC_ERROR
 case class GenericNPCError(msg: String) extends NPC_ERROR
+case class AttackWithinDistancError(msg: String) extends NPC_ERROR
 case class Prowler(
   id: ID,
   skillset: SkillSet,

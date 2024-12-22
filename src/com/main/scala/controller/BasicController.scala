@@ -168,7 +168,12 @@ object Control extends BasicController.Service[CONTROLLER_ENV] {
     Queue[QueryResponse]
   ]] =
     for {
-      w <- WorldBlock.make
+      control_ref <- Ref
+        .make[Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]](
+          None
+        )
+      w <- WorldBlock
+        .make(control_ref)
         .provide(ZLayer.succeed(WorldBlockInMem))
         .mapError(err => GenericControllerError(err.toString))
       r <- Ref.make(w)
@@ -179,5 +184,7 @@ object Control extends BasicController.Service[CONTROLLER_ENV] {
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- pc.start_socket().mapError(_ => ???)
       _ <- ZIO.log("Physics Socket Started")
-    } yield Control(BasicPlayer, r, progress, queue, client_queues, pc)
+      control = Control(BasicPlayer, r, progress, queue, client_queues, pc)
+      _ <- control_ref.update(_ => Some(control))
+    } yield control
 }

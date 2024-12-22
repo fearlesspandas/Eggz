@@ -56,6 +56,9 @@ import java.nio.charset.StandardCharsets
 object WebSocketAdvanced extends ZIOAppDefault {
   // handles auth map and controller
 
+  type SOCKET_ENV = CONTROLLER_ENV
+    with BasicController[CONTROLLER_ENV, Queue[QueryResponse]]
+
   val config =
     Server.defaultWith(
       _.webSocketConfig(
