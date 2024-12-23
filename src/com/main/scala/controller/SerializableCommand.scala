@@ -427,16 +427,23 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
         .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
+
+      curr_health <- glob.health.mapError(_ => GenericCommandError(""))
       _ <- glob.health
         .flatMap(h => glob.setHealth(h - value))
         .orElseFail(GenericCommandError(""))
       h <- glob.health.orElseFail(GenericCommandError(""))
-    } yield MultiResponse(
-      Chunk(
-        HealthSet(id, h),
-        QueuedClientBroadcast(Chunk(MSG(id, HealthSet(id, h))))
-      )
-    )
+      res =
+        if (h == curr_health) { MultiResponse(Chunk()) }
+        else {
+          MultiResponse(
+            Chunk(
+              HealthSet(id, h),
+              QueuedClientBroadcast(Chunk(MSG(id, HealthSet(id, h))))
+            )
+          )
+        }
+    } yield res
 object REMOVE_HEALTH {
   implicit val encoder: JsonEncoder[REMOVE_HEALTH] =
     DeriveJsonEncoder.gen[REMOVE_HEALTH]
@@ -834,20 +841,31 @@ case class FOLLOW_ENTITY(id: ID, target: ID)
             li
           }
         )
-      _ <- worldblock
-        .npc_handler()
-        .flatMap(_.add_entity_as_npc(entity))
-        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
+//      _ <- worldblock
+//        .npc_handler()
+//        .flatMap(_.add_entity_as_npc(entity))
+//        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
       // should maybe be in npc handler and not entity
+      follow_op = entity match {
+        // todo work out timing issues
+        case npc: NPC =>
+          npc
+            .follow_and_attack(0, target)
+            .provide(ZLayer.succeed(worldblock))
+            .repeat(Schedule.spaced(Duration.fromMillis(300)))
+        case e =>
+          e.follow_player(target)
+            .provide(ZLayer.succeed(worldblock))
+            .repeat(Schedule.spaced(Duration.fromMillis(300)));
+      }
       _ <- entity
         .relate(
           id,
           target,
           false,
-          entity
-            .follow_player(target)
-            .provide(ZLayer.succeed(worldblock))
-            .repeat(Schedule.spaced(Duration.fromMillis(300)))
+          follow_op
+            // .provide(ZLayer.succeed(worldblock))
+            // .repeat(Schedule.spaced(Duration.fromMillis(300)))
             .orElseFail("Error while scheduling entity follow")
             .unit
         )

@@ -29,10 +29,14 @@ import Ability.ABILITY_ID
 import network.PhysicsChannel
 import implicits.*
 trait NPC extends LivingEntity {
+  def follow_and_attack(ability_id: ABILITY_ID, target: GLOBZ_ID) = for {
+    _ <- this.follow_player(target)
+    _ <- this.attack_within_distance(ability_id, target)
+  } yield ()
   def attack_within_distance(
     ability_id: ABILITY_ID,
     target: GLOBZ_ID
-  ): ZIO[WorldBlock.Block with PhysicsChannel, NPC_ERROR, Unit] = for {
+  ): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
     ability <- Ability
       .make(ability_id, this.id)
       .orElseFail {
@@ -60,10 +64,10 @@ trait NPC extends LivingEntity {
       .orElseFail(
         AttackWithinDistancError("Error while attempting ability")
       )
-      .when((target_loc - loc).length <= 10)
-      .flatMap(ZIO.fromOption(_))
-      .orElseFail(AttackWithinDistancError("Ability not within distance"))
-    _ <- controller.queueQuery(ZIO.succeed(res))
+      .flatMap(responses => controller.queueQuery(ZIO.succeed(responses)))
+      .when((target_loc - loc).length() <= 10)
+    // .orElseFail(AttackWithinDistancError("Ability not within distance"))
+    // _ <- controller.queueQuery(ZIO.succeed(res))
   } yield res
 }
 trait NPC_ERROR

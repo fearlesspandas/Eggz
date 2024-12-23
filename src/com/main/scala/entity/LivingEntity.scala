@@ -80,12 +80,12 @@ trait LivingEntity
 
   def setHealth(health: Double): IO[HealthError, Health] =
     for {
-      _ <- healthRef.update(_ => health)
+      _ <- healthRef.update(_ => math.max(health, 0))
     } yield this
 
   def setEnergy(value: Double): IO[HealthError, Health] =
     for {
-      _ <- healthRef.update(_ => value)
+      _ <- healthRef.update(_ => math.max(value, 0))
     } yield this
 
   def health: IO[HealthError, Double] = healthRef.get
