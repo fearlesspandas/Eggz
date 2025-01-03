@@ -1,6 +1,6 @@
 package entity
 
-import controller.Stats
+import controller.{QueryResponse, Stats}
 import entity.Player.PlayerError
 import entity.Skill.Experience
 import entity.Skill.Level
@@ -91,6 +91,8 @@ trait LivingEntity
   def health: IO[HealthError, Double] = healthRef.get
 
   def energy: IO[HealthError, Double] = energyRef.get
+
+  def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse]
 
   def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
     glob.update(eggz)

@@ -182,7 +182,7 @@ case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
       Chunk(
         QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))),
         QueuedServerMessage(
-          Chunk(Entity(glob_ser), TeleportToNext(globId, loc))
+          Chunk(Entity(glob_ser), MSG(globId, TeleportToNext(globId, loc)))
         ),
         QueuedClientBroadcast(Chunk(Entity(glob_ser)))
       )
@@ -427,19 +427,23 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
         .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
-
       curr_health <- glob.health.mapError(_ => GenericCommandError(""))
       _ <- glob.health
         .flatMap(h => glob.setHealth(h - value))
         .orElseFail(GenericCommandError(""))
       h <- glob.health.orElseFail(GenericCommandError(""))
-      res =
-        if (h == curr_health) { MultiResponse(Chunk()) }
-        else {
-          MultiResponse(
-            Chunk(
-              HealthSet(id, h),
-              QueuedClientBroadcast(Chunk(MSG(id, HealthSet(id, h))))
+      res: QueryResponse <-
+        if (h == curr_health) { ZIO.succeed(MultiResponse(Chunk())) }
+        else if (h <= 0) {
+          glob.die
+            .mapError(err => GenericCommandError(err))
+        } else {
+          ZIO.succeed(
+            MultiResponse(
+              Chunk(
+                // HealthSet(id, h),
+                QueuedClientBroadcast(Chunk(MSG(id, HealthSet(id, h))))
+              )
             )
           )
         }
@@ -841,18 +845,18 @@ case class FOLLOW_ENTITY(id: ID, target: ID)
             li
           }
         )
-//      _ <- worldblock
-//        .npc_handler()
-//        .flatMap(_.add_entity_as_npc(entity))
-//        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
-      // should maybe be in npc handler and not entity
       follow_op = entity match {
-        // todo work out timing issues
         case npc: NPC =>
           npc
-            .follow_and_attack(0, target)
+            .follow_player(target)
             .provide(ZLayer.succeed(worldblock))
             .repeat(Schedule.spaced(Duration.fromMillis(300)))
+            .zipPar(
+              npc
+                .attack_within_distance(0, target)
+                .provide(ZLayer.succeed(worldblock))
+                .repeat(Schedule.spaced(Duration.fromMillis(3000)))
+            )
         case e =>
           e.follow_player(target)
             .provide(ZLayer.succeed(worldblock))
@@ -864,8 +868,6 @@ case class FOLLOW_ENTITY(id: ID, target: ID)
           target,
           false,
           follow_op
-            // .provide(ZLayer.succeed(worldblock))
-            // .repeat(Schedule.spaced(Duration.fromMillis(300)))
             .orElseFail("Error while scheduling entity follow")
             .unit
         )
@@ -1091,7 +1093,7 @@ case class GET_NEXT_DESTINATION(id: ID)
                           .succeed(teleport_to_destination.location(0))
                           .zip(ZIO.succeed(teleport_to_destination.location(1)))
                           .zip(ZIO.succeed(teleport_to_destination.location(2)))
-                        server_res = PaginatedResponse(
+                        server_res = QueuedServerMessage( // USED TO BE PAGINATED RESPONSE
                           Chunk(
                             MSG(id, TeleportToNext(id, teleport_to)),
                             MSG(id, NextDestination(id, ser_dest))

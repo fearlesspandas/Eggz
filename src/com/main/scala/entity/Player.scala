@@ -1,6 +1,14 @@
 package entity
 
+import controller.HealthSet
+import controller.MSG
+import controller.MultiResponse
+import controller.QueryResponse
+import controller.QueuedClientBroadcast
+import controller.QueuedPhysicsMessage
+import controller.QueuedServerMessage
 import controller.Stats
+import controller.TeleportToNext
 import entity.Player.Item
 import entity.Player.PlayerEnv
 import entity.Player.PlayerError
@@ -13,6 +21,7 @@ import physics.Destination
 import physics.Destinations
 import physics.DestinationsError
 import physics.Mode
+import physics.PhysicsTeleport
 import src.com.main.scala
 import src.com.main.scala.entity
 import src.com.main.scala.entity.EggzOps.ID
@@ -27,6 +36,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
+import zio.Chunk
 import zio.ExitCode
 import zio.IO
 import zio.Ref
@@ -97,6 +107,22 @@ case class BasicPlayer(
 
   override def setIndex(index: Level): IO[DestinationsError, Unit] =
     destinations.setIndex(index)
+
+  override def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
+    base_health <- ZIO.succeed(1000.0)
+    _ <- this
+      .setHealth(base_health)
+      .orElseFail("Could not reset health during DIE operation")
+  } yield MultiResponse(
+    Chunk(
+      QueuedServerMessage(
+        Chunk(MSG(this.id, TeleportToNext(this.id, (0, 0, 0))))
+      ),
+      QueuedClientBroadcast(
+        Chunk(MSG(this.id, HealthSet(this.id, base_health)))
+      )
+    )
+  )
 }
 
 object BasicPlayer extends Globz.Service {

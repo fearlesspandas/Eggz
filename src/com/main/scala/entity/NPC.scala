@@ -1,5 +1,10 @@
 package entity
 
+import controller.HealthSet
+import controller.MultiResponse
+import controller.QueryResponse
+import controller.QueuedClientBroadcast
+import controller.QueuedPhysicsMessage
 import controller.Stats
 import entity.LivingEntity.LivingEntityEnv
 import entity.Player.Item
@@ -8,6 +13,7 @@ import physics.Destination
 import physics.Destinations
 import physics.DestinationsError
 import physics.Mode
+import physics.PhysicsTeleport
 import physics.WaypointDestination
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
@@ -18,6 +24,7 @@ import src.com.main.scala.entity.Eggz.EggzError
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
 import src.com.main.scala.entity.basicStorage
+import zio.Chunk
 import zio.ExitCode
 import zio.IO
 import zio.Ref
@@ -122,6 +129,31 @@ case class Prowler(
 
   override def setIndex(index: Int): IO[DestinationsError, Unit] =
     destinations.setIndex(index)
+
+  override def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
+    controller <- WorldBlock
+      .get_controller()
+      .orElseFail("Could not get controller for DIE operation")
+    _ <- this
+      .setHealth(1000.0)
+      .orElseFail("Could not reset health during DIE operation")
+    _ <- controller.queueQuery(
+      ZIO.succeed(
+        Chunk(
+          QueuedPhysicsMessage(
+            Chunk(
+              PhysicsTeleport(this.id, (0, 0, 0))
+            )
+          )
+        )
+      )
+    )
+  } yield MultiResponse(
+    Chunk(
+      HealthSet(this.id, 1000.0),
+      QueuedClientBroadcast(Chunk(HealthSet(this.id, 1000.0)))
+    )
+  )
 }
 
 object Prowler extends Globz.Service {
