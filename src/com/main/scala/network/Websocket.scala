@@ -3,10 +3,12 @@ package network
 import controller.SerializableCommand.CommandError
 import controller.AuthCommandService
 import controller.AuthenticationService
+import controller.BasicCommandRateLimit
 import controller.BasicController
 import controller.Blob
 import controller.CONSOLE
 import controller.CREATE_GLOB
+import controller.CommandRateLimit
 import controller.Completed
 import controller.Control
 import controller.GET_ALL_GLOBS
@@ -89,6 +91,7 @@ case class BasicWebSocket(
   authenticated: Ref[Boolean],
   server_keys: Set[String],
   auth: AUTH[String],
+  rates: BasicCommandRateLimit,
   response_queue: Queue[QueryResponse]
 ) extends WebSocketControlServer[Any] {
 
@@ -211,6 +214,16 @@ case class BasicWebSocket(
               .as(false),
           ZIO.succeed(_)
         )
+
+  val authexecute: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
+    cmd =>
+      controller
+        .runQuery(rates.shouldExecute(cmd))
+        .foldZIO(
+          err => ZIO.logError(err.toString).as(false),
+          x => ZIO.succeed(x)
+        )
+
 //        .flatMapError(err =>
 //          Console.printLine(s"bad auth: $err").mapError(_ => ???)
 //        )
@@ -286,10 +299,11 @@ case class BasicWebSocket(
         (for {
           msg <- parse_message(text).flatMap(ZIO.fromOption(_))
           authorized <- authorizeMsg(msg)
+          should_execute <- authexecute(msg)
           _ <-
-            handle_request(msg)
+            (handle_request(msg) *> rates.updateExecuted(msg.REF_TYPE))
               .provide(ZLayer.succeed(channel))
-              .when(authorized)
+              .when(authorized && should_execute)
         } yield ())
           .foldZIO(
             err => ZIO.logError(s"Error while processing cmd $text : $err"),
@@ -386,6 +400,7 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
       authd <- Ref.make(false)
       cachedAuth <- Ref.make(Map.empty[Any, Boolean])
       q <- Queue.unbounded[QueryResponse]
+      rate_limit <- BasicCommandRateLimit.make
       res = BasicWebSocket(
         authID,
         sessions,
@@ -396,18 +411,8 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
           cachedAuth,
           AuthCommandService.all_non_par(server_keys.toSet)
         ).verify_with_caching,
+        rate_limit,
         q
       )
-    } yield BasicWebSocket(
-      authID,
-      sessions,
-      controller,
-      authd,
-      Set("1"),
-      AuthenticationService(
-        cachedAuth,
-        AuthCommandService.all_non_par(Set("1"))
-      ).verify_with_caching,
-      q
-    )
+    } yield res
 }

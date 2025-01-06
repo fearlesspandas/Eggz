@@ -67,7 +67,8 @@ case class Control(
   progress: ProgressData,
   server_response_queue: Queue[QueryResponse],
   client_response_queues: Ref[Map[GLOBZ_ID, Queue[QueryResponse]]],
-  physics_channel: PhysicsChannel
+  physics_channel: PhysicsChannel,
+  rate_limit: BasicCommandRateLimit
 ) extends BasicController[CONTROLLER_ENV, Queue[
       QueryResponse
     ]] {
@@ -188,7 +189,16 @@ object Control extends BasicController.Service[CONTROLLER_ENV] {
       _ <- ZIO.log("Attempting to start physics socket")
       _ <- pc.start_socket().mapError(_ => ???)
       _ <- ZIO.log("Physics Socket Started")
-      control = Control(BasicPlayer, r, progress, queue, client_queues, pc)
+      rate_limit <- BasicCommandRateLimit.make
+      control = Control(
+        BasicPlayer,
+        r,
+        progress,
+        queue,
+        client_queues,
+        pc,
+        rate_limit
+      )
       _ <- control_ref.update(_ => Some(control))
     } yield control
 }
