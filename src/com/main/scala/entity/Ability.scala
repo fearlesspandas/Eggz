@@ -134,7 +134,7 @@ case class GlobularTeleport(
   ): ZIO[WorldBlock.Block, AbilityDataError, LivingEntity] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => AbilityDataNoGlobFoundError,

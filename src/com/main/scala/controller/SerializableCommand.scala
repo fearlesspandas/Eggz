@@ -7,6 +7,7 @@ import controller.BIND_ENTITY.BindingMaxSpeedAdjustError
 import controller.BIND_ENTITY.NonBindableEntityError
 import controller.CONSOLE.CONSOLE_ENV
 import controller.CONSOLE.en
+import controller.CREATE_MONK.CreateMONKError
 import controller.CREATE_PROWLER.CreateProwlerError
 import controller.CREATE_SPIDER.CreateSPIDERError
 import controller.DELETE_DESTINATION.DeleteDestinationError
@@ -21,6 +22,8 @@ import entity.EmptyTerrain
 import entity.GlobzModel
 import entity.Health
 import entity.LivingEntity
+import entity.MonkGarden
+import entity.MonkGardenModel
 import entity.NPC
 import entity.NoArgs
 import entity.PhysicalEntity
@@ -198,7 +201,6 @@ object CREATE_GLOB {
 case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = CREATE_PROWLER
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       prowler <- Globz
@@ -292,6 +294,34 @@ object CREATE_SPIDER {
   case class CreateSPIDERError(msg: String) extends CommandError
 }
 
+case class CREATE_MONK(globId: GLOBZ_ID, location: Vector[Double])
+    extends ResponseQuery[WorldBlock.Block] {
+  val REF_TYPE: Any = CREATE_MONK
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    monk <- MonkGarden
+      .make(globId)
+      .mapError(err => CreateMONKError(s"Error while creating monk: $err"))
+    _ <- WorldBlock
+      .spawnBlob(monk, location)
+      .mapError(err => CreateMONKError(s"Error while spawning monk: $err"))
+    ser_model <- monk.serializeGlob.mapError(err =>
+      CreateMONKError(s"Error while serializing new monk model: $err")
+    )
+  } yield MultiResponse(
+    Chunk(
+      QueuedServerMessage(Chunk(Entity(ser_model))),
+      QueuedClientBroadcast(Chunk(Entity(ser_model)))
+    )
+  )
+}
+object CREATE_MONK {
+  implicit val encoder: JsonEncoder[CREATE_MONK] =
+    DeriveJsonEncoder.gen[CREATE_MONK]
+  implicit val decoder: JsonDecoder[CREATE_MONK] =
+    DeriveJsonDecoder.gen[CREATE_MONK]
+  case class CreateMONKError(msg: String) extends CommandError
+}
 case class GET_ALL_GLOBS() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_ALL_GLOBS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -319,7 +349,7 @@ case class GET_GLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .flatMap(_.serializeGlob)
     } yield GlobSet(Set(res)))
@@ -398,7 +428,7 @@ case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
       _ <- glob.health
@@ -424,7 +454,7 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
       curr_health <- glob.health.mapError(_ => GenericCommandError(""))
@@ -461,7 +491,7 @@ case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
       egg <- RepairEgg.make(eggId, 1000, 20)
-      glob <- WorldBlock.getBlob(globId)
+      glob <- WorldBlock.getBlobOption(globId)
       res <- ZIO.fromOption(glob).flatMap(_.update(egg))
     } yield ()).orElseFail(GenericCommandError("Error Creating egg"))
 }
@@ -476,7 +506,7 @@ case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_BLOB, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      g <- WorldBlock.getBlob(id)
+      g <- WorldBlock.getBlobOption(id)
       x <- ZIO.fromOption(g).flatMap(glob => glob.serializeGlob)
     } yield Blob(Some(x)))
       .orElseFail(GenericCommandError(s"Error finding blob with $id"))
@@ -493,7 +523,7 @@ case class GET_GLOB_LOCATION(id: GLOBZ_ID)
   override val REF_TYPE: Any = (GET_GLOB_LOCATION, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      glob <- WorldBlock.getBlob(id)
+      glob <- WorldBlock.getBlobOption(id)
       location <- ZIO.fromOption(glob).flatMap { case g: PhysicalEntity =>
         g.getLocation
       }
@@ -513,7 +543,7 @@ case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
   override val REF_TYPE: Any = (SET_GLOB_LOCATION, id)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      glob <- WorldBlock.getBlob(id)
+      glob <- WorldBlock.getBlobOption(id)
       _ <- ZIO.fromOption(glob).flatMap { case pe: PhysicalEntity =>
         pe.teleport(location)
       }
@@ -536,7 +566,7 @@ case class RELATE_EGGS(
   override val REF_TYPE: Any = (RELATE_EGGS, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      globOp <- WorldBlock.getBlob(globId)
+      globOp <- WorldBlock.getBlobOption(globId)
       glob <- ZIO.fromOption(globOp)
       _ <- glob.relate(egg1, egg2, bidirectional, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
@@ -557,7 +587,7 @@ case class UNRELATE_EGGS(
   override val REF_TYPE: Any = (UNRELATE_EGGS, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      globOp <- WorldBlock.getBlob(globId)
+      globOp <- WorldBlock.getBlobOption(globId)
       glob <- ZIO.fromOption(globOp)
       _ <- glob.unrelate(egg1, egg2, bidirectional, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
@@ -574,7 +604,7 @@ case class UNRELATE_ALL(egg1: ID, globId: GLOBZ_ID, direction: Int)
   val REF_TYPE = (UNRELATE_ALL, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      globOp <- WorldBlock.getBlob(globId)
+      globOp <- WorldBlock.getBlobOption(globId)
       glob <- ZIO.fromOption(globOp)
       _ <- glob.unrelateAll(egg1, direction, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
@@ -605,7 +635,7 @@ case class START_EGG(eggId: ID, globId: GLOBZ_ID)
   override val REF_TYPE: Any = (START_EGG, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      g <- WorldBlock.getBlob(globId)
+      g <- WorldBlock.getBlobOption(globId)
       _ <- ZIO
         .fromOption(g)
         .flatMap(glob =>
@@ -637,7 +667,7 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
     for {
       wb <- ZIO.service[WorldBlock.Block]
       blob <- wb
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ =>
@@ -682,7 +712,7 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
     for {
       wb <- ZIO.service[WorldBlock.Block]
       blob <- wb
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ =>
@@ -729,7 +759,7 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     wb <- ZIO.service[WorldBlock.Block]
     blob <- wb
-      .getBlob(id)
+      .getBlobOption(id)
       .flatMap(ZIO.fromOption(_))
       .mapBoth(
         err =>
@@ -785,7 +815,7 @@ case class SET_ACTIVE(id: ID, value: Boolean)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     wb <- ZIO.service[WorldBlock.Block]
     blob <- wb
-      .getBlob(id)
+      .getBlobOption(id)
       .flatMap(ZIO.fromOption(_))
       .mapBoth(
         err =>
@@ -837,7 +867,7 @@ case class FOLLOW_ENTITY(id: ID, target: ID)
     for {
       worldblock <- ZIO.service[WorldBlock.Block]
       entity <- worldblock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => FollowEntityError(s"Could not find entity with id $id"),
@@ -889,7 +919,7 @@ case class UNFOLLOW_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
     for {
       worldblock <- ZIO.service[WorldBlock.Block]
       entity <- worldblock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => FollowEntityError(s"Could not find entity with id $id"),
@@ -926,14 +956,14 @@ case class BIND_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       following <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => BindingEntityNotFoundError,
           { case li: LivingEntity => li }
         )
       target_entity <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(target))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(target))
         .flatMap(ZIO.fromOption(_))
         .orElseFail(BindEntityError(s"Could not find blob with id $id"))
         .flatMap {
@@ -964,9 +994,9 @@ case class ADD_DESTINATION(id: ID, dest: destination)
   override val REF_TYPE: Any = (ADD_DESTINATION, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      blob <- WorldBlock.getBlob(id)
+      blob <- WorldBlock.getBlobOption(id)
       b <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .map { case de: Destinations => de }
         .mapError(_ =>
@@ -1001,7 +1031,7 @@ case class DELETE_DESTINATION(id: ID, uuid: UUID)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ =>
@@ -1042,7 +1072,7 @@ case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       blob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           err => GenericCommandError(s"Error getting blob $id, because $err"),
@@ -1065,7 +1095,7 @@ case class GET_NEXT_DESTINATION(id: ID)
   override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      blob <- WorldBlock.getBlob(id)
+      blob <- WorldBlock.getBlobOption(id)
       result <- ZIO.fromOption(blob).flatMap {
         case entity: Destinations with PhysicalEntity =>
           for {
@@ -1161,7 +1191,7 @@ case class GET_NEXT_DESTINATION_CLIENT(id: ID)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       blob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           err =>
@@ -1192,7 +1222,7 @@ case class GET_ALL_DESTINATIONS(id: ID)
   override val REF_TYPE: Any = (GET_ALL_DESTINATIONS, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      blob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_)).map {
+      blob <- WorldBlock.getBlobOption(id).flatMap(ZIO.fromOption(_)).map {
         case de: Destinations => de
       }
       allDestinations <-
@@ -1226,7 +1256,7 @@ case class CLEAR_DESTINATIONS(id: GLOBZ_ID)
   override val REF_TYPE: Any = (CLEAR_DESTINATIONS, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      glob <- WorldBlock.getBlobOption(id).flatMap(ZIO.fromOption(_))
       _ <- glob match {
         case pe: Destinations => pe.setIndex(0) *> pe.clearDestinations()
         case _                => ZIO.unit
@@ -1248,7 +1278,7 @@ case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
     for {
       wb <- ZIO.service[WorldBlock.Block]
       glob <- wb
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           err =>
@@ -1280,7 +1310,7 @@ case class SET_ACTIVE_DESTINATION(id: GLOBZ_ID, destination_id: UUID)
     for {
       wb <- ZIO.service[WorldBlock.Block]
       glob <- wb
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           err =>
@@ -1304,59 +1334,14 @@ object SET_ACTIVE_DESTINATION {
   implicit val decoder: JsonDecoder[SET_ACTIVE_DESTINATION] =
     DeriveJsonDecoder.gen[SET_ACTIVE_DESTINATION]
 }
-//---------------------------------INPUT-----------------------------------------------------------------------------------------------------
-@deprecated
-case class APPLY_VECTOR(id: ID, vec: (Double, Double, Double))
-    extends SimpleCommandSerializable[WorldBlock.Block] {
-  override val REF_TYPE: Any = (APPLY_VECTOR, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
-    (for {
-      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
-      _ <- glob match {
-        case pe: PhysicalEntity =>
-          pe.setInputVec(Vector(vec._1, vec._2, vec._3))
-        case _ => ZIO.unit
-      }
-    } yield ()).orElseFail(GenericCommandError(""))
-}
-object APPLY_VECTOR {
-  implicit val encoder: JsonEncoder[APPLY_VECTOR] =
-    DeriveJsonEncoder.gen[APPLY_VECTOR]
-  implicit val decoder: JsonDecoder[APPLY_VECTOR] =
-    DeriveJsonDecoder.gen[APPLY_VECTOR]
-}
-@deprecated
-case class GET_INPUT_VECTOR(id: ID) extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = (GET_INPUT_VECTOR, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
-      resraw <- glob match {
-        case physicalEntity: PhysicalEntity => physicalEntity.getInputVec
-      }
-      res <- ZIO
-        .fromOption(resraw)
-        .flatMap(vec =>
-          ZIO
-            .succeed(vec(0))
-            .zip(ZIO.succeed(vec(1)))
-            .zip(ZIO.succeed(vec(2)))
-        )
-    } yield MSG(id, Input(id, res))).fold(_ => NoInput(id), x => x)
-}
-object GET_INPUT_VECTOR {
-  implicit val encoder: JsonEncoder[GET_INPUT_VECTOR] =
-    DeriveJsonEncoder.gen[GET_INPUT_VECTOR]
-  implicit val decoder: JsonDecoder[GET_INPUT_VECTOR] =
-    DeriveJsonDecoder.gen[GET_INPUT_VECTOR]
-}
+
 //------------------------------------STATS--------------------------------------------------------------------
 case class SET_LV(id: GLOBZ_ID, lv: (Double, Double, Double))
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = SET_LV
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      glob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      glob <- WorldBlock.getBlobOption(id).flatMap(ZIO.fromOption(_))
       _ <- glob match {
         case pe: PhysicalEntity => pe.setVelocity(Vector(lv._1, lv._2, lv._3));
         case _                  => ZIO.unit
@@ -1374,7 +1359,7 @@ case class LAZY_LV(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = LAZY_LV
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
-      blob <- WorldBlock.getBlob(id).flatMap(ZIO.fromOption(_))
+      blob <- WorldBlock.getBlobOption(id).flatMap(ZIO.fromOption(_))
       res <- blob match {
         case physicalEntity: PhysicalEntity =>
           physicalEntity.getVelocity.flatMap(vec =>
@@ -1406,7 +1391,7 @@ case class ADJUST_PHYSICAL_STATS(id: GLOBZ_ID, delta: PhysicalStats)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => GenericCommandError(s"Could not find entity $id"),
@@ -1441,7 +1426,7 @@ case class SET_SPEED(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => GenericCommandError(s"Could not find entity $id"),
@@ -1484,7 +1469,7 @@ case class ADJUST_MAX_SPEED(id: GLOBZ_ID, delta: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => GenericCommandError(s"Could not find entity $id"),
@@ -1526,7 +1511,7 @@ case class GET_PHYSICAL_STATS(id: GLOBZ_ID)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       glob <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => GenericCommandError(s"Could not find entity $id"),
@@ -1579,7 +1564,7 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
     // todo split between get_all_terrain_within_block and get_all_terrain_within_radius_of_loc
     for {
       loc <- WorldBlock
-        .getBlob(id)
+        .getBlobOption(id)
         .flatMap {
           case Some(g: Player) => g.getLocation;
           case None            => ZIO.succeed(Vector(0.0, 0, 0))
@@ -1640,7 +1625,7 @@ case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     _ <- ZIO.log("GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
     location <- WorldBlock
-      .getBlob(id)
+      .getBlobOption(id)
       .flatMap(ZIO.fromOption(_))
       .flatMap {
         case p: Player => p.getLocation;
@@ -1850,7 +1835,7 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
           )
         }
       blob_location <- wb
-        .getBlob(trigger_entity)
+        .getBlobOption(trigger_entity)
         .flatMap(ZIO.fromOption(_))
         .flatMap { case pe: PhysicalEntity => pe.getLocation }
         .orElseFail(
@@ -1946,7 +1931,7 @@ case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
     for {
       entity <- ZIO
         .serviceWithZIO[WorldBlock.Block](wb =>
-          wb.getBlob(from).flatMap(ZIO.fromOption(_)).map {
+          wb.getBlobOption(from).flatMap(ZIO.fromOption(_)).map {
             case li: LivingEntity => li
           }
         )
@@ -1983,7 +1968,7 @@ case class ADD_ITEM(id: GLOBZ_ID, item: Item)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .mapBoth(
           _ => AbilitiesError(s"Could not find living entity for $id"),
@@ -2011,7 +1996,7 @@ case class GET_INVENTORY(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
     for {
       glob <- ZIO
         .service[WorldBlock.Block]
-        .flatMap(_.getBlob(id))
+        .flatMap(_.getBlobOption(id))
         .flatMap(ZIO.fromOption(_))
         .map { case li: LivingEntity => li }
         .mapError(_ => InventoryError(s"Could not find living entity $id "))

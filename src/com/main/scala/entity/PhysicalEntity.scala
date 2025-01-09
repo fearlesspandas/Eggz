@@ -11,10 +11,6 @@ trait PhysicalEntity {
   def getVelocity: IO[PhysicsError, Vector[Double]]
   def setVelocity(velocity: Vector[Double]): IO[PhysicsError, Unit]
   def teleport(location: Vector[Double]): IO[PhysicsError, Unit]
-  @deprecated
-  def setInputVec(vec: Vector[Double]): IO[PhysicsError, Unit]
-  @deprecated
-  def getInputVec: IO[PhysicsError, Option[Vector[Double]]]
   def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit]
   def getMaxSpeed: IO[PhysicsError, Double]
   def adjustSpeed(delta: Double): IO[PhysicsError, Unit]
@@ -43,14 +39,6 @@ case class BasicPhysicalEntity(
 
   override def teleport(loc: Vector[Double]): IO[PhysicsError, Unit] =
     location.update(_ => loc)
-
-  override def setInputVec(vec: Vector[Double]): IO[PhysicsError, Unit] =
-    input.update {
-      case _ if vec.find(_ != 0).nonEmpty => Some(vec); case _ => None
-    }
-
-  override def getInputVec: IO[PhysicsError, Option[Vector[Double]]] =
-    input.get
 
   override def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit] =
     max_speed.update(curr => Math.max(curr + delta, 0))

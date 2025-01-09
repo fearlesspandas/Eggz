@@ -99,7 +99,7 @@ trait PhysicsChannel {
                   .flatMapError(err =>
                     ZIO.log(s"Could not map $txt due to $err")
                   )
-                _ <- wb.getBlob(r.id).flatMap(ZIO.fromOption(_)).flatMap {
+                _ <- wb.getBlobOption(r.id).flatMap(ZIO.fromOption(_)).flatMap {
                   case pe: PhysicalEntity =>
                     r.typ match {
                       case "Loc" => pe.teleport(r.vec)

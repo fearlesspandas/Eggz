@@ -12,7 +12,7 @@ trait BindableMovement {
     for {
       wb <- ZIO.service[WorldBlock.Block]
       b <- wb
-        .getBlob(binded)
+        .getBlobOption(binded)
         .flatMap(ZIO.fromOption(_))
         .orElseFail(NoEntityFoundBindableError)
 

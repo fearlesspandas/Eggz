@@ -4,6 +4,7 @@ import controller.HealthSet
 import controller.MultiResponse
 import controller.QueryResponse
 import controller.QueuedClientBroadcast
+import controller.QueuedClientMessage
 import controller.QueuedPhysicsMessage
 import controller.Stats
 import entity.LivingEntity.LivingEntityEnv
@@ -28,6 +29,7 @@ import zio.Chunk
 import zio.ExitCode
 import zio.IO
 import zio.Ref
+import zio.UIO
 import zio.ZIO
 import zio.ZLayer
 
@@ -55,7 +57,7 @@ trait NPC extends LivingEntity {
       AttackWithinDistancError(s"Couldn't get location for id ${this.id}")
     )
     target_entity <- WorldBlock
-      .getBlob(target)
+      .getBlobOption(target)
       .flatMap(ZIO.fromOption(_))
       .mapBoth(
         _ => AttackWithinDistancError(s"Could not find target entity $target"),
@@ -247,4 +249,41 @@ object Spider extends Globz.Service {
     } yield res
 
 }
+
+case class MonkGarden(
+  id: ID,
+  physics: PhysicalEntity,
+  glob: Globz,
+  inventory: Ref[Chunk[ABILITY_ID]]
+) extends TerrainEntity {
+  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
+    physics.getLocation
+      .flatMap(vec =>
+        ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
+      )
+      .mapBoth(_ => "", loc => MonkGardenModel(id, loc))
+  override def serializeEgg: IO[EggzError, EggzModel] = ???
+  override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
+  def getInventory(): UIO[Chunk[ABILITY_ID]] =
+    inventory.get
+
+  def buyItem(
+    entityId: GLOBZ_ID,
+    item: ABILITY_ID
+  ): ZIO[WorldBlock.Block, MonkGardenAPIError, QueryResponse] = for {
+    entity <- WorldBlock
+      .getBlob(entityId)
+      .orElseFail(???)
+  } yield QueuedClientMessage(entityId, Chunk())
+}
+trait MonkGardenAPIError
+object MonkGarden {
+  def make(id: ID): IO[GLOBZ_ERR, MonkGarden] = for {
+    physics <- BasicPhysicalEntity.make
+    glob <- GlobzInMem.make(id)
+    inventory <- Ref.make(Chunk(0, 1))
+  } yield MonkGarden(id, physics, glob, inventory)
+
+}
+
 case object NPCStatsNotFoundError extends EggzError

@@ -51,7 +51,8 @@ object WorldBlock {
     def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
     def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
     def tickAllBlobs(): ZIO[Any, WorldBlockError, ExitCode]
-    def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz]]
+    def getBlobOption(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz]]
+    def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Globz]
 
     def updateBlob(blob: Globz): IO[WorldBlockError, ExitCode]
 
@@ -104,11 +105,14 @@ object WorldBlock {
 
   def tickAllBlobs(): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO[WorldBlock.Block](_.get.tickAllBlobs())
-  def getBlob(
+  def getBlobOption(
     id: GLOBZ_ID
   ): ZIO[WorldBlock.Block, WorldBlockError, Option[Globz]] =
+    ZIO.serviceWithZIO[Block](_.getBlobOption(id))
+  def getBlob(
+    id: GLOBZ_ID
+  ): ZIO[WorldBlock.Block, WorldBlockError, Globz] =
     ZIO.serviceWithZIO[Block](_.getBlob(id))
-
   def getTerrain
     : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
     ZIO.environmentWithZIO(_.get.getTerrain)
@@ -173,12 +177,19 @@ case class WorldBlockInMem(
   ): ZIO[Globz, WorldBlock.WorldBlockError, ExitCode] =
     ZIO.service[Globz].flatMap(spawnBlob(_, coords))
 
-  override def getBlob(
+  override def getBlobOption(
     id: GLOBZ_ID
   ): IO[WorldBlock.WorldBlockError, Option[Globz]] =
     for {
       res <- dbRef.get.map(_.get(id))
     } yield res
+
+  override def getBlob(
+    id: GLOBZ_ID
+  ): IO[WorldBlock.WorldBlockError, Globz] =
+    dbRef.get
+      .flatMap(m => ZIO.fromOption(m.get(id)))
+      .orElseFail(GenericWorldBlockError(s"Could not find entity with id $id"))
 
   override def updateBlob(
     blob: Globz
@@ -325,7 +336,13 @@ object WorldBlockEnvironment {
     num_prowlers: Int = 0,
     prowler_radius: Double = 1000
   ): IO[GenericWorldBlockError, TerrainManager & Terrain] = for {
-    terrain_types <- ZIO.succeed(List("6", "11"))
+    terrain_types <- ZIO.succeed(
+      List(
+        TerrainTypes.BLOCK_TERRAIN.toId(),
+        TerrainTypes.HEALTH_STAR.toId(),
+        TerrainTypes.MONK_GARDEN.toId()
+      )
+    )
     _ <- ZIO
       .foreachParDiscard(0 to num) { i =>
         for {

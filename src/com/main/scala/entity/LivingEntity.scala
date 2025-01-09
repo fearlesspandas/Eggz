@@ -1,6 +1,7 @@
 package entity
 
-import controller.{QueryResponse, Stats}
+import controller.QueryResponse
+import controller.Stats
 import entity.Player.PlayerError
 import entity.Skill.Experience
 import entity.Skill.Level
@@ -31,6 +32,83 @@ import zio.ZIO
 
 import java.util.UUID
 
+trait TerrainEntity extends Eggz.Service with Globz with PhysicalEntity {
+  val id: ID
+  val physics: PhysicalEntity
+  val glob: Globz
+  def getLocation: IO[PhysicsError, Vector[Experience]] =
+    physics.getLocation
+
+  def getVelocity: IO[PhysicsError, Vector[Experience]] =
+    physics.getVelocity
+
+  def teleport(location: Vector[Experience]): IO[PhysicsError, Unit] =
+    physics.teleport(location)
+
+  def setVelocity(
+    velocity: Vector[Experience]
+  ): IO[PhysicsError, Unit] =
+    physics.setVelocity(velocity)
+
+  def adjustMaxSpeed(delta: Experience): IO[PhysicsError, Unit] =
+    physics.adjustMaxSpeed(delta)
+
+  def getMaxSpeed: IO[PhysicsError, Experience] =
+    physics.getMaxSpeed
+
+  def adjustSpeed(delta: Double): IO[PhysicsError, Unit] =
+    physics.adjustSpeed(delta)
+
+  def getSpeed: IO[PhysicsError, Experience] = physics.getSpeed
+
+  def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
+    glob.update(eggz)
+
+  def get(id: ID): IO[GLOBZ_ERR, Option[GLOBZ_IN]] =
+    glob.get(id)
+
+  def remove(id: ID): IO[GLOBZ_ERR, Unit] =
+    glob.remove(id)
+
+  def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]] =
+    glob.getAll()
+
+  def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
+    glob.tickAll()
+
+  def relate(
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    process: ZIO[Any, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] =
+    glob.relate(egg1, egg2, bidirectional, process)
+
+  def neighbors(
+    egg: GLOBZ_ID,
+    direction: Int
+  ): IO[GLOBZ_ERR, Vector[GLOBZ_ID]] =
+    glob.neighbors(egg, direction)
+
+  def scheduleEgg(
+    egg: GLOBZ_IN,
+    op: ZIO[GLOBZ_IN, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] =
+    glob.scheduleEgg(egg, op) // change to check if id is for player
+
+  def unrelate(
+    egg1: GLOBZ_ID,
+    egg2: GLOBZ_ID,
+    bidirectional: Boolean,
+    process: ZIO[Any, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] = glob.unrelate(egg1, egg2, bidirectional, process)
+
+  def unrelateAll(
+    egg: GLOBZ_ID,
+    direction: Level,
+    cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
+  ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction, cleanup_process)
+}
 trait LivingEntity
     extends Storage.Service[Item]
     with Eggz.Service
@@ -186,7 +264,7 @@ trait LivingEntity
   def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
     worldblock <- ZIO.service[WorldBlock.Block]
     player <- worldblock
-      .getBlob(id)
+      .getBlobOption(id)
       .flatMap { l =>
         ZIO.fromOption(l)
       }
@@ -232,12 +310,6 @@ trait LivingEntity
     direction: Level,
     cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction, cleanup_process)
-
-  def setInputVec(vec: Vector[Experience]): IO[PhysicsError, Unit] =
-    physics.setInputVec(vec)
-
-  def getInputVec: IO[PhysicsError, Option[Vector[Experience]]] =
-    physics.getInputVec
 
   def clearDestinations(): IO[DestinationsError, Unit] =
     destinations.clearDestinations()

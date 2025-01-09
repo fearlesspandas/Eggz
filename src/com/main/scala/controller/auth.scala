@@ -48,6 +48,13 @@ package object auth {
       } yield server_keys.contains(sender)
     case cmd => ZIO.fail(s"$cmd not relevant to CREATE_SPIDER")
   }
+  val create_monk_garden: ServerKeys => AUTH[String] = server_keys => {
+    case CREATE_MONK(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to CREATE_MONK")
+  }
 
   val get_all_globs: AUTH[String] = {
     case GET_ALL_GLOBS() => ZIO.succeed(true)
@@ -116,20 +123,6 @@ package object auth {
         senderId <- ZIO.service[String]
       } yield id == senderId
     case cmd => ZIO.fail(s"$cmd not relevant to GET_ALL_DESTINATIONS")
-  }
-  val apply_vector: AUTH[String] = {
-    case APPLY_VECTOR(id, _) =>
-      for {
-        senderId <- ZIO.service[String]
-      } yield id == senderId
-    case cmd => ZIO.fail(s"$cmd not relevant to APPLY_VECTOR")
-  }
-  val get_input_vector: Set[String] => AUTH[String] = server_keys => {
-    case GET_INPUT_VECTOR(id) =>
-      for {
-        senderId <- ZIO.service[String]
-      } yield server_keys.contains(senderId)
-    case cmd => ZIO.fail(s"$cmd not relevant to GET_INPUT_VECTOR")
   }
   val toggle_gravity: AUTH[String] = {
     case TOGGLE_GRAVITATE(id) =>
@@ -375,6 +368,7 @@ object AuthCommandService {
             relate_eggs(op),
             create_prowler(server_keys)(op),
             create_axis_spider(server_keys)(op),
+            create_monk_garden(server_keys)(op),
             get_glob(op),
             get_all_globs(op),
             add_health(server_keys)(op),
@@ -385,8 +379,6 @@ object AuthCommandService {
             set_active_destination(op),
             get_next_index(op),
             get_all_destinations(op),
-            apply_vector(op),
-            get_input_vector(server_keys)(op),
             clear_destinations(server_keys)(op),
             delete_destination(op),
             follow_entity(server_keys)(op),
@@ -433,6 +425,7 @@ object AuthCommandService {
             relate_eggs(op),
             create_prowler(server_keys)(op),
             create_axis_spider(server_keys)(op),
+            create_monk_garden(server_keys)(op),
             get_glob(op),
             get_all_globs(op),
             add_health(server_keys)(op),
@@ -443,8 +436,6 @@ object AuthCommandService {
             set_active_destination(op),
             get_next_index(op),
             get_all_destinations(op),
-            apply_vector(op),
-            get_input_vector(server_keys)(op),
             clear_destinations(server_keys)(op),
             delete_destination(op),
             follow_entity(server_keys)(op),

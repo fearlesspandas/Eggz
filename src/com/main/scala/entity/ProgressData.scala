@@ -58,7 +58,7 @@ case class BasicProgressData() extends ProgressData {
       case 0 =>
         for {
           _ <- ZIO
-            .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+            .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
             .flatMap(ZIO.fromOption(_))
             .flatMap {
               case li: LivingEntity => ZIO.succeed(li);

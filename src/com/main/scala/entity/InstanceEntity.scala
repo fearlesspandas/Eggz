@@ -189,7 +189,7 @@ trait InstanceEntity
   def follow_player(id: ID): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
     worldblock <- ZIO.service[WorldBlock.Block]
     player <- worldblock
-      .getBlob(id)
+      .getBlobOption(id)
       .flatMap { l =>
         ZIO.fromOption(l)
       }
@@ -235,12 +235,6 @@ trait InstanceEntity
     direction: Level,
     cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] = glob.unrelateAll(egg, direction, cleanup_process)
-
-  def setInputVec(vec: Vector[Experience]): IO[PhysicsError, Unit] =
-    physics.setInputVec(vec)
-
-  def getInputVec: IO[PhysicsError, Option[Vector[Experience]]] =
-    physics.getInputVec
 
   def clearDestinations(): IO[DestinationsError, Unit] =
     destinations.clearDestinations()
