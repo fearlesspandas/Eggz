@@ -37,16 +37,14 @@ object WorldBlock {
       blob: Globz,
       coords: Vector[Double]
     ): IO[WorldBlockError, ExitCode]
-
+    def spawnNonPhysicalBlob(
+      blob: Globz,
+      coords: Vector[Double]
+    ): IO[WorldBlockError, ExitCode]
     def get_controller()
       : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
         QueryResponse
       ]]]
-
-    // deprecated
-    def spawnFreshBlob(
-      coords: Vector[Double]
-    ): ZIO[Globz, WorldBlockError, ExitCode]
     def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
     def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
     def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
@@ -90,11 +88,13 @@ object WorldBlock {
     coords: Vector[Double]
   ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO(_.get.spawnBlob(blob, coords))
-    // deprecated
-  def spawnFreshBlob(
+
+  def spawnNonPhysicalBlob(
+    blob: Globz,
     coords: Vector[Double]
-  ): ZIO[WorldBlock.Block with Globz, WorldBlockError, ExitCode] =
-    ZIO.service[WorldBlock.Block].flatMap(_.spawnFreshBlob(coords))
+  ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
+    ZIO.environmentWithZIO(_.get.spawnNonPhysicalBlob(blob, coords))
+
   def getAllBlobs(): ZIO[WorldBlock.Block, WorldBlockError, Set[Globz]] =
     ZIO.environmentWithZIO[WorldBlock.Block](_.get.getAllBlobs())
 
@@ -128,6 +128,7 @@ case class WorldBlockInMem(
     Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
   ],
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
+  non_physical_entities: Ref[Map[GLOBZ_ID, Globz]],
   terrain: Ref[TerrainManager with Terrain],
   _npc_handler: NPCHandler
 ) extends WorldBlock.Block {
@@ -148,12 +149,17 @@ case class WorldBlockInMem(
     for {
       _ <- dbRef.update(_.updated(blob.id, blob))
     } yield ExitCode.success
-
+  override def spawnNonPhysicalBlob(
+    blob: Globz,
+    coords: Vector[Double]
+  ): IO[WorldBlock.WorldBlockError, ExitCode] =
+    for {
+      _ <- non_physical_entities.update(_.updated(blob.id, blob))
+    } yield ExitCode.success
   override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
     for {
       db <- dbRef.get
     } yield db.values.toSet
-
   override def getNumBlobs(): ZIO[Any, WorldBlockError, RuntimeFlags] =
     dbRef.get.map(_.size)
 
@@ -171,11 +177,6 @@ case class WorldBlockInMem(
       fail = r.count(_ != ExitCode.success)
     } yield ExitCode.apply(fail))
       .orElseFail(GenericWorldBlockError("error tick blobs"))
-  // deprecated
-  override def spawnFreshBlob(
-    coords: Vector[Double]
-  ): ZIO[Globz, WorldBlock.WorldBlockError, ExitCode] =
-    ZIO.service[Globz].flatMap(spawnBlob(_, coords))
 
   override def getBlobOption(
     id: GLOBZ_ID
@@ -285,8 +286,17 @@ object WorldBlockInMem extends WorldBlock.Service {
       terrain_ref <- Ref.make(terrain)
 
       globz_map <- Ref.make(Map.empty[GLOBZ_ID, Globz])
+      non_physical_entities <- Ref.make(Map.empty[GLOBZ_ID, Globz])
       res <- ZIO
-        .attempt(WorldBlockInMem(control, globz_map, terrain_ref, npchandler))
+        .attempt(
+          WorldBlockInMem(
+            control,
+            globz_map,
+            non_physical_entities,
+            terrain_ref,
+            npchandler
+          )
+        )
         .orElseFail(
           GenericWorldBlockError("Failed to create woldblock on startup")
         )

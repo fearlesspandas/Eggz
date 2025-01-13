@@ -297,13 +297,12 @@ object CREATE_SPIDER {
 case class CREATE_MONK(globId: GLOBZ_ID, location: Vector[Double])
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = CREATE_MONK
-
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     monk <- MonkGarden
       .make(globId)
       .mapError(err => CreateMONKError(s"Error while creating monk: $err"))
     _ <- WorldBlock
-      .spawnBlob(monk, location)
+      .spawnNonPhysicalBlob(monk, location)
       .mapError(err => CreateMONKError(s"Error while spawning monk: $err"))
     ser_model <- monk.serializeGlob.mapError(err =>
       CreateMONKError(s"Error while serializing new monk model: $err")
