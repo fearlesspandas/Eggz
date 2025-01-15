@@ -358,6 +358,13 @@ object ItemAdded {
   implicit val encoder: JsonEncoder[ItemAdded] =
     DeriveJsonEncoder.gen[ItemAdded]
 }
+case class ItemRemoved(id: GLOBZ_ID, item: Item) extends QueryResponse
+object ItemRemoved {
+  implicit val decoder: JsonDecoder[ItemRemoved] =
+    DeriveJsonDecoder.gen[ItemRemoved]
+  implicit val encoder: JsonEncoder[ItemRemoved] =
+    DeriveJsonEncoder.gen[ItemRemoved]
+}
 case class Inventory(id: GLOBZ_ID, items: Set[Item]) extends QueryResponse
 object Inventory {
   implicit val decoder: JsonDecoder[Inventory] =

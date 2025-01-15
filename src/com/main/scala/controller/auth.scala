@@ -319,6 +319,20 @@ package object auth {
       } yield server_keys.contains(sender)
     case cmd => ZIO.fail(s"$cmd not relevant for ADD_ITEM")
   }
+  val buy_item: Set[String] => AUTH[String] = server_keys => {
+    case BUY_ITEM(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender) || id == sender
+    case cmd => ZIO.fail(s"$cmd not relevant for BUY_ITEM")
+  }
+  val sell_item: Set[String] => AUTH[String] = server_keys => {
+    case SELL_ITEM(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender) || id == sender
+    case cmd => ZIO.fail(s"$cmd not relevant for SELL_ITEM")
+  }
   val get_inventory: AUTH[String] = {
     case GET_INVENTORY(id) =>
       for {
@@ -401,6 +415,8 @@ object AuthCommandService {
             get_cached_terrain(op),
             ability(op),
             add_item(server_keys)(op),
+            buy_item(server_keys)(op),
+            sell_item(server_keys)(op),
             get_inventory(op),
             progress(server_keys)(op),
             next_cmd(op),
@@ -458,6 +474,8 @@ object AuthCommandService {
             get_cached_terrain(op),
             ability(op),
             add_item(server_keys)(op),
+            buy_item(server_keys)(op),
+            sell_item(server_keys)(op),
             get_inventory(op),
             progress(server_keys)(op),
             next_cmd(op),

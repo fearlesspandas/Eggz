@@ -31,6 +31,7 @@ import entity.Player
 import entity.ProgressArgs
 import entity.ProgressData
 import entity.Prowler
+import entity.Shops
 import entity.Spider
 import entity.Terrain
 import entity.TerrainChunkM
@@ -348,8 +349,7 @@ case class GET_GLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       res <- WorldBlock
-        .getBlobOption(id)
-        .flatMap(ZIO.fromOption(_))
+        .getBlob(id)
         .flatMap(_.serializeGlob)
     } yield GlobSet(Set(res)))
       .orElseFail(GenericCommandError("Error retrieving blobs"))
@@ -427,8 +427,7 @@ case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
-        .flatMap(ZIO.fromOption(_))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
       _ <- glob.health
         .flatMap(h => glob.setHealth(h + value))
@@ -453,8 +452,7 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
-        .flatMap(ZIO.fromOption(_))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
       curr_health <- glob.health.mapError(_ => GenericCommandError(""))
       _ <- glob.health
@@ -565,8 +563,7 @@ case class RELATE_EGGS(
   override val REF_TYPE: Any = (RELATE_EGGS, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      globOp <- WorldBlock.getBlobOption(globId)
-      glob <- ZIO.fromOption(globOp)
+      glob <- WorldBlock.getBlob(globId)
       _ <- glob.relate(egg1, egg2, bidirectional, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
@@ -586,8 +583,7 @@ case class UNRELATE_EGGS(
   override val REF_TYPE: Any = (UNRELATE_EGGS, globId)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     (for {
-      globOp <- WorldBlock.getBlobOption(globId)
-      glob <- ZIO.fromOption(globOp)
+      glob <- WorldBlock.getBlob(globId)
       _ <- glob.unrelate(egg1, egg2, bidirectional, ZIO.unit)
     } yield ()).orElseFail(GenericCommandError("Error relating eggz"))
 }
@@ -1834,8 +1830,7 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
           )
         }
       blob_location <- wb
-        .getBlobOption(trigger_entity)
-        .flatMap(ZIO.fromOption(_))
+        .getBlob(trigger_entity)
         .flatMap { case pe: PhysicalEntity => pe.getLocation }
         .orElseFail(
           GenericCommandError("Could not find glob while filling terrain")
@@ -1930,8 +1925,8 @@ case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
     for {
       entity <- ZIO
         .serviceWithZIO[WorldBlock.Block](wb =>
-          wb.getBlobOption(from).flatMap(ZIO.fromOption(_)).map {
-            case li: LivingEntity => li
+          wb.getBlob(from).map { case li: LivingEntity =>
+            li
           }
         )
         .orElseFail(GenericCommandError(s"No entity found with Id $from"))
@@ -1967,8 +1962,7 @@ case class ADD_ITEM(id: GLOBZ_ID, item: Item)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
-        .flatMap(ZIO.fromOption(_))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .mapBoth(
           _ => AbilitiesError(s"Could not find living entity for $id"),
           { case li: LivingEntity => li }
@@ -1988,20 +1982,46 @@ object ADD_ITEM {
   implicit val encoder: JsonEncoder[ADD_ITEM] = DeriveJsonEncoder.gen[ADD_ITEM]
   implicit val decoder: JsonDecoder[ADD_ITEM] = DeriveJsonDecoder.gen[ADD_ITEM]
 }
+case class BUY_ITEM(id: GLOBZ_ID, item: Item)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (BUY_ITEM, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    Shops
+      .buy_ability(id, item)
+      .mapError(err => BuyItemError(s"Buy Item Failed with $err"))
+}
+case class BuyItemError(msg: String) extends CommandError
+object BUY_ITEM {
+  implicit val encoder: JsonEncoder[BUY_ITEM] = DeriveJsonEncoder.gen[BUY_ITEM]
+  implicit val decoder: JsonDecoder[BUY_ITEM] = DeriveJsonDecoder.gen[BUY_ITEM]
+}
+case class SELL_ITEM(id: GLOBZ_ID, item: Item)
+    extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (SELL_ITEM, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    Shops
+      .sell_ability(id, item)
+      .mapError(err => SellItemError(s"Error selling item $err"))
+}
+case class SellItemError(msg: String) extends CommandError
+object SELL_ITEM {
+  implicit val encoder: JsonEncoder[SELL_ITEM] =
+    DeriveJsonEncoder.gen[SELL_ITEM]
+  implicit val decoder: JsonDecoder[SELL_ITEM] =
+    DeriveJsonDecoder.gen[SELL_ITEM]
+}
 case class GET_INVENTORY(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_INVENTORY, id)
 
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       glob <- ZIO
-        .service[WorldBlock.Block]
-        .flatMap(_.getBlobOption(id))
-        .flatMap(ZIO.fromOption(_))
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .mapError(_ => InventoryError(""))
         .map { case li: LivingEntity => li }
-        .mapError(_ => InventoryError(s"Could not find living entity $id "))
       res <- glob
         .getInventory()
-        .mapError(_ =>
+        .orElseFail(
           InventoryError(s"Error while trying to get inventory for $id")
         )
     } yield Inventory(id, res)
