@@ -61,6 +61,7 @@ object Shops {
             )
           )
         )
+      case _ => ZIO.fail(BuyAbilityError("No Ability Found"))
     }
   } yield res
   def sell_ability(
@@ -112,6 +113,7 @@ object Shops {
             )
           )
         )
+      case _ => ZIO.fail(BuyAbilityError("No Ability Found"))
     }
   } yield res
 }
