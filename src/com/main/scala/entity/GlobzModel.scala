@@ -62,7 +62,8 @@ object AxisSpiderModel {
 }
 case class MonkGardenModel(
   id: String,
-  location: (Double, Double, Double)
+  location: (Double, Double, Double),
+  items: Set[Int]
 ) extends GlobzModel
 object MonkGardenModel {
   implicit val encoder: JsonEncoder[MonkGardenModel] =

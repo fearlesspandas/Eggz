@@ -256,12 +256,15 @@ case class MonkGarden(
   glob: Globz,
   inventory: Ref[Chunk[ABILITY_ID]]
 ) extends TerrainEntity {
-  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
-    physics.getLocation
-      .flatMap(vec =>
-        ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
-      )
-      .mapBoth(_ => "", loc => MonkGardenModel(id, loc))
+  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] = for {
+    items <- inventory.get.map(_.toSet)
+    res <-
+      physics.getLocation
+        .flatMap(vec =>
+          ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
+        )
+        .mapBoth(_ => "", loc => MonkGardenModel(id, loc, items))
+  } yield res
   override def serializeEgg: IO[EggzError, EggzModel] = ???
   override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
   def getInventory(): UIO[Chunk[ABILITY_ID]] =
