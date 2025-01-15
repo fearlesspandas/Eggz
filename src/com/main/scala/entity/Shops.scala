@@ -74,7 +74,8 @@ object Shops {
         _ => BuyAbilityError("No entity with that id found"),
         { case li: LivingEntity => li }
       )
-    res <- ability_id match {
+    inventory <- entity.getInventory().orElseFail(BuyAbilityError(""))
+    res <- (ability_id match {
       case 0 =>
         for {
           _ <- entity
@@ -114,7 +115,9 @@ object Shops {
           )
         )
       case _ => ZIO.fail(BuyAbilityError("No Ability Found"))
-    }
+    }).when(inventory.contains(ability_id))
+      .flatMap(ZIO.fromOption(_))
+      .orElseFail(BuyAbilityError(""))
   } yield res
 }
 trait ShopError
