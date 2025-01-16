@@ -46,6 +46,7 @@ object WorldBlock {
         QueryResponse
       ]]]
     def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
+    def getAllNonPhysicalBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
     def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
     def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
     def tickAllBlobs(): ZIO[Any, WorldBlockError, ExitCode]
@@ -97,7 +98,9 @@ object WorldBlock {
 
   def getAllBlobs(): ZIO[WorldBlock.Block, WorldBlockError, Set[Globz]] =
     ZIO.environmentWithZIO[WorldBlock.Block](_.get.getAllBlobs())
-
+  def getAllNonPhysicalBlobs()
+    : ZIO[WorldBlock.Block, WorldBlockError, Set[Globz]] =
+    ZIO.environmentWithZIO[WorldBlock.Block](_.get.getAllNonPhysicalBlobs())
   def removeBlob(
     blob: Globz
   ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
@@ -149,6 +152,7 @@ case class WorldBlockInMem(
     for {
       _ <- dbRef.update(_.updated(blob.id, blob))
     } yield ExitCode.success
+
   override def spawnNonPhysicalBlob(
     blob: Globz,
     coords: Vector[Double]
@@ -156,10 +160,18 @@ case class WorldBlockInMem(
     for {
       _ <- non_physical_entities.update(_.updated(blob.id, blob))
     } yield ExitCode.success
+
   override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
     for {
       db <- dbRef.get
     } yield db.values.toSet
+
+  override def getAllNonPhysicalBlobs()
+    : ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
+    for {
+      db <- non_physical_entities.get
+    } yield db.values.toSet
+
   override def getNumBlobs(): ZIO[Any, WorldBlockError, RuntimeFlags] =
     dbRef.get.map(_.size)
 
@@ -188,8 +200,12 @@ case class WorldBlockInMem(
   override def getBlob(
     id: GLOBZ_ID
   ): IO[WorldBlock.WorldBlockError, Globz] =
-    dbRef.get
-      .flatMap(m => ZIO.fromOption(m.get(id)))
+    (for {
+      physical <- dbRef.get.map(_.contains(id))
+      res <-
+        if (physical) dbRef.get.flatMap(m => ZIO.fromOption(m.get(id)))
+        else non_physical_entities.get.flatMap(m => ZIO.fromOption(m.get(id)))
+    } yield res)
       .orElseFail(GenericWorldBlockError(s"Could not find entity with id $id"))
 
   override def updateBlob(
