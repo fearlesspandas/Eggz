@@ -378,25 +378,6 @@ object GET_ALL_ENTITY_IDS {
     DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
 }
 
-case class GET_ALL_EGGZ() extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = GET_ALL_EGGZ
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      res <- WorldBlock.getAllBlobs()
-      nested <- ZIO
-        .foreachPar(res)(_.getAll())
-        .map(d => d.flatten)
-      stats <- ZIO.foreachPar(nested)(egg => egg.serializeEgg)
-    } yield EggSet(stats))
-      .orElseFail(GenericCommandError("Error retrieving blobs"))
-}
-object GET_ALL_EGGZ {
-  implicit val encoder: JsonEncoder[GET_ALL_EGGZ] =
-    DeriveJsonEncoder.gen[GET_ALL_EGGZ]
-  implicit val decoder: JsonDecoder[GET_ALL_EGGZ] =
-    DeriveJsonDecoder.gen[GET_ALL_EGGZ]
-}
-
 case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = GET_ALL_STATS
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -610,51 +591,7 @@ object UNRELATE_ALL {
   implicit val decoder: JsonDecoder[UNRELATE_ALL] =
     DeriveJsonDecoder.gen[UNRELATE_ALL]
 }
-@deprecated
-case class TICK_WORLD() extends SimpleCommandSerializable[WorldBlock.Block] {
-  override val REF_TYPE: Any = TICK_WORLD
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
-    WorldBlock
-      .tickAllBlobs()
-      .mapBoth(_ => GenericCommandError("Error ticking world"), _ => ())
-}
-object TICK_WORLD {
-  implicit val encoder: JsonEncoder[TICK_WORLD] =
-    DeriveJsonEncoder.gen[TICK_WORLD]
-  implicit val decoder: JsonDecoder[TICK_WORLD] =
-    DeriveJsonDecoder.gen[TICK_WORLD]
-}
 
-case class START_EGG(eggId: ID, globId: GLOBZ_ID)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
-  override val REF_TYPE: Any = (START_EGG, globId)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
-    (for {
-      g <- WorldBlock.getBlobOption(globId)
-      _ <- ZIO
-        .fromOption(g)
-        .flatMap(glob =>
-          for {
-            egg <- glob.get(eggId)
-            _ <- ZIO
-              .fromOption(egg)
-              .flatMap((egg: GLOBZ_IN) =>
-                glob.scheduleEgg(
-                  egg,
-                  egg.op.provide(ZLayer.succeed(glob)).unit
-                )
-              )
-          } yield ()
-        )
-
-    } yield ()).orElseFail(GenericCommandError("error starting egg"))
-}
-object START_EGG {
-  implicit val encoder: JsonEncoder[START_EGG] =
-    DeriveJsonEncoder.gen[START_EGG]
-  implicit val decoder: JsonDecoder[START_EGG] =
-    DeriveJsonDecoder.gen[START_EGG]
-}
 //--------------------------------DESTINATIONS-------------------------------------------------------
 case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (TOGGLE_GRAVITATE, id)

@@ -44,19 +44,6 @@ case class GlobzInMem(
       _ <- dbref.update(_.removed(id))
     } yield ()
 
-  override def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
-    for {
-      all <- getAll()
-      e <- ZIO.foreachPar(all)(
-        _.op
-          .fold(_ => ExitCode.failure, x => x)
-          .provide(ZLayer {
-            ZIO.succeed(this)
-          })
-      )
-      fail = e.filter(_ != ExitCode.success).size
-    } yield ExitCode.apply(fail)
-
   override def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]] =
     for {
       ref <- dbref.get
@@ -105,12 +92,6 @@ case class GlobzInMem(
     cleanup_process: ZIO[Any, GLOBZ_ERR, Unit]
   ): IO[GLOBZ_ERR, Unit] =
     for {
-//      eg <- get(egg)
-//        .flatMap(ZIO.fromOption(_))
-//        .mapError(_ =>
-//          s"Error" +
-//            s" looking for egg with id $egg during unrelateAll"
-//        )
       neighbors <- neighbors(egg, direction)
       _ <- ZIO.foreachParDiscard(neighbors) { n =>
         if (direction > 0) {
@@ -154,23 +135,7 @@ case class GlobzInMem(
       .unit
     // .provide(ZLayer.succeed(this))
 //      .fork
-  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
-    for {
-      eggs <- this.dbref.get
-      mapped <- ZIO
-        .collectAllPar(eggs.map { case (id, egg) =>
-          egg.serializeEgg
-        })
-        .mapError(_ => s"Error while trying to serialize glob ${this.id}")
-      rels <- this.relationRef.get
-    } yield GlobInMemory(
-      this.id,
-      mapped.toSet,
-      rels.toSet.collect[(ID, ID)] { case (ids: (ID, ID), _) =>
-        ids
-      }
-    )
-
+  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] = ???
 }
 object GlobzInMem extends Globz.Service {
   type EggMap = Ref[Map[GLOBZ_ID, Eggz.Service]]

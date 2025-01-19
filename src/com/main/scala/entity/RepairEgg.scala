@@ -26,7 +26,6 @@ case class RepairEgg(
   inventory: Storage.Service[String]
 ) extends StorageEgg[String]
     with Health {
-  override def op: ZIO[Globz, String, ExitCode] = ???
 
   override def setHealth(health: Double): IO[HealthError, Health] =
     for {
@@ -55,12 +54,6 @@ case class RepairEgg(
 
   override def energy: IO[HealthError, Double] = energyRef.get
 
-  override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
-    for {
-      health <- health.orElseFail(RepairEggStatsNotFound)
-      energy <- energy.orElseFail(RepairEggStatsNotFound)
-      stats = Stats(id, health, energy)
-    } yield REPAIR_EGG(id, stats, cost, repairValue)
 }
 
 object RepairEgg {
@@ -82,7 +75,6 @@ object RepairEgg {
       bs
     )
 
-  def op(egg: Eggz.Service): ZIO[Globz, GLOBZ_ERR, ExitCode] = egg.op
 }
 case object RepairEggStatsNotFound extends EggzError
 class processingEgg() // proocesses resource to next stage

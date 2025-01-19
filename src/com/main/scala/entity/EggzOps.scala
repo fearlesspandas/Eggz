@@ -10,10 +10,6 @@ import zio.ZIO
 object EggzOps {
   type ID = String
 
-  trait Service {
-
-    def op: ZIO[Globz, GLOBZ_ERR, ExitCode]
-
-  }
+  trait Service {}
 
 }

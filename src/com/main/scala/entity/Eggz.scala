@@ -10,7 +10,6 @@ object Eggz {
 
   trait Service extends EggzOps.Service {
     val id: ID
-    def serializeEgg: IO[EggzError, EggzModel]
   }
 
   trait EggzError

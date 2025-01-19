@@ -1,5 +1,6 @@
 package entity
 
+import entity.Ability.ABILITY_ID
 import entity.LivingEntity.Item
 import entity.LivingEntity.LivingEntityEnv
 import entity.Player.PlayerError
@@ -32,12 +33,6 @@ trait InstanceEntity
     with PhysicalEntity
     with InstanceHealth
     with Destinations {
-
-  def doAction[E, B](
-    action: ZIO[LivingEntityEnv, E, B]
-  ): ZIO[LivingEntity, E, B]
-
-  def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode]
 
   val id: ID
 
@@ -108,9 +103,6 @@ trait InstanceEntity
 
   def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]] =
     glob.getAll()
-
-  def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
-    glob.tickAll()
 
   def relate(
     egg1: GLOBZ_ID,
@@ -249,4 +241,10 @@ trait InstanceEntity
     physics.adjustSpeed(delta)
 
   def getSpeed: IO[PhysicsError, Experience] = physics.getSpeed
+
+  def setIndex(index: ABILITY_ID): IO[DestinationsError, Unit] =
+    destinations.setIndex(index)
+
+  def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
+    destinations.setActiveDest(id)
 }

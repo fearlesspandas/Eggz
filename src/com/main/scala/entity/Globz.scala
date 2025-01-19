@@ -27,8 +27,6 @@ trait Globz {
 
   def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]]
 
-  def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode]
-
   def relate(
     egg1: GLOBZ_ID,
     egg2: GLOBZ_ID,

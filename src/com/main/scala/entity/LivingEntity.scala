@@ -1,7 +1,13 @@
 package entity
 
+import controller.HealthSet
+import controller.MSG
+import controller.MultiResponse
 import controller.QueryResponse
+import controller.QueuedClientBroadcast
+import controller.QueuedServerMessage
 import controller.Stats
+import controller.TeleportToNext
 import entity.Player.PlayerError
 import entity.Skill.Experience
 import entity.Skill.Level
@@ -24,6 +30,7 @@ import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
+import zio.Chunk
 import zio.ExitCode
 import zio.Fiber
 import zio.IO
@@ -73,9 +80,6 @@ trait TerrainEntity extends Eggz.Service with Globz with PhysicalEntity {
   def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]] =
     glob.getAll()
 
-  def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
-    glob.tickAll()
-
   def relate(
     egg1: GLOBZ_ID,
     egg2: GLOBZ_ID,
@@ -117,12 +121,6 @@ trait LivingEntity
     with Health
     with AbilityData
     with Destinations {
-
-  def doAction[E, B](
-    action: ZIO[LivingEntityEnv, E, B]
-  ): ZIO[LivingEntity, E, B]
-
-  def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode]
 
   val id: ID
 
@@ -170,8 +168,6 @@ trait LivingEntity
 
   def energy: IO[HealthError, Double] = energyRef.get
 
-  def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse]
-
   def update(eggz: GLOBZ_IN): IO[GLOBZ_ERR, GLOBZ_OUT] =
     glob.update(eggz)
 
@@ -183,9 +179,6 @@ trait LivingEntity
 
   def getAll(): IO[GLOBZ_ERR, Set[GLOBZ_IN]] =
     glob.getAll()
-
-  def tickAll(): ZIO[Any, GLOBZ_ERR, ExitCode] =
-    glob.tickAll()
 
   def relate(
     egg1: GLOBZ_ID,
@@ -324,6 +317,28 @@ trait LivingEntity
     physics.adjustSpeed(delta)
 
   def getSpeed: IO[PhysicsError, Experience] = physics.getSpeed
+
+  def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
+    destinations.setActiveDest(id)
+
+  def setIndex(index: Level): IO[DestinationsError, Unit] =
+    destinations.setIndex(index)
+
+  def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
+    base_health <- ZIO.succeed(1000.0)
+    _ <- this
+      .setHealth(base_health)
+      .orElseFail("Could not reset health during DIE operation")
+  } yield MultiResponse(
+    Chunk(
+      QueuedServerMessage(
+        Chunk(MSG(this.id, TeleportToNext(this.id, (0, 0, 0))))
+      ),
+      QueuedClientBroadcast(
+        Chunk(MSG(this.id, HealthSet(this.id, base_health)))
+      )
+    )
+  )
 }
 
 object LivingEntity {

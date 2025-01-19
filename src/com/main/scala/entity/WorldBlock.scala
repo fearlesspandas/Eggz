@@ -49,7 +49,6 @@ object WorldBlock {
     def getAllNonPhysicalBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
     def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
     def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
-    def tickAllBlobs(): ZIO[Any, WorldBlockError, ExitCode]
     def getBlobOption(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz]]
     def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Globz]
 
@@ -105,9 +104,6 @@ object WorldBlock {
     blob: Globz
   ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
     ZIO.environmentWithZIO(_.get.removeBlob(blob))
-
-  def tickAllBlobs(): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
-    ZIO.environmentWithZIO[WorldBlock.Block](_.get.tickAllBlobs())
   def getBlobOption(
     id: GLOBZ_ID
   ): ZIO[WorldBlock.Block, WorldBlockError, Option[Globz]] =
@@ -181,14 +177,6 @@ case class WorldBlockInMem(
     for {
       _ <- dbRef.update(_.removed(blob.id))
     } yield ExitCode.success
-
-  override def tickAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, ExitCode] =
-    (for {
-      all <- getAllBlobs()
-      r <- ZIO.foreachPar(all)(g => g.tickAll())
-      fail = r.count(_ != ExitCode.success)
-    } yield ExitCode.apply(fail))
-      .orElseFail(GenericWorldBlockError("error tick blobs"))
 
   override def getBlobOption(
     id: GLOBZ_ID

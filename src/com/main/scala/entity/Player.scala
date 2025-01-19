@@ -65,10 +65,6 @@ case class BasicPlayer(
   val glob: Globz,
   val destinations: Destinations
 ) extends Player {
-  def doAction2[E, B](
-    action: ZIO[PlayerEnv, E, B]
-  ): ZIO[LivingEntity, E, B] =
-    ???
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
@@ -81,48 +77,6 @@ case class BasicPlayer(
     } yield PlayerGlob(this.id, stats, location))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
-  override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
-    for {
-      health <- health.orElseFail(PlayerStatsNotFound)
-      energy <- energy.orElseFail(PlayerStatsNotFound)
-      stats = Stats(id, health, energy)
-      loc <- getLocation.orElseFail(PlayerStatsNotFound)
-      location <- ZIO
-        .succeed(loc(0))
-        .zip(ZIO.succeed(loc(1)))
-        .zip(ZIO.succeed(loc(2)))
-    } yield PLAYER_EGG(id, stats, location)
-
-  override def defaultOP[GLOBZ_OUT]: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] =
-    ZIO.succeed(ExitCode.success)
-
-  override def doAction[E, B](
-    action: ZIO[LivingEntityEnv, E, B]
-  ): ZIO[LivingEntity, E, B] = ???
-
-  override def op: ZIO[GLOBZ_OUT, GLOBZ_ERR, ExitCode] = ???
-
-  override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
-    destinations.setActiveDest(id)
-
-  override def setIndex(index: Level): IO[DestinationsError, Unit] =
-    destinations.setIndex(index)
-
-  override def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
-    base_health <- ZIO.succeed(1000.0)
-    _ <- this
-      .setHealth(base_health)
-      .orElseFail("Could not reset health during DIE operation")
-  } yield MultiResponse(
-    Chunk(
-      QueuedServerMessage(
-        Chunk(MSG(this.id, TeleportToNext(this.id, (0, 0, 0))))
-      ),
-      QueuedClientBroadcast(
-        Chunk(MSG(this.id, HealthSet(this.id, base_health)))
-      )
-    )
-  )
 }
 
 object BasicPlayer extends Globz.Service {

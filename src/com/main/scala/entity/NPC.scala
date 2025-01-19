@@ -94,10 +94,6 @@ case class Prowler(
   val glob: Globz,
   val destinations: Destinations
 ) extends NPC {
-  override def doAction[E, B](
-    action: ZIO[LivingEntityEnv, E, B]
-  ): ZIO[LivingEntity, E, B] =
-    ???
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
@@ -110,52 +106,6 @@ case class Prowler(
     } yield ProwlerModel(this.id, stats, location))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
-  override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
-    for {
-      health <- health.orElseFail(NPCStatsNotFoundError)
-      energy <- energy.orElseFail(NPCStatsNotFoundError)
-      stats = Stats(id, health, energy)
-      loc <- getLocation.orElseFail(NPCStatsNotFoundError)
-      location <- ZIO
-        .succeed(loc(0))
-        .zip(ZIO.succeed(loc(1)))
-        .zip(ZIO.succeed(loc(2)))
-    } yield PROWLER_EGG(id, stats, location)
-
-  override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
-
-  override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
-
-  override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
-    destinations.setActiveDest(id)
-
-  override def setIndex(index: Int): IO[DestinationsError, Unit] =
-    destinations.setIndex(index)
-
-  override def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
-    controller <- WorldBlock
-      .get_controller()
-      .orElseFail("Could not get controller for DIE operation")
-    _ <- this
-      .setHealth(1000.0)
-      .orElseFail("Could not reset health during DIE operation")
-    _ <- controller.queueQuery(
-      ZIO.succeed(
-        Chunk(
-          QueuedPhysicsMessage(
-            Chunk(
-              PhysicsTeleport(this.id, (0, 0, 0))
-            )
-          )
-        )
-      )
-    )
-  } yield MultiResponse(
-    Chunk(
-      HealthSet(this.id, 1000.0),
-      QueuedClientBroadcast(Chunk(HealthSet(this.id, 1000.0)))
-    )
-  )
 }
 
 object Prowler extends Globz.Service {
@@ -188,10 +138,6 @@ case class Spider(
   val glob: Globz,
   val destinations: Destinations
 ) extends InstanceEntity {
-  override def doAction[E, B](
-    action: ZIO[LivingEntityEnv, E, B]
-  ): ZIO[LivingEntity, E, B] =
-    ???
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
@@ -204,30 +150,9 @@ case class Spider(
     } yield AxisSpiderModel(this.id, stats, location))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
-  override def serializeEgg: IO[Eggz.EggzError, EggzModel] =
-    for {
-      health <- ZIO.succeed(this.starting_health)
-      energy <- ZIO.succeed(this.starting_energy)
-      stats = Stats(id, health, energy)
-      loc <- getLocation.orElseFail(NPCStatsNotFoundError)
-      location <- ZIO
-        .succeed(loc(0))
-        .zip(ZIO.succeed(loc(1)))
-        .zip(ZIO.succeed(loc(2)))
-    } yield PROWLER_EGG(id, stats, location)
-
-  override def defaultOP[Env]: ZIO[Env, GLOBZ_ERR, ExitCode] = ???
-
-  override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
-
-  override def setActiveDest(id: UUID): IO[DestinationsError, Unit] =
-    destinations.setActiveDest(id)
-
-  override def setIndex(index: Int): IO[DestinationsError, Unit] =
-    destinations.setIndex(index)
-
   override val starting_health: Double = 100000
   override val starting_energy: Double = 100000
+
 }
 
 object Spider extends Globz.Service {
@@ -265,8 +190,6 @@ case class MonkGarden(
         )
         .mapBoth(_ => "", loc => MonkGardenModel(id, loc, items))
   } yield res
-  override def serializeEgg: IO[EggzError, EggzModel] = ???
-  override def op: ZIO[Globz, GLOBZ_ERR, ExitCode] = ???
   def getInventory(): UIO[Chunk[ABILITY_ID]] =
     inventory.get
 
