@@ -1,5 +1,6 @@
 package controller
 
+import entity.Ability.ABILITY_ID
 import entity.AbilityArgs
 import entity.EggzModel
 import entity.GlobzModel
@@ -313,7 +314,14 @@ object TerrainRegionm {
     DeriveJsonEncoder.gen[TerrainRegionm]
 }
 //-------------Abilities--------------
-
+case class AbilityAdded(entity_id: GLOBZ_ID, ability_id: ABILITY_ID)
+    extends QueryResponse
+object AbilityAdded {
+  implicit val decoder: JsonDecoder[AbilityAdded] =
+    DeriveJsonDecoder.gen[AbilityAdded]
+  implicit val encoder: JsonEncoder[AbilityAdded] =
+    DeriveJsonEncoder.gen[AbilityAdded]
+}
 case class DoAbility(
   entity_id: GLOBZ_ID,
   ability_id: Int,

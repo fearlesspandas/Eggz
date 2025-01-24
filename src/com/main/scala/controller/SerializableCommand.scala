@@ -1862,7 +1862,7 @@ case class ADD_ABILITY(
   ability_id: Int,
   location: FieldOps.Location
 ) extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = ADD_ABILITY
+  override val REF_TYPE: Any = (ADD_ABILITY, from)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
     res <- WorldBlock
       .getBlob(from)
@@ -1873,7 +1873,14 @@ case class ADD_ABILITY(
         { case CannotPlaceError =>
           ZIO.succeed(MultiResponse(Chunk()))
         },
-        _ => ZIO.succeed(MultiResponse(Chunk()))
+        _ =>
+          ZIO.succeed(
+            MultiResponse(
+              Chunk(
+                QueuedClientMessage(from, Chunk(AbilityAdded(from, ability_id)))
+              )
+            )
+          )
       )
   } yield res
 

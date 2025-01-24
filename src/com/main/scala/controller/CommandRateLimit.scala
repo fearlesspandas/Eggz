@@ -32,10 +32,22 @@ case class BasicCommandRateLimit(
                   last_execute <- last.get.map(_.getOrElse(s.REF_TYPE, 0L))
                   current_time <- Clock.currentTime(TimeUnit.MILLISECONDS)
                 } yield if (current_time - last_execute > 3000) true else false
-
               case _ => ZIO.succeed(true)
             }
           } yield res
+        case (ADD_ABILITY, id) =>
+          for {
+            next_num <- num_executes.get.map(_.getOrElse(s.REF_TYPE, 0))
+            res <- next_num match {
+              case n if n > 2 =>
+                for {
+                  last_execute <- last.get.map(_.getOrElse(s.REF_TYPE, 0L))
+                  current_time <- Clock.currentTime(TimeUnit.MILLISECONDS)
+                } yield if (current_time - last_execute > 3000) true else false
+              case _ => ZIO.succeed(true)
+            }
+          } yield res
+
         case _ => ZIO.succeed(true)
       }
     case _ => ZIO.succeed(true)
