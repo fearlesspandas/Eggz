@@ -23,7 +23,6 @@ trait Ability extends Command[WorldBlock.Block, QueryResponse] {
 }
 object Ability {
   type ABILITY_ID = Int
-  private val ability_config = Chunk(Smack)
   def make(
     id: ABILITY_ID,
     from: GLOBZ_ID,
@@ -35,6 +34,15 @@ object Ability {
         ZIO.succeed(GlobularTeleport(from, gta))
       case _ => ZIO.fail(AbilityDoesNotExistError)
     }
+
+  def zoneRequirement(
+    id: ABILITY_ID
+  ): IO[AbilityError, Chunk[FieldOps.Location]] = id match {
+    // SMACK
+    case 0 => ZIO.succeed(Chunk((0, -1)))
+    // GLOBULAR_TELEPORT
+    case 1 => ZIO.succeed(Chunk((0, 1)))
+  }
 }
 trait AbilityError extends CommandError
 case class SmackAbilityError(msg: String) extends AbilityError
@@ -123,9 +131,7 @@ case class GlobularTeleport(
             )
           )
         case _ =>
-          ZIO.log("Unrecognized glob teleport arg") *> ZIO.succeed(
-            MultiResponse(Chunk())
-          )
+          ZIO.log("Unrecognized glob teleport arg").as(MultiResponse(Chunk()))
       }
     } yield res
 

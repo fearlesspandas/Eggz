@@ -18,7 +18,9 @@ import controller.SerializableCommand.GenericCommandError
 import entity.Ability
 import entity.AbilityArgs
 import entity.AbilityDoesNotExistError
+import entity.CannotPlaceError
 import entity.EmptyTerrain
+import entity.FieldOps
 import entity.GlobzModel
 import entity.Health
 import entity.LivingEntity
@@ -1855,6 +1857,35 @@ object GET_CACHED_TERRAIN {
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
 //---------------------------------ABILITIES-----------------------------------------------------
+case class ADD_ABILITY(
+  from: GLOBZ_ID,
+  ability_id: Int,
+  location: FieldOps.Location
+) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = ADD_ABILITY
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    res <- WorldBlock
+      .getBlob(from)
+      .flatMap { case li: LivingEntity =>
+        li.addAbility(ability_id, location)
+      }
+      .foldZIO(
+        { case CannotPlaceError =>
+          ZIO.succeed(MultiResponse(Chunk()))
+        },
+        _ => ZIO.succeed(MultiResponse(Chunk()))
+      )
+  } yield res
+
+}
+object ADD_ABILITY {
+  implicit val encoder: JsonEncoder[ADD_ABILITY] =
+    DeriveJsonEncoder.gen[ADD_ABILITY]
+  implicit val decoder: JsonDecoder[ADD_ABILITY] =
+    DeriveJsonDecoder.gen[ADD_ABILITY]
+}
+trait AddAbilityError extends CommandError
+case class AddAbilityNoEntity(msg: String) extends AddAbilityError
 case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ABILITY, from, ability_id)

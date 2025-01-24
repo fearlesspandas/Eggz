@@ -119,6 +119,7 @@ trait LivingEntity
     with Globz
     with PhysicalEntity
     with Health
+    with FieldOps
     with AbilityData
     with Destinations {
 
@@ -137,6 +138,10 @@ trait LivingEntity
   val glob: Globz
 
   val destinations: Destinations
+
+  val fieldOps: FieldOps
+
+  override val field_state = fieldOps.field_state
 
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 

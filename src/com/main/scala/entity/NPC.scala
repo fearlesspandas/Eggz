@@ -92,7 +92,8 @@ case class Prowler(
   val ability_data_ref: Ref[Map[DATA_TYPE, DATA]],
   val physics: PhysicalEntity,
   val glob: Globz,
-  val destinations: Destinations
+  val destinations: Destinations,
+  val fieldOps: FieldOps
 ) extends NPC {
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
@@ -117,11 +118,20 @@ object Prowler extends Globz.Service {
       stor <- Storage.make[Item]
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
+      fieldOps <- FieldOps.make()
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
       ability_data <- Ref.make(Map.empty[DATA_TYPE, DATA])
-      res = Prowler(id, ss, stor)(href, eref, ability_data, pe, g, dests)
+      res = Prowler(id, ss, stor)(
+        href,
+        eref,
+        ability_data,
+        pe,
+        g,
+        dests,
+        fieldOps
+      )
       _ <- res.adjustMaxSpeed(10).mapError(_ => ???)
     } yield res
 
@@ -190,6 +200,7 @@ case class MonkGarden(
         )
         .mapBoth(_ => "", loc => MonkGardenModel(id, loc, items))
   } yield res
+
   def getInventory(): UIO[Chunk[ABILITY_ID]] =
     inventory.get
 

@@ -63,7 +63,8 @@ case class BasicPlayer(
   val ability_data_ref: Ref[Map[DATA_TYPE, DATA]],
   val physics: PhysicalEntity,
   val glob: Globz,
-  val destinations: Destinations
+  val destinations: Destinations,
+  val fieldOps: FieldOps
 ) extends Player {
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
@@ -91,8 +92,17 @@ object BasicPlayer extends Globz.Service {
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
+      field_ops <- FieldOps.make()
       ability_data <- Ref.make(Map.empty[DATA_TYPE, DATA])
-    } yield BasicPlayer(id, ss, stor)(href, eref, ability_data, pe, g, dests)
+    } yield BasicPlayer(id, ss, stor)(
+      href,
+      eref,
+      ability_data,
+      pe,
+      g,
+      dests,
+      field_ops
+    )
 
 }
 case object PlayerStatsNotFound extends EggzError
