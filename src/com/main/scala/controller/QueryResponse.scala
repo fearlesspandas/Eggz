@@ -314,8 +314,11 @@ object TerrainRegionm {
     DeriveJsonEncoder.gen[TerrainRegionm]
 }
 //-------------Abilities--------------
-case class AbilityAdded(entity_id: GLOBZ_ID, ability_id: ABILITY_ID)
-    extends QueryResponse
+case class AbilityAdded(
+  entity_id: GLOBZ_ID,
+  ability_id: ABILITY_ID,
+  location: (Int, Int)
+) extends QueryResponse
 object AbilityAdded {
   implicit val decoder: JsonDecoder[AbilityAdded] =
     DeriveJsonDecoder.gen[AbilityAdded]

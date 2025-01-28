@@ -1877,7 +1877,10 @@ case class ADD_ABILITY(
           ZIO.succeed(
             MultiResponse(
               Chunk(
-                QueuedClientMessage(from, Chunk(AbilityAdded(from, ability_id)))
+                QueuedClientMessage(
+                  from,
+                  Chunk(AbilityAdded(from, ability_id, location))
+                )
               )
             )
           )
