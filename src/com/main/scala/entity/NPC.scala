@@ -47,7 +47,7 @@ trait NPC extends LivingEntity {
     target: GLOBZ_ID
   ): ZIO[WorldBlock.Block, NPC_ERROR, Unit] = for {
     ability <- Ability
-      .make(ability_id, this.id)
+      .make(ability_id, this.id, (0, 0))
       .orElseFail {
         AttackWithinDistancError(
           s"Error while trying to create ability with id : $ability_id"

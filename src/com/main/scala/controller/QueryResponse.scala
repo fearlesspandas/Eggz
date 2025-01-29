@@ -3,6 +3,7 @@ package controller
 import entity.Ability.ABILITY_ID
 import entity.AbilityArgs
 import entity.EggzModel
+import entity.FieldOps
 import entity.GlobzModel
 import entity.NoArgs
 import entity.ProgressArgs
@@ -328,6 +329,7 @@ object AbilityAdded {
 case class DoAbility(
   entity_id: GLOBZ_ID,
   ability_id: Int,
+  location: FieldOps.Location,
   args: AbilityArgs = NoArgs
 ) extends QueryResponse
 object DoAbility {

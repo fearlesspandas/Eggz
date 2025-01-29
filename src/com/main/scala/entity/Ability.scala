@@ -26,10 +26,11 @@ object Ability {
   def make(
     id: ABILITY_ID,
     from: GLOBZ_ID,
+    location: FieldOps.Location,
     args: AbilityArgs = NoArgs
   ): IO[AbilityError, Ability] =
     (id, args) match {
-      case (0, _) => ZIO.succeed(Smack(from))
+      case (0, _) => ZIO.succeed(Smack(from, location))
       case (1, gta: GlobularTeleportArgs) =>
         ZIO.succeed(GlobularTeleport(from, gta))
       case _ => ZIO.fail(AbilityDoesNotExistError)
@@ -52,7 +53,7 @@ case object WrongArgsForAbilityError extends AbilityError
 case object NoEntityFoundError extends AbilityError
 case object NoLocationFoundForEntityError extends AbilityError
 
-case class Smack(from: GLOBZ_ID) extends Ability {
+case class Smack(from: GLOBZ_ID, location: FieldOps.Location) extends Ability {
   override val id: ABILITY_ID = 0
   override def run
     : ZIO[WorldBlock.Block, SerializableCommand.CommandError, QueryResponse] =
@@ -61,8 +62,8 @@ case class Smack(from: GLOBZ_ID) extends Ability {
         .succeed(
           MultiResponse(
             Chunk(
-              QueuedServerMessage(Chunk(DoAbility(from, 0))),
-              QueuedClientBroadcast(Chunk(DoAbility(from, 0)))
+              QueuedServerMessage(Chunk(DoAbility(from, 0, location))),
+              QueuedClientBroadcast(Chunk(DoAbility(from, 0, location)))
             )
           )
         )
@@ -126,8 +127,8 @@ case class GlobularTeleport(
             _ <- clear(from).orElseFail(GlobularTeleportExecuteError2)
           } yield MultiResponse(
             Chunk(
-              QueuedServerMessage(Chunk(DoAbility(from, 1, shape))),
-              QueuedClientBroadcast(Chunk(DoAbility(from, 1, shape)))
+              QueuedServerMessage(Chunk(DoAbility(from, 1, (0, 0), shape))),
+              QueuedClientBroadcast(Chunk(DoAbility(from, 1, (0, 0), shape)))
             )
           )
         case _ =>

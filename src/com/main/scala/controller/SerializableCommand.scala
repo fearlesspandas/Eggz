@@ -1896,8 +1896,12 @@ object ADD_ABILITY {
 }
 trait AddAbilityError extends CommandError
 case class AddAbilityNoEntity(msg: String) extends AddAbilityError
-case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
-    extends ResponseQuery[WorldBlock.Block] {
+case class ABILITY(
+  from: GLOBZ_ID,
+  ability_id: Int,
+  location: FieldOps.Location,
+  args: AbilityArgs
+) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ABILITY, from, ability_id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
@@ -1909,7 +1913,7 @@ case class ABILITY(from: GLOBZ_ID, ability_id: Int, args: AbilityArgs)
         )
         .orElseFail(GenericCommandError(s"No entity found with Id $from"))
       res <- Ability
-        .make(ability_id, from, args)
+        .make(ability_id, from, location, args)
         .flatMap(_.run)
         .whenZIO(entity.getInventory().map(_.contains(ability_id)))
         .flatMap(ZIO.fromOption(_))

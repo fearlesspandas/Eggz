@@ -313,7 +313,7 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant for ADD_ABILITY")
   }
   val ability: AUTH[String] = {
-    case ABILITY(from, _, _) =>
+    case ABILITY(from, _, _, _) =>
       for {
         sender <- ZIO.service[String]
       } yield sender == from
