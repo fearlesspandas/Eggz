@@ -126,7 +126,8 @@ case class Control(
             .map(_.get(id))
             .flatMap(ZIO.fromOption(_))
             .foldZIO(
-              _ => ZIO.logError(s"could not find client queue ${id}"),
+              _ =>
+                ZIO.unit, // ZIO.logError(s"could not find client queue ${id}"),
               q => ZIO.foreach(messages)(q.offer(_))
             )
         case QueuedClientBroadcast(messages) =>

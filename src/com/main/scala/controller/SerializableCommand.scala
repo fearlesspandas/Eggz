@@ -353,7 +353,7 @@ case class GET_GLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
       res <- WorldBlock
         .getBlob(id)
         .flatMap(_.serializeGlob)
-    } yield GlobSet(Set(res)))
+    } yield Entity(res))
       .orElseFail(GenericCommandError("Error retrieving blobs"))
 }
 
@@ -482,6 +482,7 @@ object CREATE_REPAIR_EGG {
     DeriveJsonDecoder.gen[CREATE_REPAIR_EGG]
 }
 
+@deprecated
 case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_BLOB, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -492,9 +493,15 @@ case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
       .orElseFail(GenericCommandError(s"Error finding blob with $id"))
       .fold(err => Blob(None), x => x)
 }
+@deprecated
 object GET_BLOB {
   implicit val encoder: JsonEncoder[GET_BLOB] = DeriveJsonEncoder.gen[GET_BLOB]
   implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
+  def main(args: Array[String]) = {
+    val text =
+      "\"{\"GET_BLOB\":{\"id\":\"0f93593d-28ea-405d-b17c-703b9cc24a39\"}}\""
+    println(text.fromJson[SerializableCommand[_, _]])
+  }
 }
 
 @deprecated
@@ -510,6 +517,7 @@ case class GET_GLOB_LOCATION(id: GLOBZ_ID)
     } yield MSG(id, Location(id, (location(0), location(1), location(2)))))
       .fold(_ => NoLocation(id), x => x)
 }
+@deprecated
 object GET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] =
     DeriveJsonEncoder.gen[GET_GLOB_LOCATION]
@@ -530,6 +538,7 @@ case class SET_GLOB_LOCATION(id: GLOBZ_ID, location: Vector[Double])
     } yield ()).orElseFail(GenericCommandError("Error setting glob location"))
 
 }
+@deprecated
 object SET_GLOB_LOCATION {
   implicit val encoder: JsonEncoder[SET_GLOB_LOCATION] =
     DeriveJsonEncoder.gen[SET_GLOB_LOCATION]
@@ -1864,14 +1873,18 @@ case class ADD_ABILITY(
 ) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ADD_ABILITY, from)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    _ <- ZIO.log(s"Attempting to add ability $ability_id to $location")
     res <- WorldBlock
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
         li.addAbility(ability_id, location)
       }
       .foldZIO(
-        { case CannotPlaceError =>
-          ZIO.succeed(MultiResponse(Chunk()))
+        {
+          case CannotPlaceError =>
+            ZIO.log(s"Cannot Place ability $ability_id at $location") *>
+              ZIO.succeed(MultiResponse(Chunk()))
+          case err => ZIO.fail(AddAbilityError2(s"$err"))
         },
         _ =>
           ZIO.succeed(
@@ -1896,6 +1909,7 @@ object ADD_ABILITY {
 }
 trait AddAbilityError extends CommandError
 case class AddAbilityNoEntity(msg: String) extends AddAbilityError
+case class AddAbilityError2(msg: String) extends AddAbilityError
 case class ABILITY(
   from: GLOBZ_ID,
   ability_id: Int,

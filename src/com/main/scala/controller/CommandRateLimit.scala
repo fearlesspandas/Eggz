@@ -43,7 +43,7 @@ case class BasicCommandRateLimit(
                 for {
                   last_execute <- last.get.map(_.getOrElse(s.REF_TYPE, 0L))
                   current_time <- Clock.currentTime(TimeUnit.MILLISECONDS)
-                } yield if (current_time - last_execute > 3000) true else false
+                } yield if (current_time - last_execute > 500) true else false
               case _ => ZIO.succeed(true)
             }
           } yield res
@@ -62,7 +62,7 @@ case class BasicCommandRateLimit(
     }
     currnum <- num_executes.get.map(_.getOrElse(key, 0))
     should_reset_count <- key match {
-      case (ABILITY, _, _) => ZIO.succeed(currnum > 2)
+      case (ABILITY, _, _) => ZIO.succeed(currnum > maxnum)
       case _               => ZIO.succeed(false)
     }
     _ <-

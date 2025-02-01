@@ -182,7 +182,7 @@ case class GlobularTeleport(
       loc <- glob.getLocation.orElseFail(AbilityDataNoLocationFoundError)
       dist <- ZIO.succeed((loc - point).length())
       data <- get_data(id)
-      _ <- data.points.update(Chunk(point) ++ _).when(dist < 5)
+      _ <- data.points.update(Chunk(point) ++ _).when(dist < 10)
     } yield ()
 
   def add_base(
@@ -194,7 +194,7 @@ case class GlobularTeleport(
       loc <- glob.getLocation.orElseFail(AbilityDataNoLocationFoundError)
       dist <- ZIO.succeed((loc - point).length())
       data <- get_data(id)
-      _ <- data.base.update(_ => Some(point)).when(dist < 5)
+      _ <- data.base.update(_ => Some(point)).when(dist < 10)
     } yield ()
 
   def clear(id: GLOBZ_ID): ZIO[WorldBlock.Block, AbilityDataError, Unit] =
