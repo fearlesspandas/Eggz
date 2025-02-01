@@ -1873,7 +1873,6 @@ case class ADD_ABILITY(
 ) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (ADD_ABILITY, from)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
-    _ <- ZIO.log(s"Attempting to add ability $ability_id to $location")
     res <- WorldBlock
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
