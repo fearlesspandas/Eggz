@@ -42,8 +42,6 @@ trait InstanceEntity
 
   val skillset: SkillSet
 
-  val inventory: Storage.Service[Item]
-
   val healthRef: Ref[Map[GLOBZ_ID, Double]]
 
   val energyRef: Ref[Map[GLOBZ_ID, Double]]
@@ -57,18 +55,6 @@ trait InstanceEntity
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 
   def getName: IO[PlayerError, String] = ZIO.succeed(id)
-
-  def add(
-    item: Item*
-  ): IO[Storage.ServiceError, Storage.Service[Item]] =
-    inventory.add(item: _*)
-  def remove(
-    item: Item*
-  ): IO[Storage.ServiceError, Storage.Service[Item]] =
-    inventory.remove(item: _*)
-
-  def getInventory(): IO[Storage.ServiceError, Set[Item]] =
-    inventory.getInventory()
 
   def setHealth(
     player_id: GLOBZ_ID,

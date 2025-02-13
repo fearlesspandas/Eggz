@@ -24,7 +24,6 @@ import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Eggz.EggzError
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
-import src.com.main.scala.entity.basicStorage
 import zio.Chunk
 import zio.ExitCode
 import zio.IO
@@ -35,8 +34,10 @@ import zio.ZLayer
 
 import java.util.UUID
 import Ability.ABILITY_ID
+import entity.Pocket.POCKET_STORE
 import network.PhysicsChannel
 import implicits.*
+import src.com.main.scala.entity.Storage.REF_STORE
 trait NPC extends LivingEntity {
   def follow_and_attack(ability_id: ABILITY_ID, target: GLOBZ_ID) = for {
     _ <- this.follow_player(target)
@@ -84,12 +85,13 @@ case class GenericNPCError(msg: String) extends NPC_ERROR
 case class AttackWithinDistancError(msg: String) extends NPC_ERROR
 case class Prowler(
   id: ID,
-  skillset: SkillSet,
-  inventory: Storage.Service[Item]
+  skillset: SkillSet
 )(
   val healthRef: Ref[Double],
   val energyRef: Ref[Double],
   val ability_data_ref: Ref[Map[DATA_TYPE, DATA]],
+  val pocket_contents: POCKET_STORE,
+  val storage: REF_STORE[Item],
   val physics: PhysicalEntity,
   val glob: Globz,
   val destinations: Destinations,
@@ -115,7 +117,6 @@ object Prowler extends Globz.Service {
   ): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
-      stor <- Storage.make[Item]
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
       fieldOps <- FieldOps.make()
@@ -123,10 +124,14 @@ object Prowler extends Globz.Service {
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
       ability_data <- Ref.make(Map.empty[DATA_TYPE, DATA])
-      res = Prowler(id, ss, stor)(
+      pocket_contents <- Pocket.make
+      inventory <- Storage.make[Item]
+      res = Prowler(id, ss)(
         href,
         eref,
         ability_data,
+        pocket_contents,
+        inventory,
         pe,
         g,
         dests,
@@ -139,11 +144,11 @@ object Prowler extends Globz.Service {
 
 case class Spider(
   id: ID,
-  skillset: SkillSet,
-  inventory: Storage.Service[Item]
+  skillset: SkillSet
 )(
   val healthRef: Ref[Map[GLOBZ_ID, Double]],
   val energyRef: Ref[Map[GLOBZ_ID, Double]],
+  val storage: REF_STORE[Item],
   val physics: PhysicalEntity,
   val glob: Globz,
   val destinations: Destinations
@@ -171,13 +176,13 @@ object Spider extends Globz.Service {
   ): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
-      stor <- Storage.make[Item]
       href <- Ref.make(Map.empty[GLOBZ_ID, Double])
       eref <- Ref.make(Map.empty[GLOBZ_ID, Double])
+      inventory <- Storage.make[Item]
       pe <- BasicPhysicalEntity.make
       g <- GlobzInMem.make(id)
       dests <- BasicDestinations.make()
-      res = Spider(id, ss, stor)(href, eref, pe, g, dests)
+      res = Spider(id, ss)(href, eref, inventory, pe, g, dests)
       _ <- res
         .adjustMaxSpeed(10)
         .orElseFail("failed while making axis spider")

@@ -4,11 +4,14 @@ import controller.Stats
 import entity.EggzModel
 import entity.Health
 import entity.HealthError
+import entity.LivingEntity.Item
 import entity.REPAIR_EGG
 import src.com.main.scala.entity.Eggz.EggzError
 import src.com.main.scala.entity.Eggz.GenericEggzError
 import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
+import src.com.main.scala.entity.Storage.REF_STORE
+import zio.Chunk
 //import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage.GenericServiceError
 import zio.ExitCode
@@ -19,12 +22,12 @@ import zio.ZIO
 
 case class RepairEgg(
   val id: ID,
+  override val storage: REF_STORE[String],
   healthRef: Ref[Double],
   repairValue: Double,
   energyRef: Ref[Double],
-  cost: Double,
-  inventory: Storage.Service[String]
-) extends StorageEgg[String]
+  cost: Double
+) extends Storage.Service[String]
     with Health {
 
   override def setHealth(health: Double): IO[HealthError, Health] =
@@ -37,19 +40,6 @@ case class RepairEgg(
       _ <- this.energyRef.update(_ => value)
     } yield this
 
-  override def add(
-    item: String*
-  ): IO[Storage.ServiceError, Storage.Service[String]] =
-    inventory.add(item: _*)
-
-  override def remove(
-    item: String*
-  ): IO[Storage.ServiceError, Storage.Service[String]] =
-    inventory.remove(item: _*)
-
-  override def getInventory(): IO[Storage.ServiceError, Set[String]] =
-    inventory.getInventory()
-
   override def health: IO[HealthError, Double] = healthRef.get
 
   override def energy: IO[HealthError, Double] = energyRef.get
@@ -61,18 +51,18 @@ object RepairEgg {
     id: ID,
     health: Double,
     repairValue: Double
-  ): IO[Nothing, Eggz.Service] =
+  ): IO[Nothing, RepairEgg] =
     for {
       h <- Ref.make(health)
       e <- Ref.make(10000.0)
-      bs <- Storage.make[String]
+      inventory <- Storage.make[String]
     } yield RepairEgg(
       id,
+      inventory,
       h,
       repairValue,
       e,
-      20,
-      bs
+      20
     )
 
 }

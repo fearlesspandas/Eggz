@@ -62,7 +62,6 @@ import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.RepairEgg
 import zio.Chunk
 import zio.Duration
 import zio.Schedule
@@ -463,23 +462,6 @@ object REMOVE_HEALTH {
     DeriveJsonEncoder.gen[REMOVE_HEALTH]
   implicit val decoder: JsonDecoder[REMOVE_HEALTH] =
     DeriveJsonDecoder.gen[REMOVE_HEALTH]
-}
-
-case class CREATE_REPAIR_EGG(eggId: ID, globId: GLOBZ_ID)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
-  override val REF_TYPE: Any = (CREATE_REPAIR_EGG, globId)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
-    (for {
-      egg <- RepairEgg.make(eggId, 1000, 20)
-      glob <- WorldBlock.getBlobOption(globId)
-      res <- ZIO.fromOption(glob).flatMap(_.update(egg))
-    } yield ()).orElseFail(GenericCommandError("Error Creating egg"))
-}
-object CREATE_REPAIR_EGG {
-  implicit val encoder: JsonEncoder[CREATE_REPAIR_EGG] =
-    DeriveJsonEncoder.gen[CREATE_REPAIR_EGG]
-  implicit val decoder: JsonDecoder[CREATE_REPAIR_EGG] =
-    DeriveJsonDecoder.gen[CREATE_REPAIR_EGG]
 }
 
 @deprecated
@@ -1909,6 +1891,45 @@ object ADD_ABILITY {
 trait AddAbilityError extends CommandError
 case class AddAbilityNoEntity(msg: String) extends AddAbilityError
 case class AddAbilityError2(msg: String) extends AddAbilityError
+
+case class POCKET_ABILITY(
+  from: GLOBZ_ID,
+  ability_id: Int,
+  amount: Int
+) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (POCKET_ABILITY, from)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    WorldBlock
+      .getBlob(from)
+      .flatMap { case li: LivingEntity =>
+        for {
+          has_item <- li
+            .getInventory()
+            .mapBoth(
+              _ => PocketAbilityError1(""),
+              _.keys.toSet.contains(ability_id)
+            )
+          _ <- li
+            .pocketAbility(ability_id, amount)
+            .when(has_item)
+            .flatMap(ZIO.fromOption(_))
+            .orElseFail(PocketAbilityError1(""))
+        } yield QueuedClientMessage(
+          from,
+          Chunk(AbilityPocketed(from, ability_id, amount))
+        )
+      }
+      .orElseFail(PocketAbilityError1(""))
+
+}
+object POCKET_ABILITY {
+  implicit val encoder: JsonEncoder[POCKET_ABILITY] =
+    DeriveJsonEncoder.gen[POCKET_ABILITY]
+  implicit val decoder: JsonDecoder[POCKET_ABILITY] =
+    DeriveJsonDecoder.gen[POCKET_ABILITY]
+}
+trait PocketAbilityError extends CommandError
+case class PocketAbilityError1(msg: String) extends PocketAbilityError
 case class ABILITY(
   from: GLOBZ_ID,
   ability_id: Int,
@@ -1928,7 +1949,7 @@ case class ABILITY(
       res <- Ability
         .make(ability_id, from, location, args)
         .flatMap(_.run)
-        .whenZIO(entity.getInventory().map(_.contains(ability_id)))
+        .whenZIO(entity.getInventory().map(_.keys.toSet.contains(ability_id)))
         .flatMap(ZIO.fromOption(_))
         .foldZIO(
           {

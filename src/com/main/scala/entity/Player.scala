@@ -9,9 +9,11 @@ import controller.QueuedPhysicsMessage
 import controller.QueuedServerMessage
 import controller.Stats
 import controller.TeleportToNext
+import entity.Ability.ABILITY_ID
 import entity.Player.Item
 import entity.Player.PlayerEnv
 import entity.Player.PlayerError
+import entity.Pocket.POCKET_STORE
 import entity.Skill.Experience
 import entity.Skill.Level
 import entity.SkillSet.SkillId
@@ -31,11 +33,11 @@ import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Globz
 import src.com.main.scala.entity.Storage
 import src.com.main.scala.entity.StorageEgg
-import src.com.main.scala.entity.basicStorage
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
 import src.com.main.scala.entity.Globz.GLOBZ_IN
 import src.com.main.scala.entity.Globz.GLOBZ_OUT
+import src.com.main.scala.entity.Storage.REF_STORE
 import zio.Chunk
 import zio.ExitCode
 import zio.IO
@@ -55,12 +57,13 @@ object Player {
 
 case class BasicPlayer(
   id: ID,
-  skillset: SkillSet,
-  inventory: Storage.Service[Item]
+  skillset: SkillSet
 )(
   val healthRef: Ref[Double],
   val energyRef: Ref[Double],
   val ability_data_ref: Ref[Map[DATA_TYPE, DATA]],
+  val pocket_contents: POCKET_STORE,
+  val storage: REF_STORE[Item],
   val physics: PhysicalEntity,
   val glob: Globz,
   val destinations: Destinations,
@@ -86,7 +89,6 @@ object BasicPlayer extends Globz.Service {
   ): IO[GLOBZ_ERR, _root_.src.com.main.scala.entity.Globz] =
     for {
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
-      stor <- Storage.make[Item]
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
       pe <- BasicPhysicalEntity.make
@@ -94,10 +96,14 @@ object BasicPlayer extends Globz.Service {
       dests <- BasicDestinations.make()
       field_ops <- FieldOps.make()
       ability_data <- Ref.make(Map.empty[DATA_TYPE, DATA])
-    } yield BasicPlayer(id, ss, stor)(
+      pocket_contents <- Pocket.make
+      inventory <- Storage.make[Item]
+    } yield BasicPlayer(id, ss)(
       href,
       eref,
       ability_data,
+      pocket_contents,
+      inventory,
       pe,
       g,
       dests,

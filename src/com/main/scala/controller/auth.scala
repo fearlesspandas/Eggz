@@ -312,6 +312,14 @@ package object auth {
       } yield sender == from
     case cmd => ZIO.fail(s"$cmd not relevant for ADD_ABILITY")
   }
+  val pocket_ability: AUTH[String] = {
+    case POCKET_ABILITY(from, _, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == from
+    case cmd => ZIO.fail(s"$cmd not relevant for POCKET_ABILITY")
+  }
+
   val ability: AUTH[String] = {
     case ABILITY(from, _, _, _) =>
       for {
@@ -421,6 +429,7 @@ object AuthCommandService {
             fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
             add_ability(op),
+            pocket_ability(op),
             ability(op),
             add_item(server_keys)(op),
             buy_item(server_keys)(op),
@@ -481,6 +490,7 @@ object AuthCommandService {
             fill_empty_chunk(server_keys)(op),
             get_cached_terrain(op),
             add_ability(op),
+            pocket_ability(op),
             ability(op),
             add_item(server_keys)(op),
             buy_item(server_keys)(op),

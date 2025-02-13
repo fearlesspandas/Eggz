@@ -121,13 +121,12 @@ trait LivingEntity
     with Health
     with FieldOps
     with AbilityData
-    with Destinations {
+    with Destinations
+    with Pocket.Service {
 
   val id: ID
 
   val skillset: SkillSet
-
-  val inventory: Storage.Service[Item]
 
   val healthRef: Ref[Double]
 
@@ -146,18 +145,6 @@ trait LivingEntity
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 
   def getName: IO[PlayerError, String] = ZIO.succeed(id)
-
-  def add(
-    item: Item*
-  ): IO[Storage.ServiceError, Storage.Service[Item]] =
-    inventory.add(item: _*)
-  def remove(
-    item: Item*
-  ): IO[Storage.ServiceError, Storage.Service[Item]] =
-    inventory.remove(item: _*)
-
-  def getInventory(): IO[Storage.ServiceError, Set[Item]] =
-    inventory.getInventory()
 
   def setHealth(health: Double): IO[HealthError, Health] =
     for {
