@@ -24,6 +24,8 @@ object Pocket {
         m.updated(id, scala.math.max(m.getOrElse(id, 0) - amount, 0))
       )
 
+    def getPocket(): UIO[Map[ABILITY_ID, Int]] = this.pocket_contents.get
+
   }
 
   trait PocketError {}

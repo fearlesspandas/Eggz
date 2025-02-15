@@ -329,7 +329,7 @@ object AbilityAdded {
 case class AbilityPocketed(
   entity_id: GLOBZ_ID,
   ability_id: ABILITY_ID,
-  location: Int
+  amount: Int
 ) extends QueryResponse
 object AbilityPocketed {
   implicit val decoder: JsonDecoder[AbilityPocketed] =
@@ -395,4 +395,11 @@ object Inventory {
     DeriveJsonDecoder.gen[Inventory]
   implicit val encoder: JsonEncoder[Inventory] =
     DeriveJsonEncoder.gen[Inventory]
+}
+case class Pocket(id: GLOBZ_ID, items: Map[Item, Int]) extends QueryResponse
+object Pocket {
+  implicit val decoder: JsonDecoder[Pocket] =
+    DeriveJsonDecoder.gen[Pocket]
+  implicit val encoder: JsonEncoder[Pocket] =
+    DeriveJsonEncoder.gen[Pocket]
 }

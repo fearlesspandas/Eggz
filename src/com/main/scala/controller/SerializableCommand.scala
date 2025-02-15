@@ -2026,6 +2026,24 @@ object SELL_ITEM {
   implicit val decoder: JsonDecoder[SELL_ITEM] =
     DeriveJsonDecoder.gen[SELL_ITEM]
 }
+case class GET_POCKET(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_POCKET, id)
+
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .mapBoth(_ => InventoryError(""), { case li: LivingEntity => li })
+      res <- glob
+        .getPocket()
+    } yield Pocket(id, res)
+}
+object GET_POCKET {
+  implicit val encoder: JsonEncoder[GET_POCKET] =
+    DeriveJsonEncoder.gen[GET_POCKET]
+  implicit val decoder: JsonDecoder[GET_POCKET] =
+    DeriveJsonDecoder.gen[GET_POCKET]
+}
 case class GET_INVENTORY(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_INVENTORY, id)
 
