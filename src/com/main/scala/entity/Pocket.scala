@@ -24,10 +24,15 @@ object Pocket {
         m.updated(id, scala.math.max(m.getOrElse(id, 0) - amount, 0))
       )
 
-    def getPocket(): UIO[Map[ABILITY_ID, Int]] = this.pocket_contents.get
+    def getCount(
+      ability_id: ABILITY_ID
+    ): UIO[Int] = this.pocket_contents.get
+      .map(_.getOrElse(ability_id, 0))
 
+    def getPocket(): UIO[Map[ABILITY_ID, Int]] = this.pocket_contents.get
   }
 
   trait PocketError {}
+  case object NoCountFound extends PocketError
 
 }

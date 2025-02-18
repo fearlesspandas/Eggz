@@ -1903,23 +1903,19 @@ case class POCKET_ABILITY(
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
         for {
-          has_item <- li
-            .getInventory()
-            .mapBoth(
-              _ => PocketAbilityError1(""),
-              _.keys.toSet.contains(ability_id)
-            )
+          item_count <- li.getInventoryCount(ability_id)
+          pocket_count <- li.getCount(ability_id)
           _ <- li
             .pocketAbility(ability_id, amount)
-            .when(has_item)
+            .when(item_count >= amount && amount + pocket_count <= item_count)
             .flatMap(ZIO.fromOption(_))
-            .orElseFail(PocketAbilityError1(""))
+            .mapError(err => PocketAbilityError1(s"$err"))
         } yield QueuedClientMessage(
           from,
           Chunk(AbilityPocketed(from, ability_id, amount))
         )
       }
-      .orElseFail(PocketAbilityError1(""))
+      .mapError(err => PocketAbilityError1(s"$err"))
 
 }
 object POCKET_ABILITY {
