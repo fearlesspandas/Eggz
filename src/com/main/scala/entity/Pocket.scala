@@ -19,10 +19,13 @@ object Pocket {
     def removePocketAbility(
       id: ABILITY_ID,
       amount: Int = 1
-    ): UIO[Unit] =
-      this.pocket_contents.update(m =>
+    ): UIO[Unit] = for {
+      _ <- this.pocket_contents.update(m =>
         m.updated(id, scala.math.max(m.getOrElse(id, 0) - amount, 0))
       )
+      count <- this.pocket_contents.get.map(_.getOrElse(id, 0))
+      _ <- this.pocket_contents.update(_.removed(id)).when(count == 0)
+    } yield ()
 
     def getCount(
       ability_id: ABILITY_ID

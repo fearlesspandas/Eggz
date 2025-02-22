@@ -1926,6 +1926,42 @@ object POCKET_ABILITY {
 }
 trait PocketAbilityError extends CommandError
 case class PocketAbilityError1(msg: String) extends PocketAbilityError
+case class UNPOCKET_ABILITY(
+  from: GLOBZ_ID,
+  ability_id: Int,
+  amount: Int
+) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (UNPOCKET_ABILITY, from)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    WorldBlock
+      .getBlob(from)
+      .flatMap { case li: LivingEntity =>
+        for {
+          pocket_count <- li.getCount(ability_id)
+          _ <- li
+            .removePocketAbility(ability_id, amount)
+            .when(amount <= pocket_count)
+            .flatMap(ZIO.fromOption(_))
+            .mapError(err =>
+              UnpocketAbilityError1(
+                s"$err for item:$ability_id, amount:$amount, pocket_amount:$pocket_count"
+              )
+            )
+        } yield QueuedClientMessage(
+          from,
+          Chunk(AbilityUnpocketed(from, ability_id, amount))
+        )
+      }
+      .mapError(err => UnpocketAbilityError1(s"$err"))
+}
+object UNPOCKET_ABILITY {
+  implicit val encoder: JsonEncoder[UNPOCKET_ABILITY] =
+    DeriveJsonEncoder.gen[UNPOCKET_ABILITY]
+  implicit val decoder: JsonDecoder[UNPOCKET_ABILITY] =
+    DeriveJsonDecoder.gen[UNPOCKET_ABILITY]
+}
+trait UnpocketAbilityError extends CommandError
+case class UnpocketAbilityError1(msg: String) extends UnpocketAbilityError
 case class ABILITY(
   from: GLOBZ_ID,
   ability_id: Int,

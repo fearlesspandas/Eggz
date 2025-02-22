@@ -337,6 +337,17 @@ object AbilityPocketed {
   implicit val encoder: JsonEncoder[AbilityPocketed] =
     DeriveJsonEncoder.gen[AbilityPocketed]
 }
+case class AbilityUnpocketed(
+  entity_id: GLOBZ_ID,
+  ability_id: ABILITY_ID,
+  amount: Int
+) extends QueryResponse
+object AbilityUnpocketed {
+  implicit val decoder: JsonDecoder[AbilityUnpocketed] =
+    DeriveJsonDecoder.gen[AbilityUnpocketed]
+  implicit val encoder: JsonEncoder[AbilityUnpocketed] =
+    DeriveJsonEncoder.gen[AbilityUnpocketed]
+}
 case class DoAbility(
   entity_id: GLOBZ_ID,
   ability_id: Int,
