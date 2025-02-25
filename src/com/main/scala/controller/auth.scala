@@ -369,6 +369,13 @@ package object auth {
       } yield sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for GET_INVENTORY")
   }
+  val get_field: AUTH[String] = {
+    case GET_FIELD(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_FIELD")
+  }
   val progress: ServerKeys => AUTH[String] = server_keys => {
     case PROGRESS(id, args) =>
       args match {
@@ -451,6 +458,7 @@ object AuthCommandService {
             sell_item(server_keys)(op),
             get_inventory(op),
             get_pocket(op),
+            get_field(op),
             progress(server_keys)(op),
             next_cmd(op),
             set_active(server_keys)(op),
@@ -514,6 +522,7 @@ object AuthCommandService {
             sell_item(server_keys)(op),
             get_inventory(op),
             get_pocket(op),
+            get_field(op),
             progress(server_keys)(op),
             next_cmd(op),
             set_active(server_keys)(op),

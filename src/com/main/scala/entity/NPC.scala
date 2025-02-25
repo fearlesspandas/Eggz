@@ -223,7 +223,7 @@ object MonkGarden {
   def make(id: ID): IO[GLOBZ_ERR, MonkGarden] = for {
     physics <- BasicPhysicalEntity.make
     glob <- GlobzInMem.make(id)
-    inventory <- Ref.make(Chunk(0, 1))
+    inventory <- Ref.make(Chunk(0, 1, 2))
   } yield MonkGarden(id, physics, glob, inventory)
 
 }

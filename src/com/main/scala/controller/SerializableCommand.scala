@@ -1848,6 +1848,44 @@ object GET_CACHED_TERRAIN {
     DeriveJsonDecoder.gen[GET_CACHED_TERRAIN]
 }
 //---------------------------------ABILITIES-----------------------------------------------------
+
+case class GET_FIELD(
+  id: GLOBZ_ID
+) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_FIELD, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
+    res <- WorldBlock
+      .getBlob(id)
+      .flatMap { case li: LivingEntity =>
+        li.getField()
+      }
+      .foldZIO(
+        { case err =>
+          ZIO.fail(get_field_error_1(s"$err"))
+        },
+        res =>
+          ZIO.succeed(
+            MultiResponse(
+              Chunk(
+                QueuedClientMessage(
+                  id,
+                  Chunk(Field(id, res))
+                )
+              )
+            )
+          )
+      )
+  } yield res
+
+}
+object GET_FIELD {
+  implicit val encoder: JsonEncoder[GET_FIELD] =
+    DeriveJsonEncoder.gen[GET_FIELD]
+  implicit val decoder: JsonDecoder[GET_FIELD] =
+    DeriveJsonDecoder.gen[GET_FIELD]
+}
+trait GET_FIELD_ERROR extends CommandError
+case class get_field_error_1(msg: String) extends GET_FIELD_ERROR
 case class ADD_ABILITY(
   from: GLOBZ_ID,
   ability_id: Int,

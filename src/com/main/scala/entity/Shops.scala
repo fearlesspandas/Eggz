@@ -30,7 +30,7 @@ object Shops {
             .orElseFail(BuyAbilityError("Error while spending max speed"))
           max_speed <- entity.getMaxSpeed.orElseFail(BuyAbilityError(""))
           speed <- entity.getSpeed.orElseFail(BuyAbilityError(""))
-          _ <- entity.add(0).orElseFail(BuyAbilityError(""))
+          _ <- entity.add(ability_id).orElseFail(BuyAbilityError(""))
         } yield MultiResponse(
           Chunk(
             QueuedClientMessage(
@@ -49,7 +49,26 @@ object Shops {
             .orElseFail(BuyAbilityError("Error while spending max speed"))
           max_speed <- entity.getMaxSpeed.orElseFail(BuyAbilityError(""))
           speed <- entity.getSpeed.orElseFail(BuyAbilityError(""))
-          _ <- entity.add(0).orElseFail(BuyAbilityError(""))
+          _ <- entity.add(ability_id).orElseFail(BuyAbilityError(""))
+        } yield MultiResponse(
+          Chunk(
+            QueuedClientMessage(
+              id,
+              Chunk(
+                PhysStat(id, max_speed, speed),
+                ItemAdded(id, ability_id)
+              )
+            )
+          )
+        )
+      case 2 =>
+        for {
+          _ <- entity
+            .adjustMaxSpeed(-200)
+            .orElseFail(BuyAbilityError("Error while spending max speed"))
+          max_speed <- entity.getMaxSpeed.orElseFail(BuyAbilityError(""))
+          speed <- entity.getSpeed.orElseFail(BuyAbilityError(""))
+          _ <- entity.add(ability_id).orElseFail(BuyAbilityError(""))
         } yield MultiResponse(
           Chunk(
             QueuedClientMessage(
@@ -83,7 +102,7 @@ object Shops {
             .orElseFail(BuyAbilityError("Error while spending max speed"))
           max_speed <- entity.getMaxSpeed.orElseFail(BuyAbilityError(""))
           speed <- entity.getSpeed.orElseFail(BuyAbilityError(""))
-          _ <- entity.remove(0).orElseFail(BuyAbilityError(""))
+          _ <- entity.remove(ability_id).orElseFail(BuyAbilityError(""))
         } yield MultiResponse(
           Chunk(
             QueuedClientMessage(
@@ -102,7 +121,26 @@ object Shops {
             .orElseFail(BuyAbilityError("Error while spending max speed"))
           max_speed <- entity.getMaxSpeed.orElseFail(BuyAbilityError(""))
           speed <- entity.getSpeed.orElseFail(BuyAbilityError(""))
-          _ <- entity.remove(0).orElseFail(BuyAbilityError(""))
+          _ <- entity.remove(ability_id).orElseFail(BuyAbilityError(""))
+        } yield MultiResponse(
+          Chunk(
+            QueuedClientMessage(
+              id,
+              Chunk(
+                PhysStat(id, max_speed, speed),
+                ItemRemoved(id, ability_id)
+              )
+            )
+          )
+        )
+      case 2 =>
+        for {
+          _ <- entity
+            .adjustMaxSpeed(20)
+            .orElseFail(BuyAbilityError("Error while spending max speed"))
+          max_speed <- entity.getMaxSpeed.orElseFail(BuyAbilityError(""))
+          speed <- entity.getSpeed.orElseFail(BuyAbilityError(""))
+          _ <- entity.remove(ability_id).orElseFail(BuyAbilityError(""))
         } yield MultiResponse(
           Chunk(
             QueuedClientMessage(
