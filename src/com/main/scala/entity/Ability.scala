@@ -89,6 +89,7 @@ case class Slizzard(from: GLOBZ_ID, location: FieldOps.Location)
         )
     } yield res
 }
+case class SlizzardArgs() extends AbilityArgs
 case class GlobularTeleport(
   from: GLOBZ_ID,
   args: GlobularTeleportArgs

@@ -1867,10 +1867,7 @@ case class GET_FIELD(
           ZIO.succeed(
             MultiResponse(
               Chunk(
-                QueuedClientMessage(
-                  id,
-                  Chunk(Field(id, res))
-                )
+                Field(id, res)
               )
             )
           )
@@ -1911,6 +1908,9 @@ case class ADD_ABILITY(
               Chunk(
                 QueuedClientMessage(
                   from,
+                  Chunk(AbilityAdded(from, ability_id, location))
+                ),
+                QueuedServerMessage(
                   Chunk(AbilityAdded(from, ability_id, location))
                 )
               )
