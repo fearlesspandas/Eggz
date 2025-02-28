@@ -326,6 +326,16 @@ object AbilityAdded {
   implicit val encoder: JsonEncoder[AbilityAdded] =
     DeriveJsonEncoder.gen[AbilityAdded]
 }
+case class AbilityRemoved(
+  entity_id: GLOBZ_ID,
+  ability_id: ABILITY_ID
+) extends QueryResponse
+object AbilityRemoved {
+  implicit val decoder: JsonDecoder[AbilityRemoved] =
+    DeriveJsonDecoder.gen[AbilityRemoved]
+  implicit val encoder: JsonEncoder[AbilityRemoved] =
+    DeriveJsonEncoder.gen[AbilityRemoved]
+}
 case class AbilityPocketed(
   entity_id: GLOBZ_ID,
   ability_id: ABILITY_ID,

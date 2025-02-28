@@ -28,6 +28,7 @@ import entity.MonkGarden
 import entity.MonkGardenModel
 import entity.NPC
 import entity.NoArgs
+import entity.NoOpsRemovedError
 import entity.PhysicalEntity
 import entity.Player
 import entity.ProgressArgs
@@ -1893,7 +1894,14 @@ case class ADD_ABILITY(
     res <- WorldBlock
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
-        li.addAbility(ability_id, location)
+        for {
+          pocket_count <- li.getCount(ability_id)
+          field_count <- li.getFieldCount(ability_id)
+          _ <- li
+            .addAbility(ability_id, location)
+            .when(pocket_count > field_count)
+            .flatMap(ZIO.fromOption(_))
+        } yield ()
       }
       .foldZIO(
         {
@@ -1929,6 +1937,48 @@ object ADD_ABILITY {
 trait AddAbilityError extends CommandError
 case class AddAbilityNoEntity(msg: String) extends AddAbilityError
 case class AddAbilityError2(msg: String) extends AddAbilityError
+
+case class REMOVE_ABILITY(
+  from: GLOBZ_ID,
+  ability_id: Int
+) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (REMOVE_ABILITY, from)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    WorldBlock
+      .getBlob(from)
+      .orElseFail(RemoveAbilityNoEntity)
+      .flatMap {
+        case li: LivingEntity =>
+          li
+            .removeAbility(ability_id)
+            .mapError(err => RemoveAbilityError2(s"$err"))
+        case _ => ZIO.fail(RemoveAbilityError2(s"no entity found for $from"))
+      }
+      .mapBoth(
+        err => RemoveAbilityError2(s"$err"),
+        x =>
+          MultiResponse(
+            Chunk(
+              QueuedClientMessage(
+                from,
+                Chunk(AbilityRemoved(from, ability_id))
+              ),
+              QueuedServerMessage(
+                Chunk(AbilityRemoved(from, ability_id))
+              )
+            )
+          )
+      )
+}
+object REMOVE_ABILITY {
+  implicit val encoder: JsonEncoder[REMOVE_ABILITY] =
+    DeriveJsonEncoder.gen[REMOVE_ABILITY]
+  implicit val decoder: JsonDecoder[REMOVE_ABILITY] =
+    DeriveJsonDecoder.gen[REMOVE_ABILITY]
+}
+trait RemoveAbilityError extends CommandError
+case class RemoveAbilityNoEntity(msg: String) extends RemoveAbilityError
+case class RemoveAbilityError2(msg: String) extends RemoveAbilityError
 
 case class POCKET_ABILITY(
   from: GLOBZ_ID,

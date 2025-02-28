@@ -37,7 +37,25 @@ trait FieldOps {
       .someOrElse(CannotPlaceError)
       .unit
 
+  def removeAbility(
+    id: ABILITY_ID
+  ): IO[FieldOpsError, Chunk[Location]] =
+    for {
+      res <- field_state.get.map(_.getOrElse(id, Chunk()))
+      _ <-
+        field_state
+          .update(state =>
+            state.updated(
+              id,
+              Chunk.empty[Location]
+            )
+          )
+    } yield res
+
   def getField(): UIO[Map[ABILITY_ID, Chunk[Location]]] = field_state.get
+
+  def getFieldCount(ability_id: ABILITY_ID): UIO[Int] =
+    field_state.get.map(_.getOrElse(ability_id, Chunk()).size)
 }
 object FieldOps {
   type Location = (Int, Int)
@@ -46,6 +64,7 @@ object FieldOps {
 trait FieldOpsError
 case class PlacementError(msg: String) extends FieldOpsError
 case object CannotPlaceError extends FieldOpsError
+case object NoOpsRemovedError extends FieldOpsError
 
 case class BasicFieldOps(field_state: Ref[Map[ABILITY_ID, Chunk[Location]]])
     extends FieldOps
