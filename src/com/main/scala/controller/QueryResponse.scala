@@ -315,6 +315,16 @@ object TerrainRegionm {
     DeriveJsonEncoder.gen[TerrainRegionm]
 }
 //-------------Abilities--------------
+
+case class FieldCleared(
+  entity_id: GLOBZ_ID
+) extends QueryResponse
+object FieldCleared {
+  implicit val decoder: JsonDecoder[FieldCleared] =
+    DeriveJsonDecoder.gen[FieldCleared]
+  implicit val encoder: JsonEncoder[FieldCleared] =
+    DeriveJsonEncoder.gen[FieldCleared]
+}
 case class AbilityAdded(
   entity_id: GLOBZ_ID,
   ability_id: ABILITY_ID,

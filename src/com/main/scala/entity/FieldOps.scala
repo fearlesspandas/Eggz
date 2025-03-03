@@ -1,16 +1,30 @@
 package entity
+import controller.FieldCleared
+import controller.QueryResponse
 import entity.Ability.ABILITY_ID
 import entity.FieldOps.Location
+import src.com.main.scala.entity.Globz.GLOBZ_ID
 import zio.*
 
 import scala.:+
 
 trait FieldOps {
   val field_state: Ref[Map[ABILITY_ID, Chunk[Location]]]
+  val occupied_spaces: Ref[Map[Location, Chunk[Location]]]
   def canPlace(
     id: ABILITY_ID,
     location: Location
-  ): IO[FieldOpsError, Boolean] = for {
+  ): IO[FieldOpsError, Boolean] = occupiedConflicts(id, location)
+    .map(_.isEmpty)
+    .flatMap(res =>
+      occupied_spaces.get
+        .map(res && !_.values.flatten.toSet.contains(location))
+    )
+
+  def occupiedConflicts(
+    id: ABILITY_ID,
+    location: Location
+  ): IO[FieldOpsError, Chunk[Location]] = for {
     requirements <- Ability
       .zoneRequirement(id)
       .mapError(err => PlacementError(s"Error while placing id $id : $err"))
@@ -23,25 +37,53 @@ trait FieldOps {
             .contains(occupied_space)
         )
     )
-  } yield occupied_conflicts.isEmpty
+  } yield Chunk.from(occupied_conflicts)
 
   def addAbility(
     id: ABILITY_ID,
-    location: Location
+    location: Location,
+    pocket_count: Int,
+    field_count: Int
   ): IO[FieldOpsError, Unit] =
-    field_state
-      .update(state =>
-        state.updated(id, state.getOrElse(id, Chunk()) ++ Chunk(location))
-      )
-      .whenZIO(canPlace(id, location))
-      .someOrElse(CannotPlaceError)
-      .unit
+    for {
+      zone_req <- Ability
+        .zoneRequirement(id)
+        .mapBoth(
+          _ => CannotRetreiveRequirementsError,
+          chunk =>
+            chunk.map(offset =>
+              (offset._1 + location._1, offset._2 + location._2)
+            )
+        )
+      _ <- (occupied_spaces.get.flatMap(os =>
+        ZIO.log(s"Occupied spaces Before $os, location:$location")
+      ) *>
+        field_state
+          .update(state =>
+            state.updated(
+              id,
+              state.getOrElse(id, Chunk()) ++ Chunk(location)
+            )
+          ) *> occupied_spaces.update(state =>
+          state.updated(
+            location,
+            state.getOrElse(location, Chunk()) ++ zone_req
+          )
+        ) *> occupied_spaces.get.flatMap(os =>
+          ZIO.log(s"Occupied spaces After $os location:$location")
+        ))
+        .whenZIO(canPlace(id, location))
+        .flatMap(ZIO.fromOption(_))
+        .orElseFail(CannotPlaceError)
+        .unit
+    } yield ()
 
   def removeAbility(
     id: ABILITY_ID
   ): IO[FieldOpsError, Chunk[Location]] =
     for {
-      res <- field_state.get.map(_.getOrElse(id, Chunk()))
+      original_locations <- field_state.get.map(_.getOrElse(id, Chunk()))
+      _ <- ZIO.log(s"Locations before removal $original_locations")
       _ <-
         field_state
           .update(state =>
@@ -50,12 +92,22 @@ trait FieldOps {
               Chunk.empty[Location]
             )
           )
-    } yield res
 
-  def getField(): UIO[Map[ABILITY_ID, Chunk[Location]]] = field_state.get
+      _ <- ZIO.foreachParDiscard(original_locations)(loc =>
+        occupied_spaces.update(state => state.updated(loc, Chunk()))
+      )
+    } yield original_locations
+
+  def clearField(entity_id: GLOBZ_ID): UIO[QueryResponse] =
+    (field_state
+      .update(_ => Map.empty[ABILITY_ID, Chunk[Location]]) *> occupied_spaces
+      .update(_ => Map.empty[Location, Chunk[Location]]))
+      .as(FieldCleared(entity_id))
+
+  def getField: UIO[Map[ABILITY_ID, Chunk[Location]]] = field_state.get
 
   def getFieldCount(ability_id: ABILITY_ID): UIO[Int] =
-    field_state.get.map(_.getOrElse(ability_id, Chunk()).size)
+    field_state.get.map(_.get(ability_id).map(_.size).getOrElse(0))
 }
 object FieldOps {
   type Location = (Int, Int)
@@ -64,12 +116,16 @@ object FieldOps {
 trait FieldOpsError
 case class PlacementError(msg: String) extends FieldOpsError
 case object CannotPlaceError extends FieldOpsError
+case object CannotRetreiveRequirementsError extends FieldOpsError
 case object NoOpsRemovedError extends FieldOpsError
 
-case class BasicFieldOps(field_state: Ref[Map[ABILITY_ID, Chunk[Location]]])
-    extends FieldOps
+case class BasicFieldOps(
+  field_state: Ref[Map[ABILITY_ID, Chunk[Location]]],
+  occupied_spaces: Ref[Map[Location, Chunk[Location]]]
+) extends FieldOps
 case object BasicFieldOps {
   def make(): UIO[BasicFieldOps] = for {
     ref_state <- Ref.make(Map.empty[ABILITY_ID, Chunk[Location]])
-  } yield BasicFieldOps(ref_state)
+    ref_occupied <- Ref.make(Map.empty[Location, Chunk[Location]])
+  } yield BasicFieldOps(ref_state, ref_occupied)
 }

@@ -1858,7 +1858,7 @@ case class GET_FIELD(
     res <- WorldBlock
       .getBlob(id)
       .flatMap { case li: LivingEntity =>
-        li.getField()
+        li.getField
       }
       .foldZIO(
         { case err =>
@@ -1895,10 +1895,10 @@ case class ADD_ABILITY(
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
         for {
-          pocket_count <- li.getCount(ability_id)
+          pocket_count <- li.getPocketCount(ability_id)
           field_count <- li.getFieldCount(ability_id)
           _ <- li
-            .addAbility(ability_id, location)
+            .addAbility(ability_id, location, pocket_count, field_count)
             .when(pocket_count > field_count)
             .flatMap(ZIO.fromOption(_))
         } yield ()
@@ -1991,8 +1991,8 @@ case class POCKET_ABILITY(
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
         for {
-          item_count <- li.getInventoryCount(ability_id)
-          pocket_count <- li.getCount(ability_id)
+          item_count <- li.getInventoryCount(ability_id).fold(_ => 0, x => x)
+          pocket_count <- li.getPocketCount(ability_id)
           _ <- li
             .pocketAbility(ability_id, amount)
             .when(item_count >= amount && amount + pocket_count <= item_count)
@@ -2025,7 +2025,7 @@ case class UNPOCKET_ABILITY(
       .getBlob(from)
       .flatMap { case li: LivingEntity =>
         for {
-          pocket_count <- li.getCount(ability_id)
+          pocket_count <- li.getPocketCount(ability_id)
           _ <- li
             .removePocketAbility(ability_id, amount)
             .when(amount <= pocket_count)

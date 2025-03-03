@@ -141,6 +141,7 @@ trait LivingEntity
   val fieldOps: FieldOps
 
   override val field_state = fieldOps.field_state
+  override val occupied_spaces = fieldOps.occupied_spaces
 
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 
@@ -321,13 +322,20 @@ trait LivingEntity
     _ <- this
       .setHealth(base_health)
       .orElseFail("Could not reset health during DIE operation")
+    cleared_field <- this.clearField(this.id)
   } yield MultiResponse(
     Chunk(
       QueuedServerMessage(
-        Chunk(MSG(this.id, TeleportToNext(this.id, (0, 0, 0))))
+        Chunk(
+          MSG(this.id, cleared_field),
+          MSG(this.id, TeleportToNext(this.id, (0, 0, 0)))
+        )
       ),
       QueuedClientBroadcast(
-        Chunk(MSG(this.id, HealthSet(this.id, base_health)))
+        Chunk(
+          MSG(this.id, cleared_field),
+          MSG(this.id, HealthSet(this.id, base_health))
+        )
       )
     )
   )

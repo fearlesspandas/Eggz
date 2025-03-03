@@ -27,7 +27,7 @@ object Pocket {
       _ <- this.pocket_contents.update(_.removed(id)).when(count == 0)
     } yield ()
 
-    def getCount(
+    def getPocketCount(
       ability_id: ABILITY_ID
     ): UIO[Int] = this.pocket_contents.get
       .map(_.getOrElse(ability_id, 0))

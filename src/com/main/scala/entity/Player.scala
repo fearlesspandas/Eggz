@@ -1,51 +1,25 @@
 package entity
 
-import controller.HealthSet
-import controller.MSG
-import controller.MultiResponse
-import controller.QueryResponse
-import controller.QueuedClientBroadcast
-import controller.QueuedPhysicsMessage
-import controller.QueuedServerMessage
 import controller.Stats
-import controller.TeleportToNext
-import entity.Ability.ABILITY_ID
-import entity.Player.Item
-import entity.Player.PlayerEnv
-import entity.Player.PlayerError
-import entity.Pocket.POCKET_STORE
-import entity.Skill.Experience
-import entity.Skill.Level
-import entity.SkillSet.SkillId
 import entity.LivingEntity.*
+import entity.Player.Item
+import entity.Pocket.POCKET_STORE
 import physics.BasicDestinations
-import physics.Destination
 import physics.Destinations
-import physics.DestinationsError
-import physics.Mode
-import physics.PhysicsTeleport
 import src.com.main.scala
 import src.com.main.scala.entity
-import src.com.main.scala.entity.EggzOps.ID
-import src.com.main.scala.entity.Eggz
 import src.com.main.scala.entity.Eggz.EggzError
-import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.Globz
-import src.com.main.scala.entity.Storage
-import src.com.main.scala.entity.StorageEgg
+import src.com.main.scala.entity.EggzOps.ID
 import src.com.main.scala.entity.Globz.GLOBZ_ERR
 import src.com.main.scala.entity.Globz.GLOBZ_ID
-import src.com.main.scala.entity.Globz.GLOBZ_IN
-import src.com.main.scala.entity.Globz.GLOBZ_OUT
+import src.com.main.scala.entity.Eggz
+import src.com.main.scala.entity.Globz
+import src.com.main.scala.entity.Storage
 import src.com.main.scala.entity.Storage.REF_STORE
-import zio.Chunk
-import zio.ExitCode
 import zio.IO
 import zio.Ref
 import zio.ZIO
 import zio.ZLayer
-
-import java.util.UUID
 
 trait Player extends LivingEntity {}
 
