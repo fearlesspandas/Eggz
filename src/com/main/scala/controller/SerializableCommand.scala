@@ -1858,7 +1858,7 @@ case class GET_FIELD(
     res <- WorldBlock
       .getBlob(id)
       .flatMap { case li: LivingEntity =>
-        li.getField
+        li.getField.zip(li.getOccupied.map(_.map(l => (l, 1))))
       }
       .foldZIO(
         { case err =>
@@ -1868,7 +1868,7 @@ case class GET_FIELD(
           ZIO.succeed(
             MultiResponse(
               Chunk(
-                Field(id, res)
+                Field(id, res._1, res._2)
               )
             )
           )
@@ -1901,7 +1901,7 @@ case class ADD_ABILITY(
             .addAbility(ability_id, location, pocket_count, field_count)
             .when(pocket_count > field_count)
             .flatMap(ZIO.fromOption(_))
-          occupied <- li.getOccupied(location)
+          occupied <- li.getOccupiedAt(location)
         } yield occupied
       }
       .foldZIO(

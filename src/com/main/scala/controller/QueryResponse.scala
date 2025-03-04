@@ -436,8 +436,11 @@ object Pocket {
   implicit val encoder: JsonEncoder[Pocket] =
     DeriveJsonEncoder.gen[Pocket]
 }
-case class Field(id: GLOBZ_ID, items: Map[ABILITY_ID, Chunk[FieldOps.Location]])
-    extends QueryResponse
+case class Field(
+  id: GLOBZ_ID,
+  items: Map[ABILITY_ID, Chunk[FieldOps.Location]],
+  occupied: Chunk[(FieldOps.Location, Int)]
+) extends QueryResponse
 object Field {
   implicit val decoder: JsonDecoder[Field] =
     DeriveJsonDecoder.gen[Field]

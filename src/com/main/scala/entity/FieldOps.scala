@@ -108,8 +108,11 @@ trait FieldOps {
   def getFieldCount(ability_id: ABILITY_ID): UIO[Int] =
     field_state.get.map(_.get(ability_id).map(_.size).getOrElse(0))
 
-  def getOccupied(location: Location): UIO[Chunk[Location]] =
+  def getOccupiedAt(location: Location): UIO[Chunk[Location]] =
     occupied_spaces.get.map(_.getOrElse(location, Chunk()))
+
+  def getOccupied: UIO[Chunk[Location]] =
+    occupied_spaces.get.map(x => Chunk.from(x.values.flatten))
 
 }
 object FieldOps {
