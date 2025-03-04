@@ -55,23 +55,18 @@ trait FieldOps {
               (offset._1 + location._1, offset._2 + location._2)
             )
         )
-      _ <- (occupied_spaces.get.flatMap(os =>
-        ZIO.log(s"Occupied spaces Before $os, location:$location")
-      ) *>
-        field_state
-          .update(state =>
-            state.updated(
-              id,
-              state.getOrElse(id, Chunk()) ++ Chunk(location)
-            )
-          ) *> occupied_spaces.update(state =>
+      _ <- (field_state
+        .update(state =>
           state.updated(
-            location,
-            state.getOrElse(location, Chunk()) ++ zone_req
+            id,
+            state.getOrElse(id, Chunk()) ++ Chunk(location)
           )
-        ) *> occupied_spaces.get.flatMap(os =>
-          ZIO.log(s"Occupied spaces After $os location:$location")
-        ))
+        ) *> occupied_spaces.update(state =>
+        state.updated(
+          location,
+          state.getOrElse(location, Chunk()) ++ zone_req
+        )
+      ))
         .whenZIO(canPlace(id, location))
         .flatMap(ZIO.fromOption(_))
         .orElseFail(CannotPlaceError)
@@ -83,7 +78,11 @@ trait FieldOps {
   ): IO[FieldOpsError, Chunk[Location]] =
     for {
       original_locations <- field_state.get.map(_.getOrElse(id, Chunk()))
-      _ <- ZIO.log(s"Locations before removal $original_locations")
+      freed_spaces <- ZIO
+        .foreachPar(original_locations)(loc =>
+          occupied_spaces.get.map(_.getOrElse(loc, Chunk()))
+        )
+        .map(_.flatten)
       _ <-
         field_state
           .update(state =>
@@ -96,7 +95,7 @@ trait FieldOps {
       _ <- ZIO.foreachParDiscard(original_locations)(loc =>
         occupied_spaces.update(state => state.updated(loc, Chunk()))
       )
-    } yield original_locations
+    } yield freed_spaces
 
   def clearField(entity_id: GLOBZ_ID): UIO[QueryResponse] =
     (field_state
@@ -108,6 +107,10 @@ trait FieldOps {
 
   def getFieldCount(ability_id: ABILITY_ID): UIO[Int] =
     field_state.get.map(_.get(ability_id).map(_.size).getOrElse(0))
+
+  def getOccupied(location: Location): UIO[Chunk[Location]] =
+    occupied_spaces.get.map(_.getOrElse(location, Chunk()))
+
 }
 object FieldOps {
   type Location = (Int, Int)

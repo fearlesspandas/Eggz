@@ -1901,7 +1901,8 @@ case class ADD_ABILITY(
             .addAbility(ability_id, location, pocket_count, field_count)
             .when(pocket_count > field_count)
             .flatMap(ZIO.fromOption(_))
-        } yield ()
+          occupied <- li.getOccupied(location)
+        } yield occupied
       }
       .foldZIO(
         {
@@ -1910,16 +1911,20 @@ case class ADD_ABILITY(
               ZIO.succeed(MultiResponse(Chunk()))
           case err => ZIO.fail(AddAbilityError2(s"$err"))
         },
-        _ =>
+        occupied =>
           ZIO.succeed(
             MultiResponse(
               Chunk(
                 QueuedClientMessage(
                   from,
-                  Chunk(AbilityAdded(from, ability_id, location))
+                  Chunk(
+                    AbilityAdded(from, ability_id, location, occupied.toSet)
+                  )
                 ),
                 QueuedServerMessage(
-                  Chunk(AbilityAdded(from, ability_id, location))
+                  Chunk(
+                    AbilityAdded(from, ability_id, location, occupied.toSet)
+                  )
                 )
               )
             )
@@ -1961,10 +1966,10 @@ case class REMOVE_ABILITY(
             Chunk(
               QueuedClientMessage(
                 from,
-                Chunk(AbilityRemoved(from, ability_id))
+                Chunk(AbilityRemoved(from, ability_id, x.toSet))
               ),
               QueuedServerMessage(
-                Chunk(AbilityRemoved(from, ability_id))
+                Chunk(AbilityRemoved(from, ability_id, x.toSet))
               )
             )
           )
@@ -2003,7 +2008,7 @@ case class POCKET_ABILITY(
           Chunk(AbilityPocketed(from, ability_id, amount))
         )
       }
-      .mapError(err => PocketAbilityError1(s"$err"))
+      .mapError(err => PocketAbilityError2(s"$err"))
 
 }
 object POCKET_ABILITY {
@@ -2014,6 +2019,7 @@ object POCKET_ABILITY {
 }
 trait PocketAbilityError extends CommandError
 case class PocketAbilityError1(msg: String) extends PocketAbilityError
+case class PocketAbilityError2(msg: String) extends PocketAbilityError
 case class UNPOCKET_ABILITY(
   from: GLOBZ_ID,
   ability_id: Int,
@@ -2040,7 +2046,7 @@ case class UNPOCKET_ABILITY(
           Chunk(AbilityUnpocketed(from, ability_id, amount))
         )
       }
-      .mapError(err => UnpocketAbilityError1(s"$err"))
+      .mapError(err => UnpocketAbilityError2(s"$err"))
 }
 object UNPOCKET_ABILITY {
   implicit val encoder: JsonEncoder[UNPOCKET_ABILITY] =
@@ -2050,6 +2056,7 @@ object UNPOCKET_ABILITY {
 }
 trait UnpocketAbilityError extends CommandError
 case class UnpocketAbilityError1(msg: String) extends UnpocketAbilityError
+case class UnpocketAbilityError2(msg: String) extends UnpocketAbilityError
 case class ABILITY(
   from: GLOBZ_ID,
   ability_id: Int,

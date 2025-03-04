@@ -328,7 +328,8 @@ object FieldCleared {
 case class AbilityAdded(
   entity_id: GLOBZ_ID,
   ability_id: ABILITY_ID,
-  location: (Int, Int)
+  location: (Int, Int),
+  occupied: Set[FieldOps.Location]
 ) extends QueryResponse
 object AbilityAdded {
   implicit val decoder: JsonDecoder[AbilityAdded] =
@@ -338,7 +339,8 @@ object AbilityAdded {
 }
 case class AbilityRemoved(
   entity_id: GLOBZ_ID,
-  ability_id: ABILITY_ID
+  ability_id: ABILITY_ID,
+  freed: Set[FieldOps.Location]
 ) extends QueryResponse
 object AbilityRemoved {
   implicit val decoder: JsonDecoder[AbilityRemoved] =
