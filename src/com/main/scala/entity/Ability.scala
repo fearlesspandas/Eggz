@@ -45,7 +45,7 @@ object Ability {
     // GLOBULAR_TELEPORT
     case 1 => ZIO.succeed(Chunk((0, 1)))
     // SLIZZARD
-    case 2 => ZIO.succeed(Chunk((0, 0)))
+    case 2 => ZIO.succeed(Chunk())
   }
 }
 trait AbilityError extends CommandError
