@@ -1,10 +1,12 @@
 package entity
 
 import controller.HealthSet
+import controller.Killed
 import controller.MSG
 import controller.MultiResponse
 import controller.QueryResponse
 import controller.QueuedClientBroadcast
+import controller.QueuedClientMessage
 import controller.QueuedServerMessage
 import controller.Stats
 import controller.TeleportToNext
@@ -317,27 +319,33 @@ trait LivingEntity
   def setIndex(index: Level): IO[DestinationsError, Unit] =
     destinations.setIndex(index)
 
-  def die: ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
+  def die(
+    cause: Option[GLOBZ_ID]
+  ): ZIO[WorldBlock.Block, GLOBZ_ERR, QueryResponse] = for {
     base_health <- ZIO.succeed(1000.0)
     _ <- this
       .setHealth(base_health)
       .orElseFail("Could not reset health during DIE operation")
     cleared_field <- this.clearField(this.id)
+    death_msg = cause.map(_ =>
+      Chunk(QueuedClientMessage(id, Chunk(Killed(this.id, cause))))
+    )
   } yield MultiResponse(
-    Chunk(
-      QueuedServerMessage(
-        Chunk(
-          MSG(this.id, cleared_field),
-          MSG(this.id, TeleportToNext(this.id, (0, 0, 0)))
-        )
-      ),
-      QueuedClientBroadcast(
-        Chunk(
-          MSG(this.id, cleared_field),
-          MSG(this.id, HealthSet(this.id, base_health))
+    death_msg ++
+      Chunk(
+        QueuedServerMessage(
+          Chunk(
+            MSG(this.id, cleared_field),
+            MSG(this.id, TeleportToNext(this.id, (0, 0, 0)))
+          )
+        ),
+        QueuedClientBroadcast(
+          Chunk(
+            MSG(this.id, cleared_field),
+            MSG(this.id, HealthSet(this.id, base_health))
+          )
         )
       )
-    )
   )
 }
 

@@ -429,8 +429,11 @@ object ADD_HEALTH {
     DeriveJsonDecoder.gen[ADD_HEALTH]
 }
 
-case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
-    extends ResponseQuery[WorldBlock.Block]:
+case class REMOVE_HEALTH(
+  id: GLOBZ_ID,
+  value: Double,
+  cause: Option[GLOBZ_ID] = None
+) extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = (REMOVE_HEALTH, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
@@ -445,7 +448,8 @@ case class REMOVE_HEALTH(id: GLOBZ_ID, value: Double)
       res: QueryResponse <-
         if (h == curr_health) { ZIO.succeed(MultiResponse(Chunk())) }
         else if (h <= 0) {
-          glob.die
+          glob
+            .die(cause)
             .mapError(err => GenericCommandError(err))
         } else {
           ZIO.succeed(

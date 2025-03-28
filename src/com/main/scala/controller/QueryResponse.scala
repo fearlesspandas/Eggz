@@ -447,3 +447,13 @@ object Field {
   implicit val encoder: JsonEncoder[Field] =
     DeriveJsonEncoder.gen[Field]
 }
+case class Killed(
+  id: GLOBZ_ID,
+  cause: Option[GLOBZ_ID]
+) extends QueryResponse
+object Killed {
+  implicit val decoder: JsonDecoder[Killed] =
+    DeriveJsonDecoder.gen[Killed]
+  implicit val encoder: JsonEncoder[Killed] =
+    DeriveJsonEncoder.gen[Killed]
+}
