@@ -327,25 +327,26 @@ trait LivingEntity
       .setHealth(base_health)
       .orElseFail("Could not reset health during DIE operation")
     cleared_field <- this.clearField(this.id)
-    death_msg = cause.map(_ =>
-      Chunk(QueuedClientMessage(id, Chunk(Killed(this.id, cause))))
-    )
+    death_msg = cause
+      .map(killer =>
+        Chunk(QueuedClientMessage(killer, Chunk(Killed(this.id, cause))))
+      )
+      .getOrElse(Chunk())
   } yield MultiResponse(
-    death_msg ++
-      Chunk(
-        QueuedServerMessage(
-          Chunk(
-            MSG(this.id, cleared_field),
-            MSG(this.id, TeleportToNext(this.id, (0, 0, 0)))
-          )
-        ),
-        QueuedClientBroadcast(
-          Chunk(
-            MSG(this.id, cleared_field),
-            MSG(this.id, HealthSet(this.id, base_health))
-          )
+    Chunk(
+      QueuedServerMessage(
+        Chunk(
+          MSG(this.id, cleared_field),
+          MSG(this.id, TeleportToNext(this.id, (0, 0, 0)))
+        )
+      ),
+      QueuedClientBroadcast(
+        Chunk(
+          MSG(this.id, cleared_field),
+          MSG(this.id, HealthSet(this.id, base_health))
         )
       )
+    ) ++ death_msg
   )
 }
 

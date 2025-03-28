@@ -75,7 +75,7 @@ package object auth {
   }
 
   val remove_health: Set[String] => AUTH[String] = server_keys => {
-    case REMOVE_HEALTH(id, value) =>
+    case REMOVE_HEALTH(id, value, _) =>
       for {
         sender <- ZIO.service[String]
       } yield server_keys.contains(sender)
