@@ -112,7 +112,7 @@ case class SimpleTerrainBlock(
     uuid: TERRAIN_KEY
   ): IO[TerrainError, Option[Terrain]] = ???
 
-  override val terrainType: TerrainId = ???
+  // override val terrainType: TerrainId = ???
 }
 case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
     extends Terrain {
@@ -133,6 +133,6 @@ case class SimpleTerrainUnit(id: TerrainId, center: Vector[Double])
 
   override def serialize(): IO[TerrainError, Set[TerrainModel]] = ???
 
-  override val terrainType: String = ???
+  // override val terrainType: String = ???
 }
 object SimpleTerrainUnit {}

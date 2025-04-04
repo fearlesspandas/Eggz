@@ -114,7 +114,7 @@ enum TerrainType {
 }
 trait Terrain {
 
-  val terrainType: String
+  // val terrainType: String
 //  val uuid: String = s"[${TerrainType.toString}] + UUID.randomUUID()"
   val uuid: UUID = UUID.randomUUID()
 
@@ -582,7 +582,7 @@ case class TerrainRegion(
     uuid: TERRAIN_KEY
   ): IO[TerrainError, Option[Terrain]] = cached.get.map(_.get(uuid))
 
-  override val terrainType: ID = "REGION"
+  // override val terrainType: ID = "REGION"
 }
 
 object TerrainRegion {
@@ -658,7 +658,7 @@ case class EmptyTerrain(center: Vector[Double], radius: Double)
   final override def serialize(): IO[TerrainError, Set[TerrainModel]] =
     ZIO.succeed(Set.empty[TerrainModel])
 
-  override val terrainType: ID = "EMPTY"
+  // override val terrainType: ID = "EMPTY"
 }
 //terrain unit represents the most granular cell of terrain geometry
 //i.e. if two terrain entities are "close enough" they can be considered
@@ -705,7 +705,7 @@ case class TerrainUnit(
       entities <- entitiesRef.get
     } yield Set(TerrainUnitM(location, entities, uuid))
 
-  override val terrainType: ID = "UNIT"
+  // override val terrainType: ID = "UNIT"
 }
 object TerrainUnit {
   def make(

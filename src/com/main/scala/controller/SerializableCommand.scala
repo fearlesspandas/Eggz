@@ -18,6 +18,8 @@ import controller.SerializableCommand.GenericCommandError
 import entity.Ability
 import entity.AbilityArgs
 import entity.AbilityDoesNotExistError
+import entity.BigTerrainRegion
+import entity.BigTerrainUnit
 import entity.CannotPlaceError
 import entity.EmptyTerrain
 import entity.FieldOps
@@ -1638,12 +1640,21 @@ implicit class TerrainUtils(terrain: Chunk[Terrain]) {
   ): ZIO[Any, Nothing, Chunk[QueryResponse]] =
     for {
       filtered_res <- ZIO.filterPar(terrain) {
-        case tr: TerrainRegion => ZIO.succeed(true);
-        case e: EmptyTerrain   => ZIO.succeed(true);
-        case tu: TerrainUnit   => ZIO.succeed(true);
-        case _                 => ZIO.succeed(false)
+        case tr: TerrainRegion  => ZIO.succeed(true);
+        case e: EmptyTerrain    => ZIO.succeed(true);
+        case tu: TerrainUnit    => ZIO.succeed(true);
+        case tu: BigTerrainUnit => ZIO.succeed(true);
+        case _                  => ZIO.succeed(false)
       }
       res <- ZIO.foreachPar(filtered_res) {
+        case t: BigTerrainUnit =>
+          t.entitiesRef.get.map(
+            TerrainUnitm(
+              t.uuid,
+              (t.location(0), t.location(1), t.location(2)),
+              _
+            )
+          )
         case t: TerrainUnit =>
           t.entitiesRef.get.map(
             TerrainUnitm(
@@ -1678,10 +1689,13 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
   override val REF_TYPE: Any = GET_TOP_LEVEL_TERRAIN_IN_DISTANCE
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
-      _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
+      // _ <- ZIO.log(s"Retrieving top terrain within distance $loc $distance")
       terrain <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getTerrain)
         .orElseFail(GenericCommandError("Could not get worldblock"))
+      big_terrain: BigTerrainRegion <- ZIO.serviceWithZIO[WorldBlock.Block](
+        _.getBigTerrain
+      )
       chunk_size <- ZIO.succeed(1024)
       top_terr <- terrain
         .get_top_terrain_within_distance(loc, distance, chunk_size)
@@ -1690,13 +1704,8 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
             "Problem while retrieving top terrain within distance"
           )
         }
-//      _ <- ZIO.log(s"Found Top Terrain ${top_terr.size}")
-//      res_unit <- ZIO.filterPar(top_terr) {
-//        case t: TerrainUnit => ZIO.succeed(true);
-//        case _              => ZIO.succeed(false)
-//      }
-//      _ <- ZIO.log(s"bad terrain ${res_unit.size}").when(res_unit.nonEmpty)
-      res <- top_terr.serialize_as_chunks(1024)
+      big_terr <- big_terrain.get_terrain_within_distance(loc, distance)
+      res <- (top_terr ++ big_terr).serialize_as_chunks(1024)
       _ <- terrain
         .cacheTerrain(top_terr)
         .orElseFail(GenericCommandError("Problem while caching terrain"))

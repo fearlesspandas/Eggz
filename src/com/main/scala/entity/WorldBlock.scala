@@ -56,6 +56,7 @@ object WorldBlock {
 
 //    val terrain: TerrainManager with Terrain
     def getTerrain: IO[WorldBlockError, TerrainManager with Terrain]
+    def getBigTerrain: UIO[BigTerrainRegion]
 //      ZIO.succeed(terrain)
 
     def expandTerrain: IO[WorldBlockError, Chunk[Terrain]]
@@ -129,6 +130,7 @@ case class WorldBlockInMem(
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   non_physical_entities: Ref[Map[GLOBZ_ID, Globz]],
   terrain: Ref[TerrainManager with Terrain],
+  bigTerrain: BigTerrainRegion,
   _npc_handler: NPCHandler
 ) extends WorldBlock.Block {
 
@@ -203,6 +205,9 @@ case class WorldBlockInMem(
   override def getTerrain
     : IO[WorldBlock.WorldBlockError, TerrainManager with Terrain] = terrain.get
 
+  override def getBigTerrain: UIO[BigTerrainRegion] =
+    ZIO.succeed(bigTerrain)
+
   override def expandTerrain: IO[WorldBlock.WorldBlockError, Chunk[Terrain]] =
     for {
       t <- terrain.get
@@ -262,6 +267,7 @@ object WorldBlockInMem extends WorldBlock.Service {
             ),
           _.toInt
         )
+      big_terrain <- BigTerrainRegion.make
       terrain <- TerrainRegion.make(Vector(0, 0, 0), radius).map {
         case tr: TerrainRegion => tr
       }
@@ -276,6 +282,8 @@ object WorldBlockInMem extends WorldBlock.Service {
         .orElseFail(
           GenericWorldBlockError("Could not add spawn block to terrain block")
         )
+      _ <- big_terrain // add spawn block to terrain
+        .add_terrain(TerrainTypes.PLANET_A.toId(), Vector(4096, 0, 0), 1024 * 8)
       t_count <- terrain
         .get_count()
         .mapError(err =>
@@ -298,6 +306,7 @@ object WorldBlockInMem extends WorldBlock.Service {
             globz_map,
             non_physical_entities,
             terrain_ref,
+            big_terrain,
             npchandler
           )
         )
