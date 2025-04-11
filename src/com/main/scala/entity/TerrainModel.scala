@@ -33,6 +33,7 @@ object TerrainUnitM {
 }
 
 case class TerrainRegionM(
+  region_uuid: Option[TERRAIN_KEY],
   terrain: Set[(Vector[Double], Map[TerrainId, Int], TERRAIN_KEY)]
 ) extends TerrainModel
 object TerrainRegionM {

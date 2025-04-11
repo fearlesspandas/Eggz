@@ -560,7 +560,7 @@ case class TerrainRegion(
       .map(_.flatten.toSet.map { case tm: TerrainUnitM =>
         (tm.location, tm.entities, tm.uuid)
       })
-      .map(TerrainRegionM(_))
+      .map(TerrainRegionM(Some(this.uuid), _))
   } yield r2
 
   final override def get_terrain_by_quadrant(

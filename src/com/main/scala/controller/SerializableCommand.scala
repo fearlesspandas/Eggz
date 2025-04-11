@@ -1515,7 +1515,7 @@ case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
       rr = Chunk.from(
         r3.terrain.toSeq
           .grouped(100)
-          .map(x => TerrainSet(Set(TerrainRegionM(x.toSet))))
+          .map(x => TerrainSet(Set(TerrainRegionM(r3.region_uuid, x.toSet))))
       )
     } yield PaginatedResponse(rr)
 }
@@ -1848,10 +1848,11 @@ case class GET_CACHED_TERRAIN(id: TERRAIN_KEY)
         .orElseFail(
           GenericCommandError("Error while serializing terrain cache")
         )
+      _ <- ZIO.log(s"Terrain cache retrieved ${quad.count}, ${quad.radius}")
       rr = Chunk.from(
         res.terrain
           .grouped(100)
-          .map(x => TerrainRegionm(x))
+          .map(x => TerrainRegionm(res.region_uuid, x))
       )
     } yield PaginatedResponse(rr)
 

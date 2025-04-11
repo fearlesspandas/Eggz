@@ -34,6 +34,7 @@ object Ability {
       case (1, gta: GlobularTeleportArgs) =>
         ZIO.succeed(GlobularTeleport(from, gta))
       case (2, _) => ZIO.succeed(Slizzard(from, location))
+      case (3, _) => ZIO.succeed(AntiGravityTank(from, location))
       case _      => ZIO.fail(AbilityDoesNotExistError)
     }
 
@@ -46,6 +47,8 @@ object Ability {
     case 1 => ZIO.succeed(Chunk((0, 1)))
     // SLIZZARD
     case 2 => ZIO.succeed(Chunk())
+    // ANTI_GRAVITY TANK
+    case 3 => ZIO.succeed(Chunk())
   }
 }
 trait AbilityError extends CommandError
@@ -90,6 +93,25 @@ case class Slizzard(from: GLOBZ_ID, location: FieldOps.Location)
     } yield res
 }
 case class SlizzardArgs() extends AbilityArgs
+
+case class AntiGravityTank(from: GLOBZ_ID, location: FieldOps.Location)
+    extends Ability {
+  override val id: ABILITY_ID = 2
+  override def run
+    : ZIO[WorldBlock.Block, SerializableCommand.CommandError, QueryResponse] =
+    for {
+      res <- ZIO
+        .succeed(
+          MultiResponse(
+            Chunk(
+              QueuedServerMessage(Chunk(DoAbility(from, 3, location))),
+              QueuedClientBroadcast(Chunk(DoAbility(from, 3, location)))
+            )
+          )
+        )
+    } yield res
+}
+case class AntiGravityTankArgs() extends AbilityArgs
 case class GlobularTeleport(
   from: GLOBZ_ID,
   args: GlobularTeleportArgs

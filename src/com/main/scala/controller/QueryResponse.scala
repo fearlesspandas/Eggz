@@ -306,6 +306,7 @@ object EmptyChunk {
     DeriveJsonDecoder.gen[EmptyChunk]
 }
 case class TerrainRegionm(
+  region_uuid: Option[TERRAIN_KEY],
   terrain: Set[(Vector[Double], Map[TerrainId, Int], TERRAIN_KEY)]
 ) extends QueryResponse
 object TerrainRegionm {

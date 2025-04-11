@@ -228,4 +228,27 @@ object MonkGarden {
 
 }
 
+case class Planet(
+  id: ID,
+  physics: PhysicalEntity,
+  glob: Globz
+) extends TerrainEntity {
+  override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] = for {
+    res <-
+      physics.getLocation
+        .flatMap(vec =>
+          ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
+        )
+        .mapBoth(_ => "", loc => PlanetModel(id, loc))
+  } yield res
+
+}
+trait PlanetAPIError
+object Planet {
+  def make(id: ID): IO[GLOBZ_ERR, Planet] = for {
+    physics <- BasicPhysicalEntity.make
+    glob <- GlobzInMem.make(id)
+  } yield Planet(id, physics, glob)
+
+}
 case object NPCStatsNotFoundError extends EggzError

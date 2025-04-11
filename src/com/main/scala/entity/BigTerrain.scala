@@ -21,8 +21,7 @@ case class BigTerrainUnit(
     distance: Double
   ): UIO[Seq[Terrain]] =
     if (is_within_range(location, loc, distance + 2 * this.radius)) {
-      ZIO.logError("Found BigTerrain") *>
-        ZIO.succeed(Seq(this))
+      ZIO.succeed(Seq(this))
     } else ZIO.succeed(Seq())
   override def serialize_relative(
     location: Vector[Double],

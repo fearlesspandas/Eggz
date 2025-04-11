@@ -71,3 +71,13 @@ object MonkGardenModel {
   implicit val decoder: JsonDecoder[MonkGardenModel] =
     DeriveJsonDecoder.gen[MonkGardenModel]
 }
+case class PlanetModel(
+  id: String,
+  location: (Double, Double, Double),
+) extends GlobzModel
+object PlanetModel {
+  implicit val encoder: JsonEncoder[PlanetModel] =
+    DeriveJsonEncoder.gen[PlanetModel]
+  implicit val decoder: JsonDecoder[PlanetModel] =
+    DeriveJsonDecoder.gen[PlanetModel]
+}
