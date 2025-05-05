@@ -65,7 +65,7 @@ object EntityIDSet {
   implicit val decoder: JsonDecoder[EntityIDSet] =
     DeriveJsonDecoder.gen[EntityIDSet]
 }
-case class Stats(id: ID, health: Double, energy: Double) extends QueryResponse
+case class Stats(health: Double) extends QueryResponse
 object Stats {
   implicit val encoder: JsonEncoder[Stats] = DeriveJsonEncoder.gen[Stats]
   implicit val decoder: JsonDecoder[Stats] = DeriveJsonDecoder.gen[Stats]

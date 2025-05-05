@@ -381,31 +381,6 @@ object GET_ALL_ENTITY_IDS {
   implicit val decoder: JsonDecoder[GET_ALL_ENTITY_IDS] =
     DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
 }
-
-case class GET_ALL_STATS() extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = GET_ALL_STATS
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      res <- WorldBlock.getAllBlobs()
-      nested <- ZIO
-        .foreachPar(res)(_.getAll())
-        .map(d => d.flatten)
-      s <- ZIO.foreachPar(nested) { case x: Health =>
-        for {
-          health <- x.health
-          energy <- x.energy
-        } yield Stats(x.id, health, energy)
-      }
-    } yield AllStats(s))
-      .orElseFail(GenericCommandError("Error retrieving blobs stats"))
-}
-object GET_ALL_STATS {
-  implicit val encoder: JsonEncoder[GET_ALL_STATS] =
-    DeriveJsonEncoder.gen[GET_ALL_STATS]
-  implicit val decoder: JsonDecoder[GET_ALL_STATS] =
-    DeriveJsonDecoder.gen[GET_ALL_STATS]
-}
-
 case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
     extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = (ADD_HEALTH, id)
