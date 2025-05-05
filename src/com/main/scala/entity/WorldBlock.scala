@@ -272,29 +272,80 @@ object WorldBlockInMem extends WorldBlock.Service {
         num,
         num_prowlers
       )
-      _ <- terrain // add spawn block to terrain
-        .add_terrain("9", Vector(0, -20, 0))
-        .orElseFail(
-          GenericWorldBlockError("Could not add spawn block to terrain block")
-        )
-      _ <- big_terrain // add spawn block to terrain
-        .add_terrain(
-          TerrainTypes.PLANET_A.toId(),
-          Vector(4096, 1024 * 4, 0),
-          1024 * 8
-        )
-      _ <- big_terrain // add spawn block to terrain
-        .add_terrain(
-          TerrainTypes.PLANET_A.toId(),
-          Vector(0, 1024 * 5, 4096 * 1.5),
-          1024 * 8
-        )
-      _ <- big_terrain // add spawn block to terrain
-        .add_terrain(
-          TerrainTypes.PLANET_A.toId(),
-          Vector(-4096, 1024 * 4, 0),
-          1024 * 8
-        )
+//      _ <- terrain // add spawn block to terrain
+//        .add_terrain("9", Vector(0, -20, 0))
+//        .orElseFail(
+//          GenericWorldBlockError("Could not add spawn block to terrain block")
+//        )
+//      _ <- big_terrain // add spawn block to terrain
+//        .add_terrain(
+//          TerrainTypes.PLANET_A.toId(),
+//          Vector(4096, 1024 * 4, 0),
+//          1024 * 8
+//        )
+//      _ <- ZIO.foreachParDiscard(0 to 8) { _ =>
+//        for {
+//          radius <- ZIO.succeed(1024 * 8)
+//          x <- Random.nextIntBetween(-radius, radius)
+//          y <- Random.nextIntBetween(-radius, radius)
+//          z <- Random.nextIntBetween(-radius, radius)
+//          _ <- big_terrain.add_terrain(
+//            TerrainTypes.PLANET_A.toId(),
+//            Vector(x, y, z),
+//            1024 * 8
+//          )
+//        } yield ()
+//      }
+      n <- ZIO.succeed(4)
+      _ <- ZIO.foreachParDiscard(1 to n) { i =>
+        for {
+          radius <- ZIO.succeed(1024 * 32)
+          x <- ZIO.succeed(radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+          x <- ZIO.succeed(-radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+          x <- ZIO.succeed(-radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(-radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+          x <- ZIO.succeed(radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(-radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+        } yield ()
+      }
+//      _ <- big_terrain // add spawn block to terrain
+//        .add_terrain(
+//          TerrainTypes.PLANET_A.toId(),
+//          Vector(0, 1024 * 5, 4096 * 1.5),
+//          1024 * 8
+//        )
+//      _ <- big_terrain // add spawn block to terrain
+//        .add_terrain(
+//          TerrainTypes.PLANET_A.toId(),
+//          Vector(-4096, 1024 * 4, 0),
+//          1024 * 8
+//        )
       t_count <- terrain
         .get_count()
         .mapError(err =>

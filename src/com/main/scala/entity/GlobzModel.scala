@@ -17,8 +17,8 @@ object GlobzModel {
 }
 case class PlayerGlob(
   id: String,
-  stats: Stats,
-  location: (Double, Double, Double)
+  location: (Double, Double, Double),
+  health: Option[Double] = None
 ) extends GlobzModel
 object PlayerGlob {
   implicit val encoder: JsonEncoder[PlayerGlob] =
@@ -40,8 +40,8 @@ object GlobInMemory {
 
 case class ProwlerModel(
   id: String,
-  stats: Stats,
-  location: (Double, Double, Double)
+  location: (Double, Double, Double),
+  health: Option[Double] = None
 ) extends GlobzModel
 object ProwlerModel {
   implicit val encoder: JsonEncoder[ProwlerModel] =
@@ -73,7 +73,7 @@ object MonkGardenModel {
 }
 case class PlanetModel(
   id: String,
-  location: (Double, Double, Double),
+  location: (Double, Double, Double)
 ) extends GlobzModel
 object PlanetModel {
   implicit val encoder: JsonEncoder[PlanetModel] =

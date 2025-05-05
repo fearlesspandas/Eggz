@@ -12,8 +12,8 @@ trait NPCHandler {
     glob
       .update(egg)
       .provide(ZLayer.succeed(glob))
-      .mapError(_ => ???)
-      .map(_ => ())
+      .orElseFail(AddEntityError)
+      .unit
   def remove_entity_as_npc(id: ID): IO[NPCHandlerError, Unit] = ???
 
   def scheduleEgg(
@@ -23,12 +23,14 @@ trait NPCHandler {
 }
 
 trait NPCHandlerError
+case object CreateNPCError extends NPCHandlerError
+case object AddEntityError extends NPCHandlerError
 object NPCHandler {
   def make(): IO[NPCHandlerError, NPCHandler] = for {
     glob <- Globz
       .create("NPCHandler")
       .provide(ZLayer.succeed(GlobzInMem))
-      .mapError(_ => ???)
+      .orElseFail(CreateNPCError)
   } yield BasicNPCHandler(glob)
 }
 

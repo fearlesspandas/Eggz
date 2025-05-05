@@ -47,12 +47,10 @@ case class BasicPlayer(
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
       health <- this.health
-      energy <- this.energy
-      stats = Stats(this.id, health, energy)
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
-    } yield PlayerGlob(this.id, stats, location))
+    } yield PlayerGlob(this.id, location, Some(health)))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
 }

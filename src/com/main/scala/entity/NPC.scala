@@ -101,14 +101,11 @@ case class Prowler(
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
       health <- this.health
-      energy <- this.energy
-      stats = Stats(this.id, health, energy)
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
-    } yield ProwlerModel(this.id, stats, location))
+    } yield ProwlerModel(this.id, location, Some(health)))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
-
 }
 
 object Prowler extends Globz.Service {
@@ -137,7 +134,9 @@ object Prowler extends Globz.Service {
         dests,
         fieldOps
       )
-      _ <- res.adjustMaxSpeed(10).mapError(_ => ???)
+      _ <- res
+        .adjustMaxSpeed(10)
+        .mapError(e => s"Prowler:Could not adjust speed on creation: ${e}")
     } yield res
 
 }
@@ -158,7 +157,7 @@ case class Spider(
     (for {
       health <- ZIO.succeed(this.starting_health)
       energy <- ZIO.succeed(this.starting_energy)
-      stats = Stats(this.id, health, energy)
+      stats = Stats(health)
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
