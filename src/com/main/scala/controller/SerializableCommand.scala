@@ -1352,7 +1352,8 @@ case class SET_SPEED(id: GLOBZ_ID, value: Double)
         case _: Player =>
           ZIO.succeed(
             Chunk(
-              QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed)))
+              QueuedClientMessage(id, Chunk(PhysStat(id, ms, speed))),
+              QueuedServerMessage(Chunk(PhysStat(id, ms, speed)))
             )
           )
         case _ => ZIO.succeed(Chunk())
