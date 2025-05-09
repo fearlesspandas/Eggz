@@ -1,0 +1,601 @@
+package controller
+
+import controller.auth.*
+import entity.TutorialComplete
+import zio.*
+
+package object auth {
+
+  case class CommandAuth(authorizer: AUTH[String]) {}
+
+  // authorization layer for each command
+  // compose these through flatmap/map/for-comprehension
+  // to create a live validation service.
+  // We use ZIO.validate for easy parallelism
+  type AUTH[SENDER] = Any => ZIO[SENDER, String, Boolean]
+  type ServerKeys = Set[String]
+
+  val get_glob_location: AUTH[String] = {
+    case GET_GLOB_LOCATION(id) => ZIO.succeed(true)
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_GLOB_LOCATION")
+  }
+
+  val set_glob_location: (Set[String]) => AUTH[String] = server_keys => {
+    case SET_GLOB_LOCATION(_, _) =>
+      ZIO.service[String].map(server_keys.contains(_))
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_GLOB_LOCATION")
+  }
+
+  val relate_eggs: AUTH[String] = {
+    case RELATE_EGGS(_, _, globId, _) =>
+      ZIO.service[String].map(senderId => globId == senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant to RELATE_EGGS")
+  }
+
+  val create_prowler: ServerKeys => AUTH[String] = server_keys => {
+    case CREATE_PROWLER(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to CREATE_PROWLER")
+  }
+
+  val create_axis_spider: ServerKeys => AUTH[String] = server_keys => {
+    case CREATE_SPIDER(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to CREATE_SPIDER")
+  }
+  val create_monk_garden: ServerKeys => AUTH[String] = server_keys => {
+    case CREATE_MONK(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to CREATE_MONK")
+  }
+
+  val get_all_globs: AUTH[String] = {
+    case GET_ALL_GLOBS() => ZIO.succeed(true)
+    case cmd             => ZIO.fail(s"$cmd not relevant to GET_ALL_GLOBS")
+  }
+
+  val get_glob: AUTH[String] = {
+    case GET_GLOB(_) => ZIO.succeed(true)
+    case cmd         => ZIO.fail(s"$cmd not relevant to GET_GLOB")
+  }
+
+  val add_health: Set[String] => AUTH[String] = server_keys => {
+    case ADD_HEALTH(id, value) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to ADD_HEALTH")
+  }
+
+  val remove_health: Set[String] => AUTH[String] = server_keys => {
+    case REMOVE_HEALTH(id, value, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to REMOVE_HEALTH")
+  }
+
+  val add_destination: ServerKeys => AUTH[String] = server_keys => {
+    case ADD_DESTINATION(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id || server_keys.contains(senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant to ADD_DESTINATION")
+  }
+  val get_next_destination: Set[String] => AUTH[String] = server_keys => {
+    case GET_NEXT_DESTINATION(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield server_keys.contains(senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION")
+  }
+  val get_next_destination_client: AUTH[String] = {
+    case GET_NEXT_DESTINATION_CLIENT(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION_CLIENT")
+  }
+  val set_active_destination: AUTH[String] = {
+    case SET_ACTIVE_DESTINATION(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_ACTIVE_DESTINATION")
+  }
+  val get_next_index: AUTH[String] = {
+    case GET_NEXT_INDEX(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_INDEX")
+  }
+  val get_all_destinations: AUTH[String] = {
+    case GET_ALL_DESTINATIONS(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield id == senderId
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_ALL_DESTINATIONS")
+  }
+  val toggle_gravity: AUTH[String] = {
+    case TOGGLE_GRAVITATE(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant to TOGGLE_GRAVITATE")
+  }
+  val toggle_destinations: AUTH[String] = {
+    case TOGGLE_DESTINATIONS(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant to TOGGLE_DESTINATIONS")
+  }
+  val set_gravitate: ServerKeys => AUTH[String] = server_keys => {
+    case SET_GRAVITATE(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id || server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_GRAVITATE")
+  }
+  val set_active: ServerKeys => AUTH[String] = server_keys => {
+    case SET_ACTIVE(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id || server_keys.contains(senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_ACTIVE")
+  }
+  val clear_destinations: ServerKeys => AUTH[String] = server_keys => {
+    case CLEAR_DESTINATIONS(id) =>
+      for {
+        senderid <- ZIO.service[String]
+      } yield senderid == id || server_keys.contains(senderid)
+    case cmd => ZIO.fail(s"$cmd not relevant to CLEAR_DESTINATION")
+  }
+  val delete_destination: AUTH[String] = {
+    case DELETE_DESTINATION(id, _) =>
+      for {
+        senderid <- ZIO.service[String]
+      } yield senderid == id
+    case cmd => ZIO.fail(s"$cmd not relevant to DELETE_DESTINATION")
+  }
+  val follow_entity: ServerKeys => AUTH[String] = server_keys => {
+    case FOLLOW_ENTITY(id, target) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield id != target && (id == sender || server_keys.contains(sender))
+    case cmd => ZIO.fail(s"$cmd not relevant to FOLLOW_ENTITY")
+  }
+  val unfollow_entity: ServerKeys => AUTH[String] = server_keys => {
+    case UNFOLLOW_ENTITY(id, target) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield id != target && (id == sender || server_keys.contains(sender))
+    case cmd => ZIO.fail(s"$cmd not relevant to UNFOLLOW_ENTITY")
+  }
+  val bind_entity: ServerKeys => AUTH[String] = server_keys => {
+    case BIND_ENTITY(id, target) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield id != target && (id == sender || server_keys.contains(sender))
+    case cmd => ZIO.fail(s"$cmd not relevant to BIND_ENTITY")
+  }
+  val set_mode_destinations: ServerKeys => AUTH[String] = server_keys => {
+    case SET_MODE_DESTINATIONS(id, mode) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id || server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for SET_MODE_DESTINATIONS")
+  }
+  val set_lv: Set[String] => AUTH[String] = server_keys => {
+    case SET_LV(id, _) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield server_keys.contains(senderId)
+    case cmd => ZIO.fail(s"$cmd not relevant for SET_LV")
+  }
+  val lazy_lv: AUTH[String] = {
+    case LAZY_LV(id) =>
+      for {
+        senderId <- ZIO.service[String]
+      } yield senderId == id
+    case cmd => ZIO.fail(s"$cmd not relevant for LAZY_LV")
+  }
+  val adjust_physical_stats: AUTH[String] = {
+    case ADJUST_PHYSICAL_STATS(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_PHYSICAL_STATS")
+  }
+  val set_speed: ServerKeys => AUTH[String] = server_keys => {
+    case SET_SPEED(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id || server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for SET_SPEED")
+  }
+  val adjust_max_speed: Set[String] => AUTH[String] = server_keys => {
+    case ADJUST_MAX_SPEED(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for ADJUST_MAX_SPEED")
+  }
+  val get_physical_stats: Set[String] => AUTH[String] = server_keys => {
+    case GET_PHYSICAL_STATS(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender) || sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_PHYSICAL_STATS")
+  }
+  val get_all_terrain: Set[String] => AUTH[String] = server_keys => {
+    case GET_ALL_TERRAIN(id, non_relative) =>
+      for {
+        send <- ZIO.service[String]
+      } yield id == send || (non_relative && server_keys.contains(send))
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_ALL_TERRAIN")
+  }
+  val get_terrain_within_distance: Set[String] => AUTH[String] = server_keys =>
+    {
+      case GET_TERRAIN_WITHIN_DISTANCE(location, radius) =>
+        for {
+          sender <- ZIO.service[String]
+        } yield server_keys.contains(sender)
+      case cmd => ZIO.fail(s"$cmd not relevant for GET_TERRAIN_WITHIN_DISTANCE")
+    }
+
+  val get_terrain_within_player_distance: Set[String] => AUTH[String] =
+    server_keys => {
+      case GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id, radius) =>
+        for {
+          sender <- ZIO.service[String]
+        } yield sender == id || server_keys.contains(sender)
+      case cmd =>
+        ZIO.fail(s"$cmd not relevant for GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
+    }
+  val add_terrain: AUTH[String] = {
+    case ADD_TERRAIN(id, location) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd => ZIO.fail(s"$cmd not relevant for ADD_TERRAIN")
+  }
+  val get_top_level_terrain: AUTH[String] = {
+    case GET_TOP_LEVEL_TERRAIN() =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_TOP_LEVEL_TERRAIN")
+  }
+  val get_top_level_terrain_in_distance: AUTH[String] = {
+    case GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd =>
+      ZIO.fail(s"$cmd not relevant for GET_TOP_LEVEL_TERRAIN_IN_DISTANCE")
+  }
+  val expand_terrain: Set[String] => AUTH[String] = server_keys => {
+    case EXPAND_TERRAIN() =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+
+    case cmd => ZIO.fail(s"$cmd not relevant for EXPAND_TERRAIN")
+  }
+  val fill_empty_chunk: Set[String] => AUTH[String] = server_keys => {
+    case FILL_EMPTY_CHUNK(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for FILL_EMPTY_CHUNK")
+  }
+  val get_cached_terrain: AUTH[String] = {
+    case GET_CACHED_TERRAIN(_) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_CACHED_TERRAIN")
+  }
+  val add_ability: AUTH[String] = {
+    case ADD_ABILITY(from, _, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == from
+    case cmd => ZIO.fail(s"$cmd not relevant for ADD_ABILITY")
+  }
+  val remove_ability: AUTH[String] = {
+    case REMOVE_ABILITY(from, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == from
+    case cmd => ZIO.fail(s"$cmd not relevant for ADD_ABILITY")
+  }
+  val pocket_ability: AUTH[String] = {
+    case POCKET_ABILITY(from, _, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == from
+    case cmd => ZIO.fail(s"$cmd not relevant for POCKET_ABILITY")
+  }
+  val unpocket_ability: AUTH[String] = {
+    case UNPOCKET_ABILITY(from, _, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == from
+    case cmd => ZIO.fail(s"$cmd not relevant for UNPOCKET_ABILITY")
+  }
+
+  val ability: AUTH[String] = {
+    case ABILITY(from, _, _, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == from
+    case cmd => ZIO.fail(s"$cmd not relevant for ABILITY")
+  }
+  val add_item: Set[String] => AUTH[String] = server_keys => {
+    case ADD_ITEM(_, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for ADD_ITEM")
+  }
+  val buy_item: Set[String] => AUTH[String] = server_keys => {
+    case BUY_ITEM(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender) || id == sender
+    case cmd => ZIO.fail(s"$cmd not relevant for BUY_ITEM")
+  }
+  val sell_item: Set[String] => AUTH[String] = server_keys => {
+    case SELL_ITEM(id, _) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield server_keys.contains(sender) || id == sender
+    case cmd => ZIO.fail(s"$cmd not relevant for SELL_ITEM")
+  }
+  val get_pocket: AUTH[String] = {
+    case GET_POCKET(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_POCKET")
+  }
+  val get_inventory: AUTH[String] = {
+    case GET_INVENTORY(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_INVENTORY")
+  }
+  val get_field: ServerKeys => AUTH[String] = server_keys => {
+    case GET_FIELD(id) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id || server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant for GET_FIELD")
+  }
+  val progress: ServerKeys => AUTH[String] = server_keys => {
+    case PROGRESS(id, args) =>
+      args match {
+        case TutorialComplete(stage) if stage == 0 =>
+          for {
+            sender <- ZIO.service[String]
+          } yield sender == id
+        case _ =>
+          for {
+            sender <- ZIO.service[String]
+          } yield server_keys.contains(sender)
+      }
+    case cmd => ZIO.fail(s"$cmd not relevant for PROGRESS")
+  }
+  val next_cmd: AUTH[String] = {
+    case NEXT_CMD() =>
+      for {
+        sender <- ZIO.service[String]
+      } yield true
+    case cmd => ZIO.fail(s"$cmd not relevant for NEXT_CMD")
+  }
+  val subscribe: AUTH[String] => AUTH[String] = masterAuth => {
+    case SUBSCRIBE(query) => masterAuth(query)
+    case cmd              => ZIO.fail(s"$cmd not relevant to SUBSCRIBE")
+  }
+  val console: AUTH[String] => AUTH[String] = masterAuth => {
+    case CONSOLE(_, query) => masterAuth(query)
+    case cmd               => ZIO.fail(s"$cmd not relevant to CONSOLE")
+  }
+}
+object AuthCommandService {
+
+  val base: Set[String] => AUTH[String] = (server_keys: Set[String]) =>
+    (op: Any) =>
+      ZIO
+        .validateFirstPar(
+          Seq(
+            set_glob_location(server_keys)(op),
+            get_glob_location(op),
+            relate_eggs(op),
+            create_prowler(server_keys)(op),
+            create_axis_spider(server_keys)(op),
+            create_monk_garden(server_keys)(op),
+            get_glob(op),
+            get_all_globs(op),
+            add_health(server_keys)(op),
+            remove_health(server_keys)(op),
+            add_destination(server_keys)(op),
+            get_next_destination(server_keys)(op),
+            get_next_destination_client(op),
+            set_active_destination(op),
+            get_next_index(op),
+            get_all_destinations(op),
+            clear_destinations(server_keys)(op),
+            delete_destination(op),
+            follow_entity(server_keys)(op),
+            unfollow_entity(server_keys)(op),
+            bind_entity(server_keys)(op),
+            set_lv(server_keys)(op),
+            lazy_lv(op),
+            adjust_physical_stats(op),
+            set_speed(server_keys)(op),
+            adjust_max_speed(server_keys)(op),
+            get_physical_stats(server_keys)(op),
+            get_all_terrain(server_keys)(op),
+            get_terrain_within_distance(server_keys)(op),
+            get_terrain_within_player_distance(server_keys)(op),
+            add_terrain(op),
+            get_top_level_terrain(op),
+            get_top_level_terrain_in_distance(op),
+            expand_terrain(server_keys)(op),
+            fill_empty_chunk(server_keys)(op),
+            get_cached_terrain(op),
+            add_ability(op),
+            remove_ability(op),
+            pocket_ability(op),
+            unpocket_ability(op),
+            ability(op),
+            add_item(server_keys)(op),
+            buy_item(server_keys)(op),
+            sell_item(server_keys)(op),
+            get_inventory(op),
+            get_pocket(op),
+            get_field(server_keys)(op),
+            progress(server_keys)(op),
+            next_cmd(op),
+            set_active(server_keys)(op),
+            toggle_destinations(op),
+            set_gravitate(server_keys)(op),
+            toggle_gravity(op),
+            set_mode_destinations(server_keys)(op)
+          )
+        ) { x =>
+          x
+        }
+        .mapError(_ => "failed base validations")
+
+  val base_non_par: Set[String] => AUTH[String] = (server_keys: Set[String]) =>
+    (op: Any) =>
+      ZIO
+        .validateFirstPar(
+          Seq(
+            set_glob_location(server_keys)(op),
+            get_glob_location(op),
+            relate_eggs(op),
+            create_prowler(server_keys)(op),
+            create_axis_spider(server_keys)(op),
+            create_monk_garden(server_keys)(op),
+            get_glob(op),
+            get_all_globs(op),
+            add_health(server_keys)(op),
+            remove_health(server_keys)(op),
+            add_destination(server_keys)(op),
+            get_next_destination(server_keys)(op),
+            get_next_destination_client(op),
+            set_active_destination(op),
+            get_next_index(op),
+            get_all_destinations(op),
+            clear_destinations(server_keys)(op),
+            delete_destination(op),
+            follow_entity(server_keys)(op),
+            unfollow_entity(server_keys)(op),
+            bind_entity(server_keys)(op),
+            set_lv(server_keys)(op),
+            lazy_lv(op),
+            adjust_physical_stats(op),
+            set_speed(server_keys)(op),
+            adjust_max_speed(server_keys)(op),
+            get_physical_stats(server_keys)(op),
+            get_all_terrain(server_keys)(op),
+            get_terrain_within_distance(server_keys)(op),
+            get_terrain_within_player_distance(server_keys)(op),
+            add_terrain(op),
+            get_top_level_terrain(op),
+            get_top_level_terrain_in_distance(op),
+            expand_terrain(server_keys)(op),
+            fill_empty_chunk(server_keys)(op),
+            get_cached_terrain(op),
+            add_ability(op),
+            remove_ability(op),
+            pocket_ability(op),
+            unpocket_ability(op),
+            ability(op),
+            add_item(server_keys)(op),
+            buy_item(server_keys)(op),
+            sell_item(server_keys)(op),
+            get_inventory(op),
+            get_pocket(op),
+            get_field(server_keys)(op),
+            progress(server_keys)(op),
+            next_cmd(op),
+            set_active(server_keys)(op),
+            toggle_destinations(op),
+            set_gravitate(server_keys)(op),
+            toggle_gravity(op),
+            set_mode_destinations(server_keys)(op)
+          )
+        ) { x =>
+          x
+        }
+        .mapError(_ => "failed base validations")
+
+  val all: (Set[String]) => AUTH[String] =
+    (server_keys: Set[String]) =>
+      (op: Any) =>
+        {
+          val other_tests = base(server_keys)
+          val sub = subscribe(other_tests(_))
+          val cnsl = console(other_tests(_))
+          ZIO
+            .validateFirstPar(Seq(other_tests(op), sub(op), cnsl(op))) { x =>
+              x
+            }
+            .mapError(_ => "failed group validate")
+        }.fold(_ => false, x => x)
+
+  val all_non_par: (Set[String]) => AUTH[String] =
+    (server_keys: Set[String]) =>
+      (op: Any) =>
+        {
+          val other_tests = base_non_par(server_keys)
+          val sub = subscribe(other_tests(_).mapError(_ => ""))
+          val cnsl = console(other_tests(_))
+          ZIO
+            .validateFirstPar(Seq(other_tests(op), sub(op), cnsl(op))) { x =>
+              x
+            }
+            .mapError(_ => "failed group validate")
+        }.fold(_ => false, x => x)
+}
+
+case class AuthenticationService(
+  cachedAuth: Ref[Map[Any, Boolean]],
+  authorizer: AUTH[String]
+) {
+  def verify_with_caching: AUTH[String] = (cmd: Any) =>
+    cmd match {
+      case command: SerializableCommand[_, _] =>
+        for {
+          sender <- ZIO.service[String]
+          cached <- cachedAuth.get.map(_.get((command.REF_TYPE, sender)))
+          res <- cached match {
+            case Some(r) =>
+              ZIO.succeed(r)
+            case None =>
+              for {
+                rres <- authorizer(cmd)
+                _ <- ZIO.log(s"creating cached for $command , $sender , $rres")
+                _ <- cachedAuth.update(
+                  _.updated((command.REF_TYPE, sender), rres)
+                )
+              } yield rres
+          }
+        } yield res
+      case _ => ZIO.succeed(false)
+    }
+}

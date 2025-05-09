@@ -1,0 +1,51 @@
+package entity
+
+import entity.Terrain.TerrainId
+import entity.TerrainRegion.TERRAIN_KEY
+
+import java.util.UUID
+import zio.json.*
+
+sealed trait TerrainModel
+
+object TerrainModel {
+  implicit val decoder: JsonDecoder[TerrainModel] =
+    DeriveJsonDecoder.gen[TerrainModel]
+  implicit val encoder: JsonEncoder[TerrainModel] =
+    DeriveJsonEncoder.gen[TerrainModel]
+}
+
+case class TerrainUnitM(
+  location: Vector[Double],
+  entities: Map[TerrainId, Int],
+  uuid: TERRAIN_KEY
+) extends TerrainModel
+
+object TerrainUnitM {
+  implicit val decoder: JsonDecoder[TerrainUnitM] =
+    DeriveJsonDecoder.gen[TerrainUnitM]
+  implicit val encoder: JsonEncoder[TerrainUnitM] =
+    DeriveJsonEncoder.gen[TerrainUnitM]
+}
+
+case class TerrainRegionM(
+  region_uuid: Option[TERRAIN_KEY],
+  terrain: Set[(Vector[Double], Map[TerrainId, Int], TERRAIN_KEY)]
+) extends TerrainModel
+object TerrainRegionM {
+  implicit val decoder: JsonDecoder[TerrainRegionM] =
+    DeriveJsonDecoder.gen[TerrainRegionM]
+  implicit val encoder: JsonEncoder[TerrainRegionM] =
+    DeriveJsonEncoder.gen[TerrainRegionM]
+}
+case class TerrainChunkM(
+  uuid: UUID,
+  location: (Double, Double, Double),
+  radius: Double
+) extends TerrainModel
+object TerrainChunkM {
+  implicit val encoder: JsonEncoder[TerrainChunkM] =
+    DeriveJsonEncoder.gen[TerrainChunkM]
+  implicit val decoder: JsonDecoder[TerrainChunkM] =
+    DeriveJsonDecoder.gen[TerrainChunkM]
+}

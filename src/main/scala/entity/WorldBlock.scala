@@ -1,0 +1,445 @@
+package entity
+
+import controller.Control.CONTROLLER_ENV
+import controller.BasicController
+import controller.QueryResponse
+import entity.Globz.GLOBZ_ID
+import entity.Terrain.TerrainId
+import entity.WorldBlock.GenericWorldBlockError
+import entity.WorldBlock.WorldBlockError
+import implicits.*
+import zio.*
+
+object WorldBlock {
+
+  trait Block {
+    def spawnBlob(
+      blob: Globz,
+      coords: Vector[Double]
+    ): IO[WorldBlockError, ExitCode]
+    def spawnNonPhysicalBlob(
+      blob: Globz,
+      coords: Vector[Double]
+    ): IO[WorldBlockError, ExitCode]
+    def get_controller()
+      : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
+        QueryResponse
+      ]]]
+    def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
+    def getAllNonPhysicalBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
+    def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
+    def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
+    def getBlobOption(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz]]
+    def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Globz]
+
+    def updateBlob(blob: Globz): IO[WorldBlockError, ExitCode]
+
+//    val terrain: TerrainManager with Terrain
+    def getTerrain: IO[WorldBlockError, TerrainManager with Terrain]
+    def getBigTerrain: UIO[BigTerrainRegion]
+//      ZIO.succeed(terrain)
+
+    def expandTerrain: IO[WorldBlockError, Chunk[Terrain]]
+  }
+
+  trait Service {
+    def make(
+      control: Ref[
+        Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
+      ]
+    ): IO[WorldBlockError, WorldBlock.Block]
+  }
+  def make(
+    controller: Ref[
+      Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
+    ]
+  ): ZIO[WorldBlock.Service, WorldBlockError, WorldBlock.Block] =
+    ZIO.service[WorldBlock.Service].flatMap(_.make(controller))
+
+  def get_controller(): ZIO[WorldBlock.Block, WorldBlockError, BasicController[
+    CONTROLLER_ENV,
+    Queue[
+      QueryResponse
+    ]
+  ]] = ZIO.environmentWithZIO(_.get.get_controller())
+
+  def spawnBlob(
+    blob: Globz,
+    coords: Vector[Double]
+  ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
+    ZIO.environmentWithZIO(_.get.spawnBlob(blob, coords))
+
+  def spawnNonPhysicalBlob(
+    blob: Globz,
+    coords: Vector[Double]
+  ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
+    ZIO.environmentWithZIO(_.get.spawnNonPhysicalBlob(blob, coords))
+
+  def getAllBlobs(): ZIO[WorldBlock.Block, WorldBlockError, Set[Globz]] =
+    ZIO.environmentWithZIO[WorldBlock.Block](_.get.getAllBlobs())
+  def getAllNonPhysicalBlobs()
+    : ZIO[WorldBlock.Block, WorldBlockError, Set[Globz]] =
+    ZIO.environmentWithZIO[WorldBlock.Block](_.get.getAllNonPhysicalBlobs())
+  def removeBlob(
+    blob: Globz
+  ): ZIO[WorldBlock.Block, WorldBlockError, ExitCode] =
+    ZIO.environmentWithZIO(_.get.removeBlob(blob))
+  def getBlobOption(
+    id: GLOBZ_ID
+  ): ZIO[WorldBlock.Block, WorldBlockError, Option[Globz]] =
+    ZIO.serviceWithZIO[Block](_.getBlobOption(id))
+  def getBlob(
+    id: GLOBZ_ID
+  ): ZIO[WorldBlock.Block, WorldBlockError, Globz] =
+    ZIO.serviceWithZIO[Block](_.getBlob(id))
+  def getTerrain
+    : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
+    ZIO.environmentWithZIO(_.get.getTerrain)
+
+  trait WorldBlockError
+
+  case class GenericWorldBlockError(msg: String) extends WorldBlockError
+
+}
+
+case class WorldBlockInMem(
+  controller: Ref[
+    Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
+  ],
+  dbRef: Ref[Map[GLOBZ_ID, Globz]],
+  non_physical_entities: Ref[Map[GLOBZ_ID, Globz]],
+  terrain: Ref[TerrainManager with Terrain],
+  bigTerrain: BigTerrainRegion
+) extends WorldBlock.Block {
+
+  def get_controller()
+    : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
+      QueryResponse
+    ]]] =
+    controller.get
+      .flatMap(ZIO.fromOption(_))
+      .orElseFail(
+        GenericWorldBlockError("Could not retrieve controller from world block")
+      )
+  override def spawnBlob(
+    blob: Globz,
+    coords: Vector[Double]
+  ): IO[WorldBlock.WorldBlockError, ExitCode] =
+    for {
+      _ <- dbRef.update(_.updated(blob.id, blob))
+    } yield ExitCode.success
+
+  override def spawnNonPhysicalBlob(
+    blob: Globz,
+    coords: Vector[Double]
+  ): IO[WorldBlock.WorldBlockError, ExitCode] =
+    for {
+      _ <- non_physical_entities.update(_.updated(blob.id, blob))
+    } yield ExitCode.success
+
+  override def getAllBlobs(): ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
+    for {
+      db <- dbRef.get
+    } yield db.values.toSet
+
+  override def getAllNonPhysicalBlobs()
+    : ZIO[Any, WorldBlock.WorldBlockError, Set[Globz]] =
+    for {
+      db <- non_physical_entities.get
+    } yield db.values.toSet
+
+  override def getNumBlobs(): ZIO[Any, WorldBlockError, RuntimeFlags] =
+    dbRef.get.map(_.size)
+
+  override def removeBlob(
+    blob: Globz
+  ): IO[WorldBlock.WorldBlockError, ExitCode] =
+    for {
+      _ <- dbRef.update(_.removed(blob.id))
+    } yield ExitCode.success
+
+  override def getBlobOption(
+    id: GLOBZ_ID
+  ): IO[WorldBlock.WorldBlockError, Option[Globz]] =
+    for {
+      res <- dbRef.get.map(_.get(id))
+    } yield res
+
+  override def getBlob(
+    id: GLOBZ_ID
+  ): IO[WorldBlock.WorldBlockError, Globz] =
+    (for {
+      physical <- dbRef.get.map(_.contains(id))
+      res <-
+        if (physical) dbRef.get.flatMap(m => ZIO.fromOption(m.get(id)))
+        else non_physical_entities.get.flatMap(m => ZIO.fromOption(m.get(id)))
+    } yield res)
+      .orElseFail(GenericWorldBlockError(s"Could not find entity with id $id"))
+
+  override def updateBlob(
+    blob: Globz
+  ): IO[WorldBlock.WorldBlockError, ExitCode] = ???
+
+  override def getTerrain
+    : IO[WorldBlock.WorldBlockError, TerrainManager with Terrain] = terrain.get
+
+  override def getBigTerrain: UIO[BigTerrainRegion] =
+    ZIO.succeed(bigTerrain)
+
+  override def expandTerrain: IO[WorldBlock.WorldBlockError, Chunk[Terrain]] =
+    for {
+      t <- terrain.get
+      d <- t
+        .expandTerrain()
+        .mapBoth(
+          _ => GenericWorldBlockError("Problem while expanding terrain"),
+          { case tr: TerrainRegion => tr }
+        )
+      _ <- terrain.update(_ => d)
+      top_terr <- d
+//        .get_top_terrain_within_distance(d.center, d.radius / 2, d.radius / 2)
+        .get_top_terrain_within_distance(d.center, 8192 * 2, 1024)
+        .orElseFail(
+          GenericWorldBlockError(
+            "could not retrieve top terrain after expansion"
+          )
+        )
+    } yield top_terr
+}
+object WorldBlockInMem extends WorldBlock.Service {
+  override def make(
+    control: Ref[Option[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]]
+  ): IO[WorldBlock.WorldBlockError, WorldBlock.Block] =
+    for {
+      radius <- System
+        .env("WORLDBLOCK_RADIUS")
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericWorldBlockError(
+              s"error initiating worldblock; no WORLDBLOCK_RADIUS env variable set; $err"
+            ),
+          _.toInt
+        )
+      //      num = 50000
+      num <- System
+        .env("RANDOMIZED_SPAWN_COUNT")
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericWorldBlockError(
+              s"Error initiating worldblock; no RANDOMIZED_SPAWN_COUNT env variable set; $err"
+            ),
+          _.toInt
+        )
+      num_prowlers <- System
+        .env("PROWLER_COUNT")
+        .flatMap(ZIO.fromOption(_))
+        .mapBoth(
+          err =>
+            GenericWorldBlockError(
+              s"Error initiating worldblock; no PROWLER_COUNT env variable set; $err"
+            ),
+          _.toInt
+        )
+      big_terrain <- BigTerrainRegion.make
+      terrain <- TerrainRegion.make(Vector(0, 0, 0), radius).map {
+        case tr: TerrainRegion => tr
+      }
+      terrain <- WorldBlockEnvironment.add_terrain(
+        terrain,
+        terrain.radius,
+        num,
+        num_prowlers
+      )
+//      _ <- terrain // add spawn block to terrain
+//        .add_terrain("9", Vector(0, -20, 0))
+//        .orElseFail(
+//          GenericWorldBlockError("Could not add spawn block to terrain block")
+//        )
+//      _ <- big_terrain // add spawn block to terrain
+//        .add_terrain(
+//          TerrainTypes.PLANET_A.toId(),
+//          Vector(4096, 1024 * 4, 0),
+//          1024 * 8
+//        )
+//      _ <- ZIO.foreachParDiscard(0 to 8) { _ =>
+//        for {
+//          radius <- ZIO.succeed(1024 * 8)
+//          x <- Random.nextIntBetween(-radius, radius)
+//          y <- Random.nextIntBetween(-radius, radius)
+//          z <- Random.nextIntBetween(-radius, radius)
+//          _ <- big_terrain.add_terrain(
+//            TerrainTypes.PLANET_A.toId(),
+//            Vector(x, y, z),
+//            1024 * 8
+//          )
+//        } yield ()
+//      }
+      n <- ZIO.succeed(4)
+      _ <- ZIO.foreachParDiscard(1 to n) { i =>
+        for {
+          radius <- ZIO.succeed(1024 * 32)
+          x <- ZIO.succeed(radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+          x <- ZIO.succeed(-radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+          x <- ZIO.succeed(-radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(-radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+          x <- ZIO.succeed(radius / (i * n))
+          y <- ZIO.succeed(0)
+          z <- ZIO.succeed(-radius / (i * n))
+          _ <- big_terrain.add_terrain(
+            TerrainTypes.PLANET_A.toId(),
+            Vector(x, y, z),
+            1024 * 8
+          )
+        } yield ()
+      }
+//      _ <- big_terrain // add spawn block to terrain
+//        .add_terrain(
+//          TerrainTypes.PLANET_A.toId(),
+//          Vector(0, 1024 * 5, 4096 * 1.5),
+//          1024 * 8
+//        )
+//      _ <- big_terrain // add spawn block to terrain
+//        .add_terrain(
+//          TerrainTypes.PLANET_A.toId(),
+//          Vector(-4096, 1024 * 4, 0),
+//          1024 * 8
+//        )
+      t_count <- terrain
+        .get_count()
+        .mapError(err =>
+          GenericWorldBlockError(
+            s"Failed to get worldblock terrain count : $err"
+          )
+        )
+      _ <- ZIO.log(s"starting terrain with count $t_count")
+
+      terrain_ref <- Ref.make(terrain)
+
+      globz_map <- Ref.make(Map.empty[GLOBZ_ID, Globz])
+      non_physical_entities <- Ref.make(Map.empty[GLOBZ_ID, Globz])
+      res <- ZIO
+        .attempt(
+          WorldBlockInMem(
+            control,
+            globz_map,
+            non_physical_entities,
+            terrain_ref,
+            big_terrain
+          )
+        )
+        .orElseFail(
+          GenericWorldBlockError("Failed to create woldblock on startup")
+        )
+      _ <- res.expandTerrain
+//      _ <- WorldBlockEnvironment
+//        .add_prowlers(res, num_prowlers, 1000)
+//        .mapError(err =>
+//          GenericWorldBlockError(
+//            s"Errow while adding prowlers to worldblock : $err"
+//          )
+//        )
+    } yield res
+}
+object WorldBlockEnvironment {
+  def create_terrain_set(
+    num: Int,
+    radius: Double,
+    center: Vector[Double]
+  ): IO[WorldBlockError, Set[(TerrainId, Vector[Double])]] =
+    for {
+      terrain_types <- ZIO.succeed(List("6", "11"))
+      groups <- ZIO.succeed((0 to num).grouped(num / 1000))
+      collected <- ZIO
+        .collectAllPar(groups.map { r =>
+          ZIO
+            .foreach(r) { i =>
+              for {
+                x <- Random.nextDoubleBetween(-radius, radius)
+                y <- Random.nextDoubleBetween(-radius, radius)
+                z <- Random.nextDoubleBetween(-radius, radius)
+                terrain_type <- Random
+                  .nextIntBetween(0, terrain_types.size)
+                  .map(i => terrain_types(i))
+                _ <- ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+              } yield (terrain_type, Vector(x, y, z) + center)
+            }
+        }.toSeq)
+        .map(_.flatten)
+    } yield collected.toSet
+
+  def add_terrain(
+    terrain: TerrainManager with Terrain,
+    radius: Double,
+    num: Int,
+    num_prowlers: Int = 0,
+    prowler_radius: Double = 1000
+  ): IO[GenericWorldBlockError, TerrainManager & Terrain] = for {
+    terrain_types <- ZIO.succeed(
+      List(
+        TerrainTypes.BLOCK_TERRAIN.toId(),
+        TerrainTypes.HEALTH_STAR.toId(),
+        TerrainTypes.MONK_GARDEN.toId()
+      )
+    )
+    _ <- ZIO
+      .foreachParDiscard(0 to num) { i =>
+        for {
+          x <- Random.nextDoubleBetween(-radius, radius)
+          y <- Random.nextDoubleBetween(-radius, radius)
+          z <- Random.nextDoubleBetween(-radius, radius)
+          terrain_type <- Random
+            .nextIntBetween(0, terrain_types.size)
+            .map(i => terrain_types(i))
+          _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
+          _ <-
+            ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+        } yield ()
+      }
+      .mapError(err =>
+        GenericWorldBlockError(
+          s"Failed to add terrain to worldblock due to : $err"
+        )
+      )
+    _ <- ZIO
+      .foreachPar(0 to num_prowlers) { i =>
+        for {
+          x <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          y <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          z <- Random.nextDoubleBetween(-prowler_radius, prowler_radius)
+          _ <- ZIO.log(s"prowler created $x , $y , $z")
+          terrain_type <- ZIO.succeed("16")
+          _ <- terrain.add_terrain(terrain_type, Vector(x, y, z))
+          _ <-
+            ZIO.log(s"Generating terrain $i/$num").when(i % 1000 == 0)
+        } yield ()
+      }
+      .mapError(err =>
+        GenericWorldBlockError(
+          s"Failed to add prowler terrain to worldblock because $err"
+        )
+      )
+  } yield terrain
+
+}
