@@ -44,9 +44,9 @@ import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
-import physics.DESTINATION_TYPE.GRAVITY
-import physics.DESTINATION_TYPE.TELEPORT
-import physics.DESTINATION_TYPE.WAYPOINT
+import physics.GRAVITY
+import physics.TELEPORT
+import physics.WAYPOINT
 import physics.*
 import entity.implicits.*
 import zio.*
