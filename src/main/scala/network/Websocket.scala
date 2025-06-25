@@ -43,13 +43,13 @@ object WebSocketAdvanced extends ZIOAppDefault {
     )
 
   override val run =
-//    CausalProfiler(10)
-//      .profile(
+    //CausalProfiler(10)
+      //.profile(
     program()
       .provide(ZLayer.succeed(WebSocketServerBasic))
       .map(x => ???)
-//      )
-//      .flatMap(_.renderToFile("profile.causal"))
+      //)
+      //.flatMap(_.renderToFile("profile.causal"))
   def program(): ZIO[WebSocketServer.Service, WebSocketError, Unit] =
     (for {
       _ <- ZIO.logInfo("server started")
@@ -127,13 +127,6 @@ case class BasicWebSocket(
         )
       )
     } yield res
-//    match {
-//      case x: QueuedServerMessage       => x
-//      case x: Completed                 => x
-//      case PaginatedResponse(responses) => responses.map(_.toJson)
-//      case r                            => Seq(r.toJson)
-//      case _                            => Seq()
-//    }
 
   val initialize_session: WebSocketChannel => ZIO[Any, Object, Unit] =
     channel =>
@@ -171,11 +164,6 @@ case class BasicWebSocket(
               .as(None),
           ZIO.some(_)
         )
-//        .flatMapError(err =>
-//          ZIO.log(
-//            s"Error while deserializing command $text, error : $err"
-//          ) *> ZIO.never
-//        )
 
   val authorizeMsg: SerializableCommand[_, _] => ZIO[Any, Nothing, Boolean] =
     cmd =>
@@ -197,11 +185,6 @@ case class BasicWebSocket(
           err => ZIO.logError(err.toString).as(false),
           x => ZIO.succeed(x)
         )
-
-//        .flatMapError(err =>
-//          Console.printLine(s"bad auth: $err").mapError(_ => ???)
-//        )
-//        .fold(_ => false, x => x)
 
   def handle_query_response(
     channel: WebSocketChannel,
@@ -314,8 +297,6 @@ case class BasicWebSocket(
               _ <- Console.printLine("Verified succeeded")
               _ <- authenticated.update(_ => true)
               // initialize response stream when first authenticating
-//              _ <- sendResponses(ZStream.fromQueue(response_queue))
-//                .provide(ZLayer.succeed(channel))
               _ <- linkControllerServer(channel)
               _ <- linkControllerClient(channel)
               _ <- recieveAllText(
@@ -337,12 +318,6 @@ case class BasicWebSocket(
       channel.receiveAll {
         case Read(WebSocketFrame.Text(text)) =>
           recieveAll(channel, text).mapError(_ => ???)
-        // *> CausalProfiler
-//            .progressPoint(
-//              "rendered command" +
-//                ""
-//            )
-
         case UserEventTriggered(UserEvent.HandshakeTimeout) =>
           ZIO.succeed(println("handshake timeout"))
         case UserEventTriggered(UserEvent.HandshakeComplete) =>
@@ -363,9 +338,11 @@ object BasicWebSocket extends WebSocketControlServer.Service[Any] {
 
   override def make(
     authID: AUTH_ID
-  ): ZIO[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]
-    with Ref[SESSION_MAP]
-    with Ref[SERVER_IDS], Nothing, WebSocketControlServer[Any]] =
+  ): ZIO[
+      BasicController[CONTROLLER_ENV, Queue[QueryResponse]] with Ref[SESSION_MAP] with Ref[SERVER_IDS], 
+      Nothing,
+      WebSocketControlServer[Any]
+    ] =
     for {
       controller <- ZIO
         .service[BasicController[CONTROLLER_ENV, Queue[QueryResponse]]]
