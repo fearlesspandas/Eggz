@@ -1,23 +1,62 @@
 package physics
 
-import physics.DESTINATION_TYPE.GRAVITY
-import physics.DESTINATION_TYPE.TELEPORT
-import physics.DESTINATION_TYPE.WAYPOINT
+//import physics.DESTINATION_TYPE.GRAVITY
+//import physics.DESTINATION_TYPE.TELEPORT
+//import physics.DESTINATION_TYPE.WAYPOINT
+
+import physics.DESTINATION_TYPE.DestinationTypeId
 
 import java.util.UUID
 import zio.*
 import zio.json.*
 
-sealed trait DESTINATION_TYPE
+sealed trait DESTINATION_TYPE {
+  val id: DESTINATION_TYPE.DestinationTypeId
+  def to_id = this.id
+  // case WAYPOINT
+  // case TELEPORT
+  // case GRAVITY
+}
+case object WAYPOINT extends DESTINATION_TYPE {
+  override val id: DestinationTypeId = 0
+}
+
+case object TELEPORT extends DESTINATION_TYPE {
+  override val id: DestinationTypeId = 1
+}
+
+case object GRAVITY extends DESTINATION_TYPE {
+  override val id: DestinationTypeId = 2
+}
 
 object DESTINATION_TYPE {
-  case object WAYPOINT extends DESTINATION_TYPE
-  case object TELEPORT extends DESTINATION_TYPE
-  case object GRAVITY extends DESTINATION_TYPE
+  type DestinationTypeId = Int
   implicit val encoder: JsonEncoder[DESTINATION_TYPE] =
-    DeriveJsonEncoder.gen[DESTINATION_TYPE]
+    DeriveJsonEncoder
+      .gen[DESTINATION_TYPE]
   implicit val decoder: JsonDecoder[DESTINATION_TYPE] =
     DeriveJsonDecoder.gen[DESTINATION_TYPE]
+
+  def to_string(typ: DESTINATION_TYPE): String =
+    typ match {
+      case WAYPOINT => "Waypoint"
+      case TELEPORT => "Teleport"
+      case GRAVITY  => "Gravity"
+    }
+  def from_string(id: String): DESTINATION_TYPE =
+    id match {
+      case "Waypoint" => WAYPOINT
+      case "Teleport" => TELEPORT
+      case "Gravity"  => GRAVITY
+    }
+  def to_id(typ: DESTINATION_TYPE): DestinationTypeId =
+    typ.to_id
+  def from_id(id: DestinationTypeId): DESTINATION_TYPE =
+    id match {
+      case 0 => WAYPOINT
+      case 1 => TELEPORT
+      case 2 => GRAVITY
+    }
 }
 
 trait Destination {
@@ -31,7 +70,7 @@ trait Destination {
         .succeed(location(0))
         .zip(ZIO.succeed(location(1)))
         .zip(ZIO.succeed(location(2)))
-    } yield DEST(uuid, dest_type, loc, radius)
+    } yield DEST(uuid, DESTINATION_TYPE.to_id(dest_type), loc, radius)
 }
 case class WaypointDestination(location: Vector[Double], radius: Double)
     extends Destination {
@@ -47,13 +86,13 @@ case class GravityDestination(location: Vector[Double], radius: Double)
 }
 
 sealed trait DestinationModel {
-  val dest_type: DESTINATION_TYPE
+  val dest_type: DESTINATION_TYPE.DestinationTypeId
   val location: (Double, Double, Double)
   val radius: Double
   def deserialize: IO[DestinationError, Destination] =
     (for {
       conf <- DestinationModel.config
-      f <- ZIO.fromOption(conf.get(dest_type))
+      f <- ZIO.fromOption(conf.get(DESTINATION_TYPE.from_id(dest_type)))
       func: ((Vector[Double], Double) => Destination) = f._1
       res: Destination = func(
         Vector(location._1, location._2, location._3),
@@ -108,7 +147,7 @@ object DestinationModel {
     )
 }
 case class destination(
-  dest_type: DESTINATION_TYPE,
+  dest_type: DESTINATION_TYPE.DestinationTypeId,
   location: (Double, Double, Double),
   radius: Double
 ) extends DestinationModel
@@ -121,7 +160,7 @@ object destination {
 
 case class DEST(
   uuid: UUID,
-  dest_type: DESTINATION_TYPE,
+  dest_type: DESTINATION_TYPE.DestinationTypeId,
   location: (Double, Double, Double),
   radius: Double
 ) extends DestinationModel
@@ -133,7 +172,7 @@ object DEST {
 }
 case class Waypoint(location: (Double, Double, Double))
     extends DestinationModel {
-  override val dest_type: DESTINATION_TYPE = WAYPOINT
+  override val dest_type: DESTINATION_TYPE.DestinationTypeId = WAYPOINT.to_id
   val radius = ???
 }
 object Waypoint {
@@ -146,7 +185,7 @@ object Waypoint {
 
 case class Teleport(location: (Double, Double, Double))
     extends DestinationModel {
-  override val dest_type: DESTINATION_TYPE = TELEPORT
+  override val dest_type: DESTINATION_TYPE.DestinationTypeId = TELEPORT.id
   override val radius: Double = ???
 }
 
@@ -159,7 +198,7 @@ object Teleport {
 }
 case class Gravity(location: (Double, Double, Double))
     extends DestinationModel {
-  override val dest_type: DESTINATION_TYPE = GRAVITY
+  override val dest_type: DESTINATION_TYPE.DestinationTypeId = GRAVITY.id
   override val radius: Double = ???
 }
 

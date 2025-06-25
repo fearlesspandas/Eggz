@@ -1,9 +1,7 @@
 package controller
 
 import entity.WorldBlock
-import physics.DESTINATION_TYPE.TELEPORT
-import physics.DESTINATION_TYPE.WAYPOINT
-import physics.Destination
+import physics.{Destination, TELEPORT, WAYPOINT}
 import zio.*
 import zio.http.WebSocketChannel
 import zio.stream.ZStream
