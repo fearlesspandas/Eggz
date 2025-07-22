@@ -132,7 +132,7 @@ object ModeSet {
   implicit val decoder: JsonDecoder[ModeSet] =
     DeriveJsonDecoder.gen[ModeSet]
 }
-case class ClearDestinations() extends QueryResponse
+case class ClearDestinations(entity_id:String) extends QueryResponse
 object ClearDestinations {
   implicit val encoder: JsonEncoder[ClearDestinations] =
     DeriveJsonEncoder.gen[ClearDestinations]

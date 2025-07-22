@@ -1143,7 +1143,7 @@ case class CLEAR_DESTINATIONS(id: GLOBZ_ID)
         case pe: Destinations => pe.setIndex(0) *> pe.clearDestinations()
         case _                => ZIO.unit
       }
-    } yield ClearDestinations())
+    } yield ClearDestinations(id))
       .orElseFail(GenericCommandError(s"Error clearing destinations for $id"))
 }
 object CLEAR_DESTINATIONS {
