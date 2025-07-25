@@ -576,7 +576,7 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !gravitate))),
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, gravitate))))
+        QueuedServerMessage(Chunk(GravityActive(id, gravitate)))
       ) ++ client_messages
     )
 }
@@ -625,7 +625,7 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !res))),
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res))))
+        QueuedServerMessage(Chunk(GravityActive(id, res)))
       ) ++ client_messages
     )
 }
@@ -680,7 +680,7 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
-      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+      QueuedServerMessage(Chunk(DestinationsActive(id, isactive)))
     ) ++ client_messages
   )
 }
@@ -730,7 +730,7 @@ case class SET_ACTIVE(id: ID, value: Boolean)
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
-      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+      QueuedServerMessage(Chunk(DestinationsActive(id, isactive)))
     ) ++ client_messages
   )
 }
