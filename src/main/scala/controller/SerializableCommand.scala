@@ -1176,7 +1176,7 @@ case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
             s"failed while updating destinations mode for $id due to $err"
           )
         )
-    } yield ModeSet(mode)
+    } yield ModeSet(id,mode)
 
 object SET_MODE_DESTINATIONS {
   implicit val encoder: JsonEncoder[SET_MODE_DESTINATIONS] =
