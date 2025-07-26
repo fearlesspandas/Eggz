@@ -576,7 +576,7 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !gravitate))),
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, gravitate))))
+        QueuedServerMessage(Chunk(GravityActive(id, gravitate)))
       ) ++ client_messages
     )
 }
@@ -625,7 +625,7 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
     } yield MultiResponse(
       Chunk(
         QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !res))),
-        QueuedServerMessage(Chunk(MSG(id, GravityActive(id, res))))
+        QueuedServerMessage(Chunk(GravityActive(id, res)))
       ) ++ client_messages
     )
 }
@@ -680,7 +680,7 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
-      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+      QueuedServerMessage(Chunk(DestinationsActive(id, isactive)))
     ) ++ client_messages
   )
 }
@@ -730,7 +730,7 @@ case class SET_ACTIVE(id: ID, value: Boolean)
   } yield MultiResponse(
     Chunk(
       QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
-      QueuedServerMessage(Chunk(MSG(id, DestinationsActive(id, isactive))))
+      QueuedServerMessage(Chunk(DestinationsActive(id, isactive)))
     ) ++ client_messages
   )
 }
@@ -1176,7 +1176,7 @@ case class SET_MODE_DESTINATIONS(id: GLOBZ_ID, mode: Mode)
             s"failed while updating destinations mode for $id due to $err"
           )
         )
-    } yield ModeSet(mode)
+    } yield ModeSet(id,mode)
 
 object SET_MODE_DESTINATIONS {
   implicit val encoder: JsonEncoder[SET_MODE_DESTINATIONS] =
