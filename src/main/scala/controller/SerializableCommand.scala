@@ -892,9 +892,15 @@ case class ADD_DESTINATION(id: ID, dest: destination)
       ind_maybe <- b.getAllDestinations().map(_.size).map {
         case 1 => Chunk(ActiveDestination(id, res.uuid)); case _ => Chunk()
       }
-    } yield PaginatedResponse(
-      Chunk(NewDestination(id, res)) ++ ind_maybe
-    )).orElseFail(
+    } yield MultiResponse(
+        Chunk(
+          PaginatedResponse(
+            Chunk(NewDestination(id, res)) ++ ind_maybe,
+          ),
+          QueuedServerMessage(NewDestination(id,res) +: ind_maybe),
+        )
+      )
+    ).orElseFail(
       GenericCommandError(s"Error adding destination to entity $id")
     )
 }
@@ -1143,8 +1149,11 @@ case class CLEAR_DESTINATIONS(id: GLOBZ_ID)
         case pe: Destinations => pe.setIndex(0) *> pe.clearDestinations()
         case _                => ZIO.unit
       }
-    } yield ClearDestinations(id))
-      .orElseFail(GenericCommandError(s"Error clearing destinations for $id"))
+    } yield MultiResponse(Chunk(
+      ClearDestinations(id),
+      QueuedServerMessage(Chunk(ClearDestinations(id)))
+    ))
+  ).orElseFail(GenericCommandError(s"Error clearing destinations for $id"))
 }
 object CLEAR_DESTINATIONS {
   implicit val encoder: JsonEncoder[CLEAR_DESTINATIONS] =
@@ -1208,7 +1217,12 @@ case class SET_ACTIVE_DESTINATION(id: GLOBZ_ID, destination_id: UUID)
             s"failed while updating destinations mode for $id due to $err"
           )
         )
-    } yield ActiveDestination(id, destination_id)
+    } yield MultiResponse(
+              Chunk(
+                ActiveDestination(id, destination_id),
+                QueuedServerMessage(Chunk(ActiveDestination(id,destination_id))),
+              )
+            )
 
 object SET_ACTIVE_DESTINATION {
   implicit val encoder: JsonEncoder[SET_ACTIVE_DESTINATION] =
