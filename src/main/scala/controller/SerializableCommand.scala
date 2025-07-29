@@ -1809,6 +1809,8 @@ case class GET_CACHED_TERRAIN(id: TERRAIN_KEY)
           { case tr: TerrainRegion => tr }
         )
       res <- quad
+        //relative and radius args are nonsense values here as
+        //we only want the full terrain body
         .serializeMini(Vector(0), true, 0)
         .orElseFail(
           GenericCommandError("Error while serializing terrain cache")
