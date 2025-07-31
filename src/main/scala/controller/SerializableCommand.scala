@@ -1,3 +1,6 @@
+
+
+
 package controller
 
 import controller.ADD_DESTINATION.AddDestinationError
@@ -1669,6 +1672,10 @@ case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
             "Problem while retrieving top terrain within distance"
           )
         }
+        //new
+      empty_terrain = top_terr.filter{case x:EmptyTerrain => true; case _ => false}.size;
+      _ <- ZIO.log(s"EMPTY TERRAIN FOUND : ${empty_terrain}")
+        //
       big_terr <- big_terrain.get_terrain_within_distance(loc, distance)
       res <- (top_terr ++ big_terr).serialize_as_chunks(1024)
       _ <- terrain
