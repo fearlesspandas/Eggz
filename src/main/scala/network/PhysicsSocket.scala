@@ -17,6 +17,7 @@ import physics.PhysicsData
 import physics.PhysicsTeleport
 import physics.SetInputLock
 trait PhysicsChannel {
+  val poll_interval:Long
   def get_queue(): IO[PhysicsChannelError, Queue[PHYSICS_COMMAND]]
   def add_to_queue(cmd: PHYSICS_COMMAND): UIO[Unit]
   def start_queue_stream(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
@@ -121,7 +122,7 @@ trait PhysicsChannel {
                     ZIO.succeed(_)
                   )
                 xx <- this
-                  .loop(10)
+                  .loop(this.poll_interval)
                   .provide(ZLayer.succeed(channel))
                   .flatMapError(err =>
                     ZIO.log(s"Error while processing loop ${err.toString}")
@@ -181,13 +182,18 @@ object PhysicsChannel {
       npc_id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
       queue <- Queue.unbounded[PHYSICS_COMMAND]
       wb <- ZIO.service[WorldBlock.Block]
-    } yield BasicPhysicsChannel(id_queue, npc_id_queue, queue, wb)
+      poll_interval <- System
+        .env("PHYSICS_SOCKET_UPDATE_INTERVAL")
+        .flatMap(ZIO.fromOption(_))
+        .fold(err => 1000,x => x.toInt)
+    } yield BasicPhysicsChannel(id_queue, npc_id_queue, queue, wb,poll_interval)
 }
 case class BasicPhysicsChannel(
   player_id_queue: Ref[Seq[GLOBZ_ID]],
   npc_id_queue: Ref[Seq[GLOBZ_ID]],
   cmd_queue: Queue[PHYSICS_COMMAND],
-  worldBlock: WorldBlock.Block
+  worldBlock: WorldBlock.Block,
+  val poll_interval: Long,
 ) extends PhysicsChannel {
 
   private def process_id_queue() =
