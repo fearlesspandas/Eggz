@@ -181,18 +181,18 @@ object CREATE_GLOB {
     DeriveJsonDecoder.gen[CREATE_GLOB]
 }
 
-case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
+case class CREATE_PROWLER(id: GLOBZ_ID, location: Vector[Double])
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = CREATE_PROWLER
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     (for {
       prowler <- Globz
-        .create(globId)
+        .create(id)
         .provide(ZLayer.succeed(Prowler))
         .mapBoth(
           _ =>
             CreateProwlerError(
-              s"failed to create prowler glob with id $globId"
+              s"failed to create prowler glob with id $id"
             ),
           { case pr: Prowler => pr }
         )
@@ -212,7 +212,7 @@ case class CREATE_PROWLER(globId: GLOBZ_ID, location: Vector[Double])
       prowler_ser <- prowler.serializeGlob
     } yield MultiResponse(
       Chunk(
-        QueuedPhysicsMessage(Chunk(PhysicsTeleport(globId, loc))),
+        QueuedPhysicsMessage(Chunk(PhysicsTeleport(id, loc))),
         QueuedServerMessage(Chunk(Entity(prowler_ser))),
         QueuedClientBroadcast(Chunk(Entity(prowler_ser)))
       )
