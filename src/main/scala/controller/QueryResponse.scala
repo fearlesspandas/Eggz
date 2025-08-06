@@ -13,6 +13,7 @@ import entity.NoArgs
 import entity.ProgressArgs
 import entity.TerrainModel
 import entity.TerrainRegionM
+import entity.StatType
 import physics.DEST
 import physics.Mode
 import physics.PhysicsCommand
@@ -69,6 +70,13 @@ object HealthSet {
     DeriveJsonEncoder.gen[HealthSet]
   implicit val decoder: JsonDecoder[HealthSet] =
     DeriveJsonDecoder.gen[HealthSet]
+}
+case class Statsd(id: GLOBZ_ID, stats:Map[Int,Double]) extends QueryResponse
+object Statsd {
+  implicit val encoder: JsonEncoder[Statsd] =
+    DeriveJsonEncoder.gen[Statsd]
+  implicit val decoder: JsonDecoder[Statsd] =
+    DeriveJsonDecoder.gen[Statsd]
 }
 case class NextDestination(id: GLOBZ_ID, destination: DEST)
     extends QueryResponse
