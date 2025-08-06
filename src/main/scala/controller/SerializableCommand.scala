@@ -897,7 +897,8 @@ case class ADD_DESTINATION(id: ID, dest: destination)
       }
     } yield MultiResponse(
         Chunk(
-          PaginatedResponse(
+          QueuedClientMessage(
+            id,
             Chunk(NewDestination(id, res)) ++ ind_maybe,
           ),
           QueuedServerMessage(NewDestination(id,res) +: ind_maybe),
