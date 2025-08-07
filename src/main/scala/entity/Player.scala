@@ -34,6 +34,10 @@ case class BasicPlayer(
   val fieldOps: FieldOps
 ) extends Player {
 
+  //Stats
+  override val global_stat_notifiers = Set(StatType.health)
+  override val client_stat_notifiers = global_stat_notifiers ++ Set(StatType.speed)
+
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
       health <- this.health

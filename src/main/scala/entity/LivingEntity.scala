@@ -100,6 +100,7 @@ trait LivingEntity
     with Globz
     with PhysicalEntity
     with Stats
+    with StatsNotifier
     with Health
     with FieldOps
     with AbilityData
