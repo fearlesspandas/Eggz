@@ -22,6 +22,7 @@ case class BasicPlayer(
   id: ID,
   skillset: SkillSet
 )(
+  val stats    : Ref[Map[StatType,Double]],
   val healthRef: Ref[Double],
   val energyRef: Ref[Double],
   val ability_data_ref: Ref[Map[DATA_TYPE, DATA]],
@@ -49,6 +50,7 @@ object BasicPlayer extends Globz.Service {
     id: GLOBZ_ID
   ): IO[GLOBZ_ERR, Globz] =
     for {
+      stats <- Ref.make(Map.empty[StatType,Double])
       ss <- SkillSet.make.provide(ZLayer.succeed(BasicSkillset))
       href <- Ref.make(1000.0)
       eref <- Ref.make(1000.0)
@@ -60,6 +62,7 @@ object BasicPlayer extends Globz.Service {
       pocket_contents <- Pocket.make
       inventory <- Storage.make[Item]
     } yield BasicPlayer(id, ss)(
+      stats,
       href,
       eref,
       ability_data,

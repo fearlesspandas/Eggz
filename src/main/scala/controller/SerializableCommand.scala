@@ -47,6 +47,7 @@ import entity.TerrainRegionM
 import entity.TerrainUnit
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
+import entity.StatType
 import physics.GRAVITY
 import physics.TELEPORT
 import physics.WAYPOINT
@@ -358,6 +359,31 @@ object GET_ALL_ENTITY_IDS {
     DeriveJsonEncoder.gen[GET_ALL_ENTITY_IDS]
   implicit val decoder: JsonDecoder[GET_ALL_ENTITY_IDS] =
     DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
+}
+case class SET_STAT(id: GLOBZ_ID,typ:Int, value: Double)
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = (SET_STAT,typ, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+      glob <- ZIO
+        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
+      _ <- ZIO.fromOption(StatType.from_int(typ))
+        .flatMap(stat_type => glob.setStat(stat_type,value))
+        .orElseFail(IntConversionFailure)
+    } yield MultiResponse(
+      Chunk(
+        Statsd(id,Map((typ,value))),
+        QueuedClientBroadcast( Chunk(MSG(id,Statsd(id,Map((typ,value))))) )
+      )
+    )
+trait SetStatError extends CommandError
+case object IntConversionFailure extends SetStatError
+object SET_STAT {
+  implicit val encoder: JsonEncoder[SET_STAT] =
+    DeriveJsonEncoder.gen[SET_STAT]
+  implicit val decoder: JsonDecoder[SET_STAT] =
+    DeriveJsonDecoder.gen[SET_STAT]
 }
 case class ADD_HEALTH(id: GLOBZ_ID, value: Double)
     extends ResponseQuery[WorldBlock.Block]:

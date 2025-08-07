@@ -99,6 +99,7 @@ trait LivingEntity
     with Eggz.Service
     with Globz
     with PhysicalEntity
+    with Stats
     with Health
     with FieldOps
     with AbilityData
@@ -108,6 +109,8 @@ trait LivingEntity
   val id: ID
 
   val skillset: SkillSet
+
+  val stats    : Ref[Map[StatType,Double]]
 
   val healthRef: Ref[Double]
 
@@ -127,6 +130,13 @@ trait LivingEntity
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 
   def getName: IO[PlayerError, String] = ZIO.succeed(id)
+
+  //TODO
+  def setStat(typ:StatType,value:Double): UIO[Unit] = 
+      stats.update(_.updated(typ,value))
+
+  def getStat(typ:StatType): UIO[Option[Double]] = 
+    stats.get.map(_.get(typ))
 
   def setHealth(health: Double): IO[HealthError, Health] =
     for {
