@@ -438,12 +438,14 @@ case class SET_STAT(id: GLOBZ_ID,typ:Int, value: Double)
           x => ZIO.succeed(Chunk(x))
         ).orElseFail(StatNotFoundAfterSet)
 
-    } yield MultiResponse(
-      Chunk(
-        Statsd(id,Map((typ,value))),
-        QueuedClientBroadcast( Chunk(MSG(id,Statsd(id,Map((typ,value))))) )
-      ) ++ broadcast ++ client_res
-    )
+        server_res <- glob.getStat(stat_type)
+          .flatMap(ZIO.fromOption(_))
+          .map(stat => Chunk(
+              QueuedServerMessage(Chunk(Statsd(id,Map((typ,stat)))))
+            ))
+          .orElseFail(StatNotFoundAfterSet)
+
+    } yield MultiResponse( broadcast ++ client_res ++ server_res)
 trait SetStatError extends CommandError
 case object IntConversionFailure extends SetStatError
 case object StatNotFoundAfterSet extends SetStatError
