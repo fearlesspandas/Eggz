@@ -22,6 +22,11 @@ object StatType{
   }
 }
 
+trait Stats{
+  def setStat(typ:StatType,value:Double):UIO[Unit]
+  def getStat(typ:StatType):UIO[Option[Double]]
+}
+trait StatsError
 trait StatsNotifier{
   //StatTypes that will notify all relevant players
   //of a 'this' stat change
@@ -105,9 +110,4 @@ trait StatsNotifierError
 case object StatNotFound extends StatsNotifierError
 case class NotGlobalNotifier(msg:String) extends StatsNotifierError
 case class NotClientNotifier(msg:String) extends StatsNotifierError
-trait Stats{
-  def setStat(typ:StatType,value:Double):UIO[Unit]
-  def getStat(typ:StatType):UIO[Option[Double]]
-}
 
-trait StatsError

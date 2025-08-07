@@ -1,6 +1,3 @@
-
-
-
 package controller
 
 import controller.ADD_DESTINATION.AddDestinationError
@@ -17,6 +14,8 @@ import controller.FOLLOW_ENTITY.FollowEntityError
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
+import controller.NotLivingEntity
+import controller.NoEntityFound
 import entity.LivingEntity.Item
 import entity.TerrainRegion.TERRAIN_KEY
 import entity.Ability
@@ -48,6 +47,8 @@ import entity.TerrainUnit
 import entity.WorldBlock
 import entity.WorldBlockEnvironment
 import entity.StatType
+import entity.NotGlobalNotifier
+import entity.NotClientNotifier
 import physics.GRAVITY
 import physics.TELEPORT
 import physics.WAYPOINT
@@ -360,15 +361,55 @@ object GET_ALL_ENTITY_IDS {
   implicit val decoder: JsonDecoder[GET_ALL_ENTITY_IDS] =
     DeriveJsonDecoder.gen[GET_ALL_ENTITY_IDS]
 }
+
+case class GET_STATS(id: GLOBZ_ID,types:Set[Int])
+    extends ResponseQuery[WorldBlock.Block]:
+  override val REF_TYPE: Any = (GET_STATS, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    for {
+
+      glob <- ZIO.serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .orElseFail(NoEntityFound("GET_STATS"))
+        .flatMap({
+          case li:LivingEntity => ZIO.succeed(li);
+          case _ => ZIO.fail(NotLivingEntity("GET_STATS"))
+        })
+
+      stat_types <- ZIO.foreach(types)(
+        typ => ZIO.fromOption(StatType.from_int(typ))
+            .orElseFail(GetStatIntConversionFailure)
+        )
+
+      values <- ZIO.foreach(stat_types)(
+        typ => glob.getStat(typ)
+            .flatMap(ZIO.fromOption(_))
+            .orElseFail(GetStatStatNotFound(typ,id))
+            .map(stat => (StatType.to_int(typ),stat))
+        )
+
+    } yield Statsd(id,values.toMap)
+trait GetStatsError extends CommandError
+case object GetStatIntConversionFailure extends GetStatsError
+case class GetStatStatNotFound(typ:StatType,id:GLOBZ_ID) extends GetStatsError
+object GET_STATS {
+  implicit val encoder: JsonEncoder[GET_STATS] =
+    DeriveJsonEncoder.gen[GET_STATS]
+  implicit val decoder: JsonDecoder[GET_STATS] =
+    DeriveJsonDecoder.gen[GET_STATS]
+}
+
 case class SET_STAT(id: GLOBZ_ID,typ:Int, value: Double)
     extends ResponseQuery[WorldBlock.Block]:
   override val REF_TYPE: Any = (SET_STAT,typ, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
 
-      glob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
-        .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
+      glob <- ZIO.serviceWithZIO[WorldBlock.Block](_.getBlob(id))
+        .orElseFail(NoEntityFound("SET_STAT"))
+        .flatMap({
+          case li:LivingEntity => ZIO.succeed(li);
+          case _ => ZIO.fail(NotLivingEntity("SET_STAT"))
+        })
 
       stat_type <- ZIO.fromOption(StatType.from_int(typ))
         .orElseFail(IntConversionFailure)
@@ -376,13 +417,26 @@ case class SET_STAT(id: GLOBZ_ID,typ:Int, value: Double)
       _ <- glob.setStat(stat_type,value)
 
       broadcast <- glob.statsGlobalNotification(id,stat_type)
+        .provide(ZLayer.succeed(glob))
         .flatMap(ZIO.fromOption(_))
-        .fold({case _:NotGlobalNotifier => Chunk.empty[QueryResponse] },
-          x => Chunk(QueuedClientBroadcst(id,Chunk(x)))
-        )
+        .foldZIO(
+          {
+            case _:NotGlobalNotifier => ZIO.succeed(Chunk.empty[QueryResponse]);
+            case e => ZIO.fail(e)
+          },
+          x => ZIO.succeed(Chunk(QueuedClientBroadcast(Chunk(x))))
+        ).orElseFail(StatNotFoundAfterSet)
+
       client_res <- glob.statsClientNotification(id,stat_type)
+        .provide(ZLayer.succeed(glob))
         .flatMap(ZIO.fromOption(_))
-        .fold(Chunk.empty[QueryResponse] },x => Chunk(x))
+        .foldZIO(
+          {
+            case _:NotClientNotifier => ZIO.succeed(Chunk.empty[QueryResponse]);
+            case e => ZIO.fail(e)
+          },
+          x => ZIO.succeed(Chunk(x))
+        ).orElseFail(StatNotFoundAfterSet)
 
     } yield MultiResponse(
       Chunk(
@@ -392,6 +446,7 @@ case class SET_STAT(id: GLOBZ_ID,typ:Int, value: Double)
     )
 trait SetStatError extends CommandError
 case object IntConversionFailure extends SetStatError
+case object StatNotFoundAfterSet extends SetStatError
 object SET_STAT {
   implicit val encoder: JsonEncoder[SET_STAT] =
     DeriveJsonEncoder.gen[SET_STAT]

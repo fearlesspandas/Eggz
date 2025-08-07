@@ -2,6 +2,7 @@ package controller
 
 import controller.auth.*
 import entity.TutorialComplete
+import entity.StatType
 import zio.*
 
 package object auth {
@@ -63,6 +64,27 @@ package object auth {
   val get_glob: AUTH[String] = {
     case GET_GLOB(_) => ZIO.succeed(true)
     case cmd         => ZIO.fail(s"$cmd not relevant to GET_GLOB")
+  }
+
+  val get_stats: Set[String] => AUTH[String] = server_keys => {
+    case GET_STATS(id, types) =>
+      for {
+        sender <- ZIO.service[String]
+      } yield sender == id || server_keys.contains(sender)
+    case cmd => ZIO.fail(s"$cmd not relevant to GET_STAT")
+  }
+
+  val set_stat: Set[String] => AUTH[String] = server_keys => {
+    case SET_STAT(id, typ, value) =>
+      for {
+        sender <- ZIO.service[String]
+        stat_type <- ZIO.fromOption(StatType.from_int(typ))
+          .orElseFail(s"bad conversion to StatType")
+      } yield stat_type match {
+        case StatType.health => server_keys.contains(sender)
+        case StatType.speed => sender == id || server_keys.contains(sender)
+      }
+    case cmd => ZIO.fail(s"$cmd not relevant to SET_STAT")
   }
 
   val add_health: Set[String] => AUTH[String] = server_keys => {
@@ -427,6 +449,8 @@ object AuthCommandService {
             create_monk_garden(server_keys)(op),
             get_glob(op),
             get_all_globs(op),
+            get_stats(server_keys)(op),
+            set_stat(server_keys)(op),
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
             add_destination(server_keys)(op),
@@ -492,6 +516,8 @@ object AuthCommandService {
             create_monk_garden(server_keys)(op),
             get_glob(op),
             get_all_globs(op),
+            get_stats(server_keys)(op),
+            set_stat(server_keys)(op),
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
             add_destination(server_keys)(op),
