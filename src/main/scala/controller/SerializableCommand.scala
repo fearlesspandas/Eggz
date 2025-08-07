@@ -365,17 +365,30 @@ case class SET_STAT(id: GLOBZ_ID,typ:Int, value: Double)
   override val REF_TYPE: Any = (SET_STAT,typ, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
+
       glob <- ZIO
         .serviceWithZIO[WorldBlock.Block](_.getBlob(id))
         .mapBoth(_ => GenericCommandError(""), { case li: LivingEntity => li })
-      _ <- ZIO.fromOption(StatType.from_int(typ))
-        .flatMap(stat_type => glob.setStat(stat_type,value))
+
+      stat_type <- ZIO.fromOption(StatType.from_int(typ))
         .orElseFail(IntConversionFailure)
+
+      _ <- glob.setStat(stat_type,value)
+
+      broadcast <- glob.statsGlobalNotification(id,stat_type)
+        .flatMap(ZIO.fromOption(_))
+        .fold({case _:NotGlobalNotifier => Chunk.empty[QueryResponse] },
+          x => Chunk(QueuedClientBroadcst(id,Chunk(x)))
+        )
+      client_res <- glob.statsClientNotification(id,stat_type)
+        .flatMap(ZIO.fromOption(_))
+        .fold(Chunk.empty[QueryResponse] },x => Chunk(x))
+
     } yield MultiResponse(
       Chunk(
         Statsd(id,Map((typ,value))),
         QueuedClientBroadcast( Chunk(MSG(id,Statsd(id,Map((typ,value))))) )
-      )
+      ) ++ broadcast ++ client_res
     )
 trait SetStatError extends CommandError
 case object IntConversionFailure extends SetStatError
