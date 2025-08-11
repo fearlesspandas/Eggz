@@ -138,11 +138,11 @@ package object auth {
       } yield senderId == id
     case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_INDEX")
   }
-  val get_all_destinations: AUTH[String] = {
+  val get_all_destinations: ServerKeys => AUTH[String] = server_keys => {
     case GET_ALL_DESTINATIONS(id) =>
       for {
         senderId <- ZIO.service[String]
-      } yield id == senderId
+      } yield id == senderId || server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to GET_ALL_DESTINATIONS")
   }
   val toggle_gravity: AUTH[String] = {
@@ -458,7 +458,7 @@ object AuthCommandService {
             get_next_destination_client(op),
             set_active_destination(op),
             get_next_index(op),
-            get_all_destinations(op),
+            get_all_destinations(server_keys)(op),
             clear_destinations(server_keys)(op),
             delete_destination(op),
             follow_entity(server_keys)(op),
@@ -525,7 +525,7 @@ object AuthCommandService {
             get_next_destination_client(op),
             set_active_destination(op),
             get_next_index(op),
-            get_all_destinations(op),
+            get_all_destinations(server_keys)(op),
             clear_destinations(server_keys)(op),
             delete_destination(op),
             follow_entity(server_keys)(op),
