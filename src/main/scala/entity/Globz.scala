@@ -61,6 +61,5 @@ object Globz {
 //    ZIO.service[Globz.Service].flatMap(_.serialize(glob))
   trait Service {
     def make(id: GLOBZ_ID): IO[GLOBZ_ERR, Globz]
-
   }
 }

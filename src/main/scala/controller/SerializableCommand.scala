@@ -1055,6 +1055,10 @@ object DELETE_DESTINATION {
 
   case class DeleteDestinationError(msg: String) extends CommandError
 }
+//deprecated as of the godot 4 rebuild
+//destinations api is not much more transparant to the point
+//where this is unneccessary.
+@deprecated
 case class GET_NEXT_INDEX(id: ID) extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_INDEX, id)
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
@@ -1078,6 +1082,11 @@ object GET_NEXT_INDEX {
     DeriveJsonDecoder.gen[GET_NEXT_INDEX]
 }
 
+//deprecated as of the godot 4 rebuild
+//this logic is instead handled on the game server itself.
+//this was a dumb idea to begin with, and is a remnant of
+//when the game was more scala reliant for it's core behavior.
+@deprecated
 case class GET_NEXT_DESTINATION(id: ID)
     extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)

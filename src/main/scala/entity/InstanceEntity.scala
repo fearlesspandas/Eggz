@@ -40,6 +40,9 @@ trait InstanceEntity
 
   val destinations: Destinations
 
+  def with_physics_id(id:Int) : IO[PhysicsError,Unit] = 
+    physics.with_physics_id(id)
+
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills
 
   def getName: IO[PlayerError, String] = ZIO.succeed(id)

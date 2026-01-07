@@ -2,6 +2,7 @@ package entity
 
 import zio.*
 trait PhysicalEntity {
+  def with_physics_id(id:Int) : IO[PhysicsError , Unit]
   def getLocation: IO[PhysicsError, Vector[Double]]
   def getVelocity: IO[PhysicsError, Vector[Double]]
   def setVelocity(velocity: Vector[Double]): IO[PhysicsError, Unit]
@@ -19,12 +20,15 @@ object PhysicalEntity {
 }
 
 case class BasicPhysicalEntity(
+  physics_id: Ref[Option[Int]],
   location: Ref[Vector[Double]],
   velocity: Ref[Vector[Double]],
   input: Ref[Option[Vector[Double]]],
   max_speed: Ref[Double],
   speed: Ref[Double]
 ) extends PhysicalEntity {
+  override def with_physics_id(id:Int) : IO[PhysicsError , Unit] = physics_id.update(_ => Some(id))
+
   override def getLocation: IO[PhysicsError, Vector[Double]] = location.get
 
   override def getVelocity: IO[PhysicsError, Vector[Double]] = velocity.get
@@ -52,10 +56,12 @@ case class BasicPhysicalEntity(
 object BasicPhysicalEntity extends PhysicalEntity.Service {
   override def make: IO[Nothing, PhysicalEntity] =
     for {
+      physics_id <- Ref.make[Option[Int]](None)
       loc <- Ref.make(Vector(0.0, 10, 0))
       vel <- Ref.make(Vector(0.0, 0, 0))
       inpt <- Ref.make[Option[Vector[Double]]](None)
       max_speed <- Ref.make(500.0)
       speed <- Ref.make(0.0)
-    } yield BasicPhysicalEntity(loc, vel, inpt, max_speed, speed)
+    } yield BasicPhysicalEntity(physics_id,loc, vel, inpt, max_speed, speed)
 }
+
