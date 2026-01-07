@@ -2,7 +2,7 @@ package entity
 
 import zio.*
 trait PhysicalEntity {
-  def with_physics_id(id:Int) : IO[PhysicsError , Unit]
+  def with_physics_id(id:Int) : UIO[Unit]
   def getLocation: IO[PhysicsError, Vector[Double]]
   def getVelocity: IO[PhysicsError, Vector[Double]]
   def setVelocity(velocity: Vector[Double]): IO[PhysicsError, Unit]
@@ -27,7 +27,7 @@ case class BasicPhysicalEntity(
   max_speed: Ref[Double],
   speed: Ref[Double]
 ) extends PhysicalEntity {
-  override def with_physics_id(id:Int) : IO[PhysicsError , Unit] = physics_id.update(_ => Some(id))
+  override def with_physics_id(id:Int) : UIO[ Unit] = physics_id.update(_ => Some(id))
 
   override def getLocation: IO[PhysicsError, Vector[Double]] = location.get
 

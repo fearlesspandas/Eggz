@@ -40,7 +40,7 @@ trait InstanceEntity
 
   val destinations: Destinations
 
-  def with_physics_id(id:Int) : IO[PhysicsError,Unit] = 
+  def with_physics_id(id:Int) : UIO[Unit] = 
     physics.with_physics_id(id)
 
   def skills: IO[SkillError, Set[Skill]] = skillset.getSkills

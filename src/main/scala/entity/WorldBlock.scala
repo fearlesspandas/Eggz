@@ -25,6 +25,7 @@ object WorldBlock {
       : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
         QueryResponse
       ]]]
+    def next_physics_id() : UIO[Int]
     def getAllBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
     def getAllNonPhysicalBlobs(): ZIO[Any, WorldBlockError, Set[Globz]]
     def getNumBlobs(): ZIO[Any, WorldBlockError, Int]
@@ -62,6 +63,9 @@ object WorldBlock {
       QueryResponse
     ]
   ]] = ZIO.environmentWithZIO(_.get.get_controller())
+
+  def next_physics_id() : ZIO[WorldBlock.Block,Nothing,Int] =
+    ZIO.environmentWithZIO(_.get.next_physics_id())
 
   def spawnBlob(
     blob: Globz,
@@ -109,8 +113,12 @@ case class WorldBlockInMem(
   dbRef: Ref[Map[GLOBZ_ID, Globz]],
   non_physical_entities: Ref[Map[GLOBZ_ID, Globz]],
   terrain: Ref[TerrainManager with Terrain],
-  bigTerrain: BigTerrainRegion
+  bigTerrain: BigTerrainRegion,
+  physics_id_count : Ref[Int],
 ) extends WorldBlock.Block {
+
+  def next_physics_id():UIO[Int] = 
+    physics_id_count.update(_ + 1) *> physics_id_count.get
 
   def get_controller()
     : IO[WorldBlockError, BasicController[CONTROLLER_ENV, Queue[
@@ -127,6 +135,10 @@ case class WorldBlockInMem(
   ): IO[WorldBlock.WorldBlockError, ExitCode] =
     for {
       _ <- dbRef.update(_.updated(blob.id, blob))
+      _ <- blob match{
+        case pe : PhysicalEntity => next_physics_id().flatMap(id => pe.with_physics_id(id))
+        case _ => ZIO.unit
+      }
     } yield ExitCode.success
 
   override def spawnNonPhysicalBlob(
@@ -339,6 +351,7 @@ object WorldBlockInMem extends WorldBlock.Service {
 
       globz_map <- Ref.make(Map.empty[GLOBZ_ID, Globz])
       non_physical_entities <- Ref.make(Map.empty[GLOBZ_ID, Globz])
+      physics_id_count <- Ref.make(0)
       res <- ZIO
         .attempt(
           WorldBlockInMem(
@@ -346,7 +359,8 @@ object WorldBlockInMem extends WorldBlock.Service {
             globz_map,
             non_physical_entities,
             terrain_ref,
-            big_terrain
+            big_terrain,
+            physics_id_count
           )
         )
         .orElseFail(

@@ -1811,7 +1811,8 @@ object EXPAND_TERRAIN {
   implicit val decoder: JsonDecoder[EXPAND_TERRAIN] =
     DeriveJsonDecoder.gen[EXPAND_TERRAIN]
 }
-
+//this should be removed and handled by the game server if possible
+@deprecated
 case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = FILL_EMPTY_CHUNK
