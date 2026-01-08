@@ -223,7 +223,7 @@ case class BasicPhysicsChannel(
         if (non_empty > 0) { process_id_queue() }
         else { send_noop() }
     } yield ())
-      .repeat(Schedule.spaced(Duration.fromNanos(interval)))
+      .repeat(Schedule.spaced(Duration.fromMillis(interval)))
       .mapError(err => FailedSend(s"Error inside loop ${err.toString}"))
 
   override def get_queue(): IO[PhysicsChannelError, Queue[PHYSICS_COMMAND]] =
