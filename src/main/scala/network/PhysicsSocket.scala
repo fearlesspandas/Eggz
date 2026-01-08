@@ -78,7 +78,15 @@ trait PhysicsChannel {
     send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""")
 
   def send_noop(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    get_location(???)
+    for {
+      channel <- ZIO.service[WebSocketChannel]
+      _ <- channel
+        .send(Read(WebSocketFrame.ping))
+        .mapError(err =>
+          FailedSend(s"Error while sending to physics server : $err")
+        )
+    } yield ()
+
 
     // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
     // todo remove interval on loop and see how unthrottled processing handles
@@ -87,8 +95,7 @@ trait PhysicsChannel {
       Handler
         .webSocket { channel =>
           channel.receiveAll {
-            case Read(WebSocketFrame.Text(txt)) if txt == "0"    => ZIO.unit
-            case Read(WebSocketFrame.Text(txt)) if txt == "NOOP" => ZIO.unit
+            case Read(WebSocketFrame.Binary(bytes)) => ZIO.log("bytes_received")
             case Read(WebSocketFrame.Text(txt)) =>
               (for {
                 r <- ZIO
@@ -110,11 +117,6 @@ trait PhysicsChannel {
             case UserEventTriggered(UserEvent.HandshakeComplete) =>
               (for {
                 blobs <- wb.getAllBlobs().mapError(_ => ???)
-//                interval <- ZIO
-//                  .succeed(
-//                    if (blobs.size > 0) math.max(50 / blobs.size, 1) else 10
-//                  )
-//                  .map(_.toLong)
                 _ <- start_queue_stream()
                   .provide(ZLayer.succeed(channel))
                   .foldZIO(
