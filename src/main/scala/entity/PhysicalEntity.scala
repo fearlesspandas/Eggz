@@ -1,6 +1,9 @@
 package entity
 
 import zio.*
+
+type PHYSICS_ID = Int
+
 trait PhysicalEntity {
   def physics_id() : UIO[Option[Int]]
   def with_physics_id(id:Int) : UIO[Unit]

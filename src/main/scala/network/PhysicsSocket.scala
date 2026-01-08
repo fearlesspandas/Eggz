@@ -78,7 +78,7 @@ trait PhysicsChannel {
     send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""")
 
   def send_noop(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send("Echo:NOOP")
+    get_location(???)
 
     // todo fix bug where internal errors do not cause the socket to restart (possibly due to forking)
     // todo remove interval on loop and see how unthrottled processing handles
@@ -179,18 +179,16 @@ object PhysicsChannel {
   def make: ZIO[WorldBlock.Block, PhysicsChannelError, PhysicsChannel] =
     for {
       id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
-      npc_id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
       queue <- Queue.unbounded[PHYSICS_COMMAND]
       wb <- ZIO.service[WorldBlock.Block]
       poll_interval <- System
         .env("PHYSICS_SOCKET_UPDATE_INTERVAL")
         .flatMap(ZIO.fromOption(_))
         .fold(err => 1000,x => x.toInt)
-    } yield BasicPhysicsChannel(id_queue, npc_id_queue, queue, wb,poll_interval)
+    } yield BasicPhysicsChannel(id_queue, queue, wb,poll_interval)
 }
 case class BasicPhysicsChannel(
   player_id_queue: Ref[Seq[GLOBZ_ID]],
-  npc_id_queue: Ref[Seq[GLOBZ_ID]],
   cmd_queue: Queue[PHYSICS_COMMAND],
   worldBlock: WorldBlock.Block,
   val poll_interval: Long,
@@ -213,13 +211,6 @@ case class BasicPhysicsChannel(
         case Some(id) => get_location(id);
         case _        => send_noop()
       }
-      //      _ <- ZIO
-      //        .fromOption(next_id)
-      //        .flatMap(id => get_location(id))
-      //        .foldZIO(
-      //          _ => ZIO.log("Sending noop liveness probe") *> send_noop(),
-      //          ZIO.succeed(_)
-      //        )
       _ <- player_id_queue.update(_.tail)
     } yield ()
 

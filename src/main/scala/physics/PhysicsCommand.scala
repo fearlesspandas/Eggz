@@ -1,6 +1,7 @@
 package physics
 import entity.Globz.GLOBZ_ID
 import zio.json.*
+
 case class PhysicsData(
   typ: GLOBZ_ID,
   id: GLOBZ_ID,
@@ -32,8 +33,8 @@ object Loc {
 case class SetInputLock(id: String, value: Boolean) extends PhysicsCommand
 case class PhysicsTeleport(id: String, location: (Double, Double, Double))
     extends PhysicsCommand
-object serializationTest {
 
+object serializationTest {
   def main(args: Array[String]): Unit = {
     val str = Loc("test", Vector(0, 0, 0))
     println(str.toJson)

@@ -313,7 +313,7 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant for EXPAND_TERRAIN")
   }
   val fill_empty_chunk: Set[String] => AUTH[String] = server_keys => {
-    case FILL_EMPTY_CHUNK(_, _) =>
+    case FILL_EMPTY_CHUNK(_, _,_) =>
       for {
         sender <- ZIO.service[String]
       } yield server_keys.contains(sender)

@@ -1813,13 +1813,14 @@ object EXPAND_TERRAIN {
 }
 //this should be removed and handled by the game server if possible
 @deprecated
-case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
+case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID,location:(Double,Double,Double))
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = FILL_EMPTY_CHUNK
   override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       _ <- ZIO.log(s"Filling empty chunk $id for entity $trigger_entity")
       wb <- ZIO.service[WorldBlock.Block]
+      //retrieve empty chunk that has been entered by trigger_entity at location
       empty_chunk <- wb.getTerrain
         .flatMap { case tr: TerrainRegion => tr.get_cached(id) }
         .flatMap(ZIO.fromOption(_))
@@ -1830,6 +1831,7 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
             ),
           { case e: EmptyTerrain => e }
         )
+      //create new terrain fill set
       fill_set <- WorldBlockEnvironment
         .create_terrain_set(
           1000,
@@ -1837,13 +1839,14 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
           empty_chunk.center
         )
         .orElseFail(GenericCommandError("Error while creating fill set"))
+      //fill the empty chunk through the terrain api
       filled_chunk <- empty_chunk
         .fill(fill_set)
         .mapBoth(
           _ => GenericCommandError("Problem while filling empty chunk"),
           { case tr: TerrainRegion => tr }
         )
-      //      _ <- terrain.remove_cached
+      //add filled chunk to terrain as new quadrant
       _ <- wb.getTerrain
         .flatMap { case tr: TerrainRegion => tr.addQuadrant(filled_chunk) }
         .orElseFail {
@@ -1851,21 +1854,18 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
             "problem while adding filled chunk to global terrain"
           )
         }
-      blob_location <- wb
-        .getBlob(trigger_entity)
-        .flatMap { case pe: PhysicalEntity => pe.getLocation }
-        .orElseFail(
-          GenericCommandError("Could not find glob while filling terrain")
-        )
+      //retrieve the newly generated terrain that is close to the triggering entity
+      location_vec = Vector(location._1,location._2,location._3)
       top_terr <- filled_chunk
         .get_top_terrain_within_distance(
-          blob_location,
+          location_vec,
           2048,
           math.min(filled_chunk.radius / 2, 4096.0)
         )
         .orElseFail(
           GenericCommandError("Error while getting top terrain post fill")
         )
+      //cache the close new terrain
       _ <- wb.getTerrain
         .flatMap { case tr: TerrainRegion =>
           tr.cacheTerrain(top_terr)
@@ -1873,20 +1873,24 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID)
         .orElseFail(
           GenericCommandError("Error while caching terrain during generation")
         )
+      //if we are close to the edge of the map, the map expands and new empty
+      //chunks are created
       newchunks <- wb.getTerrain
         .flatMap { case terrain: TerrainRegion =>
           wb.expandTerrain
             .when(
-              !(blob_location - terrain.center)
+              !(location_vec - terrain.center)
                 .forall(math.abs(_) < terrain.radius - 2 * filled_chunk.radius)
             )
         }
         .orElseFail(
           GenericCommandError("Problem while checking if terrain should expand")
         )
+      //logging
       chunksShouldbeEmpty <- ZIO.log(
         s"Expanded chunks ${newchunks.map(_.size)}"
       )
+      //combine close terrain and new chunks as result
       mapped_result <- (top_terr ++ newchunks.getOrElse(Chunk()))
         .serialize_as_chunks(1024)
       _ <- ZIO.log(s"Sending top terrain post fill ${mapped_result.size}")
