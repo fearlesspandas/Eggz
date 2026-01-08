@@ -205,19 +205,6 @@ case class BasicPhysicsChannel(
           err =>
             for {
               ids <- worldBlock.getAllBlobs().map(_.map(g => g.id))
-//              player_ids <- worldBlock
-//                .getAllBlobs()
-//                .flatMap(ZIO.filterPar(_) {
-//                  case pl: Player             => ZIO.succeed(true);
-//                  case entity: InstanceEntity => ZIO.succeed(true);
-//                  case _                      => ZIO.succeed(false)
-//                })
-//              npc_ids <- worldBlock
-//                .getAllBlobs()
-//                .flatMap(ZIO.filterPar(_) {
-//                  case npc: NPC => ZIO.succeed(true);
-//                  case _        => ZIO.succeed(false)
-//                })
               _ <- player_id_queue.update(_ => ids.toSeq)
             } yield ids.headOption,
           x => ZIO.some(x)
