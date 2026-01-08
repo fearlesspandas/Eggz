@@ -53,7 +53,7 @@ trait PhysicsChannel {
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
       _ <- send(
-        s""" {"type":"SET_LOC", "body":{"id": "$id","vec":[${loc._1},${loc._2},${loc._3}]}} """
+        s""" {"type":"SET_LOC", "body":{"id": $id,"vec":[${loc._1},${loc._2},${loc._3}]}} """
       )
         .mapError(err =>
           FailedSend(s"Error while sending to physics server : $err")
@@ -69,13 +69,13 @@ trait PhysicsChannel {
         )
     } yield ()
 
-  def lock_input(id: String): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"LOCK_INPUT","body":{"id":"$id"}}""")
+  def lock_input(id: Int): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
+    send(s"""{"type":"LOCK_INPUT","body":{"id":$id}}""")
 
   def unlock_input(
-    id: String
+    id: Int
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
-    send(s"""{"type":"UNLOCK_INPUT","body":{"id":"$id"}}""")
+    send(s"""{"type":"UNLOCK_INPUT","body":{"id":$id}}""")
 
   def send_noop(): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
     for {
@@ -96,24 +96,7 @@ trait PhysicsChannel {
         .webSocket { channel =>
           channel.receiveAll {
             case Read(WebSocketFrame.Binary(bytes)) => ZIO.log("bytes_received")
-            case Read(WebSocketFrame.Text(txt)) =>
-              (for {
-                r <- ZIO
-                  .fromEither(txt.fromJson[PhysicsData])
-                  .flatMapError(err =>
-                    ZIO.log(s"Could not map $txt due to $err")
-                  )
-                _ <- wb.getBlobOption(r.id).flatMap(ZIO.fromOption(_)).flatMap {
-                  case pe: PhysicalEntity =>
-                    r.typ match {
-                      case "Loc" => pe.teleport(r.vec)
-                      case _     => ZIO.unit
-                    }
-                }
-              } yield ()).foldZIO(
-                err => ZIO.log(s"processing failed on $txt with err $err"),
-                x => ZIO.succeed(x)
-              )
+            case Read(WebSocketFrame.Text(txt)) => ZIO.log(s"text received $txt")
             case UserEventTriggered(UserEvent.HandshakeComplete) =>
               (for {
                 blobs <- wb.getAllBlobs().mapError(_ => ???)

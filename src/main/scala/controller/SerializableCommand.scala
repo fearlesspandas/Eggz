@@ -672,9 +672,14 @@ case class TOGGLE_GRAVITATE(id: ID) extends ResponseQuery[WorldBlock.Block] {
           )
         case _ => ZIO.succeed(Chunk())
       }
+      physics_id <- (blob match {
+        case pe : PhysicalEntity => pe.physics_id()
+        case _  => ZIO.succeed(None)
+      }).flatMap(x => ZIO.fromOption(x))
+        .mapError(_ => GenericCommandError("No physics Id found Toggle Gravitate"))
     } yield MultiResponse(
       Chunk(
-        QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !gravitate))),
+        QueuedPhysicsMessage(Chunk(SetInputLock(physics_id, isActive && !gravitate))),
         QueuedServerMessage(Chunk(GravityActive(id, gravitate)))
       ) ++ client_messages
     )
@@ -721,9 +726,14 @@ case class SET_GRAVITATE(id: ID, value: Boolean)
           )
         case _ => ZIO.succeed(Chunk())
       }
+      physics_id <- (blob match {
+        case pe : PhysicalEntity => pe.physics_id()
+        case _  => ZIO.succeed(None)
+      }).flatMap(x => ZIO.fromOption(x))
+        .mapError(_ => GenericCommandError("No physics Id found Toggle Gravitate"))
     } yield MultiResponse(
       Chunk(
-        QueuedPhysicsMessage(Chunk(SetInputLock(id, isActive && !res))),
+        QueuedPhysicsMessage(Chunk(SetInputLock(physics_id, isActive && !res))),
         QueuedServerMessage(Chunk(GravityActive(id, res)))
       ) ++ client_messages
     )
@@ -776,9 +786,14 @@ case class TOGGLE_DESTINATIONS(id: ID) extends ResponseQuery[WorldBlock.Block] {
         )
       case _ => ZIO.succeed(Chunk())
     }
+    physics_id <- (blob match {
+      case pe : PhysicalEntity => pe.physics_id()
+      case _  => ZIO.succeed(None)
+    }).flatMap(x => ZIO.fromOption(x))
+      .mapError(_ => GenericCommandError("No physics Id found Toggle Gravitate"))
   } yield MultiResponse(
     Chunk(
-      QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
+      QueuedPhysicsMessage(Chunk(SetInputLock(physics_id, isactive && !gravitate))),
       QueuedServerMessage(Chunk(DestinationsActive(id, isactive)))
     ) ++ client_messages
   )
@@ -826,9 +841,14 @@ case class SET_ACTIVE(id: ID, value: Boolean)
         )
       case _ => ZIO.succeed(Chunk())
     }
+    physics_id <- (blob match {
+      case pe : PhysicalEntity => pe.physics_id()
+      case _  => ZIO.succeed(None)
+    }).flatMap(x => ZIO.fromOption(x))
+      .mapError(_ => GenericCommandError("No physics Id found Toggle Gravitate"))
   } yield MultiResponse(
     Chunk(
-      QueuedPhysicsMessage(Chunk(SetInputLock(id, isactive && !gravitate))),
+      QueuedPhysicsMessage(Chunk(SetInputLock(physics_id, isactive && !gravitate))),
       QueuedServerMessage(Chunk(DestinationsActive(id, isactive)))
     ) ++ client_messages
   )
@@ -1566,6 +1586,8 @@ object ADD_TERRAIN {
     DeriveJsonDecoder.gen[ADD_TERRAIN]
 }
 
+//removed as of godot 4 rebuild
+@deprecated
 case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = GET_ALL_TERRAIN
@@ -1628,6 +1650,8 @@ object GET_TERRAIN_WITHIN_DISTANCE {
     DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_DISTANCE]
 }
 
+//removed as of godot4 rebuild
+@deprecated
 case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = (GET_TERRAIN_WITHIN_PLAYER_DISTANCE, id)
@@ -1759,6 +1783,9 @@ implicit class TerrainUtils(terrain: Chunk[Terrain]) {
       }
     } yield res
 }
+//TODO make this server authoritative
+//server entity should trigger this call, but results
+//should be passed to both client and server
 case class GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
   loc: Vector[Double],
   distance: Double

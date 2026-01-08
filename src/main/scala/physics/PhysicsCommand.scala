@@ -3,8 +3,8 @@ import entity.Globz.GLOBZ_ID
 import zio.json.*
 
 case class PhysicsData(
-  typ: GLOBZ_ID,
-  id: GLOBZ_ID,
+  typ: String,
+  id: Int,
   vec: Vector[Double]
 )
 object PhysicsData {
@@ -30,7 +30,7 @@ object Loc {
   implicit val decoder: JsonDecoder[Loc] =
     DeriveJsonDecoder.gen[Loc]
 }
-case class SetInputLock(id: String, value: Boolean) extends PhysicsCommand
+case class SetInputLock(id: Int, value: Boolean) extends PhysicsCommand
 case class PhysicsTeleport(id: String, location: (Double, Double, Double))
     extends PhysicsCommand
 
