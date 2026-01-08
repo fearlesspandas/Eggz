@@ -16,6 +16,7 @@ object GlobzModel {
 }
 case class PlayerGlob(
   id: String,
+  physics_id:Int,
   location: (Double, Double, Double),
   health: Option[Double] = None
 ) extends GlobzModel
@@ -39,6 +40,7 @@ object GlobInMemory {
 
 case class ProwlerModel(
   id: String,
+  physics_id:Int,
   location: (Double, Double, Double),
   health: Option[Double] = None
 ) extends GlobzModel
@@ -50,6 +52,7 @@ object ProwlerModel {
 }
 case class AxisSpiderModel(
   id: String,
+  physics_id:Int,
   stats: Stats,
   location: (Double, Double, Double)
 ) extends GlobzModel

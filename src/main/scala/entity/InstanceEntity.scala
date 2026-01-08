@@ -40,6 +40,9 @@ trait InstanceEntity
 
   val destinations: Destinations
 
+  def physics_id() : UIO[Option[Int]] = 
+    physics.physics_id()
+
   def with_physics_id(id:Int) : UIO[Unit] = 
     physics.with_physics_id(id)
 

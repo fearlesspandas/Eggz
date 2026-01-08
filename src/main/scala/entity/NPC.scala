@@ -82,11 +82,14 @@ case class Prowler(
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
+      physics_id <- physics
+        .physics_id()
+        .flatMap(x => ZIO.fromOption(x))
       health <- this.health
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
-    } yield ProwlerModel(this.id, location, Some(health)))
+    } yield ProwlerModel(this.id,physics_id, location, Some(health)))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 }
 
@@ -139,13 +142,16 @@ case class Spider(
 
   override def serializeGlob: IO[GLOBZ_ERR, GlobzModel] =
     (for {
+      physics_id <- physics
+        .physics_id()
+        .flatMap(x => ZIO.fromOption(x))
       health <- ZIO.succeed(this.starting_health)
       energy <- ZIO.succeed(this.starting_energy)
       stats = Stats(health)
       location <- getLocation.flatMap(vec =>
         ZIO.succeed(vec(0)).zip(ZIO.succeed(vec(1))).zip(ZIO.succeed(vec(2)))
       )
-    } yield AxisSpiderModel(this.id, stats, location))
+    } yield AxisSpiderModel(this.id,physics_id, stats, location))
       .orElseFail(s"Error while trying to Serialize glob ${glob.id}")
 
   override val starting_health: Double = 100000

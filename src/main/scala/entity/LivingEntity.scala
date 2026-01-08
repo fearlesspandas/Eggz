@@ -25,6 +25,9 @@ trait TerrainEntity extends Eggz.Service with Globz with PhysicalEntity {
   val physics: PhysicalEntity
   val glob: Globz
 
+  def physics_id() : UIO[Option[Int]] = 
+    ZIO.succeed(None)
+
   def with_physics_id(id:Int) : UIO[Unit] = 
     ZIO.unit
 
@@ -131,6 +134,9 @@ trait LivingEntity
 
   override val field_state = fieldOps.field_state
   override val occupied_spaces = fieldOps.occupied_spaces
+
+  def physics_id() : UIO[Option[Int]] = 
+    physics.physics_id()
 
   def with_physics_id(id:Int) : UIO[Unit] = 
     physics.with_physics_id(id)
