@@ -59,6 +59,7 @@ trait PhysicsChannel {
           FailedSend(s"Error while sending to physics server : $err")
         )
     } yield ()
+
   def get_location(
     id: String
   ): ZIO[WebSocketChannel, PhysicsChannelError, Unit] =
@@ -163,49 +164,23 @@ object PhysicsChannel {
       .mapError(err => PhysicsAddrNotFound())
   def make: ZIO[WorldBlock.Block, PhysicsChannelError, PhysicsChannel] =
     for {
-      id_queue <- Ref.make(Seq.empty[GLOBZ_ID])
       queue <- Queue.unbounded[PHYSICS_COMMAND]
       wb <- ZIO.service[WorldBlock.Block]
       poll_interval <- System
         .env("PHYSICS_SOCKET_UPDATE_INTERVAL")
         .flatMap(ZIO.fromOption(_))
         .fold(err => 1000,x => x.toInt)
-    } yield BasicPhysicsChannel(id_queue, queue, wb,poll_interval)
+    } yield BasicPhysicsChannel( queue, wb,poll_interval)
 }
 case class BasicPhysicsChannel(
-  player_id_queue: Ref[Seq[GLOBZ_ID]],
   cmd_queue: Queue[PHYSICS_COMMAND],
   worldBlock: WorldBlock.Block,
   val poll_interval: Long,
 ) extends PhysicsChannel {
 
-  private def process_id_queue() =
-    for {
-      q <- player_id_queue.get
-      next_id <- ZIO
-        .fromOption(q.headOption)
-        .foldZIO(
-          err =>
-            for {
-              ids <- worldBlock.getAllBlobs().map(_.map(g => g.id))
-              _ <- player_id_queue.update(_ => ids.toSeq)
-            } yield ids.headOption,
-          x => ZIO.some(x)
-        )
-      _ <- next_id match {
-        case Some(id) => get_location(id);
-        case _        => send_noop()
-      }
-      _ <- player_id_queue.update(_.tail)
-    } yield ()
 
   def loop(interval: Long): ZIO[WebSocketChannel, PhysicsChannelError, Long] =
-    (for {
-      non_empty <- worldBlock.getNumBlobs()
-      _ <-
-        if (non_empty > 0) { process_id_queue() }
-        else { send_noop() }
-    } yield ())
+    send_noop() 
       .repeat(Schedule.spaced(Duration.fromMillis(interval)))
       .mapError(err => FailedSend(s"Error inside loop ${err.toString}"))
 
