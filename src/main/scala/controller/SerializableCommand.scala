@@ -10,7 +10,6 @@ import controller.CREATE_MONK.CreateMONKError
 import controller.CREATE_PROWLER.CreateProwlerError
 import controller.CREATE_SPIDER.CreateSPIDERError
 import controller.DELETE_DESTINATION.DeleteDestinationError
-import controller.FOLLOW_ENTITY.FollowEntityError
 import controller.SUBSCRIBE.SubscriptionEnv
 import controller.SerializableCommand.CommandError
 import controller.SerializableCommand.GenericCommandError
@@ -859,97 +858,54 @@ object SET_ACTIVE {
   implicit val decoder: JsonDecoder[SET_ACTIVE] =
     DeriveJsonDecoder.gen[SET_ACTIVE]
 }
-//todo if player is already following entity
-// make the existing process stop
+//check if entities exist then initiate follow
 case class FOLLOW_ENTITY(id: ID, target: ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
   override val REF_TYPE: Any = (FOLLOW_ENTITY, id, target)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     for {
       worldblock <- ZIO.service[WorldBlock.Block]
-      entity <- worldblock
-        .getBlobOption(id)
-        .flatMap(ZIO.fromOption(_))
-        .mapBoth(
-          _ => FollowEntityError(s"Could not find entity with id $id"),
-          { case li: LivingEntity =>
-            li
-          }
-        )
-      follow_op = entity match {
-        case npc: NPC =>
-          npc
-            .follow_player(target)
-            .provide(ZLayer.succeed(worldblock))
-            .repeat(Schedule.spaced(Duration.fromMillis(300)))
-            .zipPar(
-              npc
-                .attack_within_distance(0, target)
-                .provide(ZLayer.succeed(worldblock))
-                .repeat(Schedule.spaced(Duration.fromMillis(3000)))
-            )
-        case e =>
-          e.follow_player(target)
-            .provide(ZLayer.succeed(worldblock))
-            .repeat(Schedule.spaced(Duration.fromMillis(300)));
-      }
-      _ <- entity
-        .relate(
-          id,
-          target,
-          false,
-          follow_op
-            .orElseFail("Error while scheduling entity follow")
-            .unit
-        )
-        .orElseFail(FollowEntityError("Error while following entity"))
-    } yield ()
+      following_exists <- worldblock.hasBlob(id)
+      followed_exists <- worldblock.hasBlob(target)
+      res <- ZIO.succeed(Chunk(Following(id,target)))
+        .when(following_exists && followed_exists)
+        .flatMap(x => ZIO.fromOption(x))
+        .mapError(err => FollowEntityError(s"could not initiate follow due to $err"))
+
+    } yield MultiResponse(
+      Chunk(
+        QueuedServerMessage(res),
+        QueuedClientMessage(id,res),
+      )
+    )
 }
+case class FollowEntityError(msg: String) extends CommandError
 object FOLLOW_ENTITY {
   implicit val encoder: JsonEncoder[FOLLOW_ENTITY] = DeriveJsonEncoder
     .gen[FOLLOW_ENTITY]
   implicit val decoder: JsonDecoder[FOLLOW_ENTITY] =
     DeriveJsonDecoder.gen[FOLLOW_ENTITY]
-
-  case class FollowEntityError(msg: String) extends CommandError
 }
-case class UNFOLLOW_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
+case class UNFOLLOW_ENTITY(id: GLOBZ_ID)
     extends SimpleCommandSerializable[WorldBlock.Block] {
-  override val REF_TYPE: Any = (FOLLOW_ENTITY, id, target)
+  override val REF_TYPE: Any = (FOLLOW_ENTITY, id)
   override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
     for {
       worldblock <- ZIO.service[WorldBlock.Block]
-      entity <- worldblock
-        .getBlobOption(id)
-        .flatMap(ZIO.fromOption(_))
-        .mapBoth(
-          _ => FollowEntityError(s"Could not find entity with id $id"),
-          { case li: LivingEntity =>
-            li
-          }
-        )
-//      _ <- worldblock
-//        .npc_handler()
-//        .flatMap(_.add_entity_as_npc(entity))
-//        .orElseFail(FollowEntityError("Error while scheduling follow entity "))
-      // should maybe be in npc handler and not entity
-      _ <- entity
-        .unrelate(
-          id,
-          target,
-          false,
-          ZIO.unit
-        )
-        .orElseFail(FollowEntityError("Error while following entity"))
-    } yield ()
+      res <- ZIO.succeed(Chunk(Unfollowing(id)))
+    } yield MultiResponse(
+      Chunk(
+        QueuedServerMessage(res),
+        QueuedClientMessage(id,res),
+      )
+    )
 }
+case class UnfollowEntityError(msg: String) extends CommandError
 object UNFOLLOW_ENTITY {
   implicit val encoder: JsonEncoder[UNFOLLOW_ENTITY] = DeriveJsonEncoder
     .gen[UNFOLLOW_ENTITY]
   implicit val decoder: JsonDecoder[UNFOLLOW_ENTITY] =
     DeriveJsonDecoder.gen[UNFOLLOW_ENTITY]
-
-  case class FollowEntityError(msg: String) extends CommandError
 }
 case class BIND_ENTITY(id: GLOBZ_ID, target: GLOBZ_ID)
     extends ResponseQuery[WorldBlock.Block] {

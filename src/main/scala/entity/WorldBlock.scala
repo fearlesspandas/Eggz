@@ -32,6 +32,7 @@ object WorldBlock {
     def removeBlob(blob: Globz): IO[WorldBlockError, ExitCode]
     def getBlobOption(id: GLOBZ_ID): IO[WorldBlockError, Option[Globz]]
     def getBlob(id: GLOBZ_ID): IO[WorldBlockError, Globz]
+    def hasBlob(id:GLOBZ_ID):UIO[Boolean]
 
     def updateBlob(blob: Globz): IO[WorldBlockError, ExitCode]
 
@@ -96,6 +97,10 @@ object WorldBlock {
     id: GLOBZ_ID
   ): ZIO[WorldBlock.Block, WorldBlockError, Globz] =
     ZIO.serviceWithZIO[Block](_.getBlob(id))
+  def hasBlob(
+    id: GLOBZ_ID
+  ): ZIO[WorldBlock.Block, WorldBlockError, Boolean] =
+    ZIO.serviceWithZIO[Block](_.hasBlob(id))
   def getTerrain
     : ZIO[WorldBlock.Block, WorldBlockError, TerrainManager with Terrain] =
     ZIO.environmentWithZIO(_.get.getTerrain)
@@ -186,7 +191,9 @@ case class WorldBlockInMem(
         if (physical) dbRef.get.flatMap(m => ZIO.fromOption(m.get(id)))
         else non_physical_entities.get.flatMap(m => ZIO.fromOption(m.get(id)))
     } yield res)
-      .orElseFail(GenericWorldBlockError(s"Could not find entity with id $id"))
+      .orElseFail(GenericWorldBlockError(s"getBlob: Could not find entity with id $id"))
+
+  override def hasBlob( id: GLOBZ_ID): UIO[Boolean] = dbRef.get.map(_.contains(id))
 
   override def updateBlob(
     blob: Globz

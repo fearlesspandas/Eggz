@@ -195,10 +195,10 @@ package object auth {
     case cmd => ZIO.fail(s"$cmd not relevant to FOLLOW_ENTITY")
   }
   val unfollow_entity: ServerKeys => AUTH[String] = server_keys => {
-    case UNFOLLOW_ENTITY(id, target) =>
+    case UNFOLLOW_ENTITY(id) =>
       for {
         sender <- ZIO.service[String]
-      } yield id != target && (id == sender || server_keys.contains(sender))
+      } yield id == sender || server_keys.contains(sender)
     case cmd => ZIO.fail(s"$cmd not relevant to UNFOLLOW_ENTITY")
   }
   val bind_entity: ServerKeys => AUTH[String] = server_keys => {
