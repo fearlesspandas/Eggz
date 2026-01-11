@@ -1838,8 +1838,8 @@ object EXPAND_TERRAIN {
   implicit val decoder: JsonDecoder[EXPAND_TERRAIN] =
     DeriveJsonDecoder.gen[EXPAND_TERRAIN]
 }
-//this should be removed and handled by the game server if possible
-@deprecated
+//only called by authenticated servers, but will send results back to both server
+//and clients associated with that entity
 case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID,location:(Double,Double,Double))
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = FILL_EMPTY_CHUNK
@@ -1918,13 +1918,14 @@ case class FILL_EMPTY_CHUNK(id: TERRAIN_KEY, trigger_entity: GLOBZ_ID,location:(
         s"Expanded chunks ${newchunks.map(_.size)}"
       )
       //combine close terrain and new chunks as result
-      mapped_result <- (top_terr ++ newchunks.getOrElse(Chunk()))
+      terrain_near_player <- (top_terr ++ newchunks.getOrElse(Chunk()))
         .serialize_as_chunks(1024)
-      _ <- ZIO.log(s"Sending top terrain post fill ${mapped_result.size}")
+      _ <- ZIO.log(s"Sending top terrain post fill ${terrain_near_player.size}")
     } yield MultiResponse(
       Chunk(
-        PaginatedResponse(mapped_result),
-        QueuedClientMessage(trigger_entity, mapped_result)
+        QueuedServerMessage(terrain_near_player),
+        //PaginatedResponse(terrain_near_player),
+        QueuedClientMessage(trigger_entity, terrain_near_player)
       )
     )
 }

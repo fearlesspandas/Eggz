@@ -147,6 +147,20 @@ object ClearDestinations {
   implicit val decoder: JsonDecoder[ClearDestinations] =
     DeriveJsonDecoder.gen[ClearDestinations]
 }
+case class Following(following:String,followed:String) extends QueryResponse
+object Following {
+  implicit val encoder: JsonEncoder[Following] =
+    DeriveJsonEncoder.gen[Following]
+  implicit val decoder: JsonDecoder[Following] =
+    DeriveJsonDecoder.gen[Following]
+}
+case class Unfollowing(following:String) extends QueryResponse
+object Unfollowing {
+  implicit val encoder: JsonEncoder[Unfollowing] =
+    DeriveJsonEncoder.gen[Unfollowing]
+  implicit val decoder: JsonDecoder[Unfollowing] =
+    DeriveJsonDecoder.gen[Unfollowing]
+}
 case class Location(id: GLOBZ_ID, location: (Double, Double, Double))
     extends QueryResponse
 object Location {
