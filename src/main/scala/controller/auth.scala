@@ -16,11 +16,6 @@ package object auth {
   type AUTH[SENDER] = Any => ZIO[SENDER, String, Boolean]
   type ServerKeys = Set[String]
 
-  val get_glob_location: AUTH[String] = {
-    case GET_GLOB_LOCATION(id) => ZIO.succeed(true)
-    case cmd => ZIO.fail(s"$cmd not relevant to GET_GLOB_LOCATION")
-  }
-
   val set_glob_location: (Set[String]) => AUTH[String] = server_keys => {
     case SET_GLOB_LOCATION(_, _) =>
       ZIO.service[String].map(server_keys.contains(_))
@@ -109,20 +104,6 @@ package object auth {
         senderId <- ZIO.service[String]
       } yield senderId == id || server_keys.contains(senderId)
     case cmd => ZIO.fail(s"$cmd not relevant to ADD_DESTINATION")
-  }
-  val get_next_destination: Set[String] => AUTH[String] = server_keys => {
-    case GET_NEXT_DESTINATION(id) =>
-      for {
-        senderId <- ZIO.service[String]
-      } yield server_keys.contains(senderId)
-    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION")
-  }
-  val get_next_destination_client: AUTH[String] = {
-    case GET_NEXT_DESTINATION_CLIENT(id) =>
-      for {
-        senderId <- ZIO.service[String]
-      } yield senderId == id
-    case cmd => ZIO.fail(s"$cmd not relevant to GET_NEXT_DESTINATION_CLIENT")
   }
   val set_active_destination: AUTH[String] = {
     case SET_ACTIVE_DESTINATION(id, _) =>
@@ -257,13 +238,6 @@ package object auth {
       } yield server_keys.contains(sender) || sender == id
     case cmd => ZIO.fail(s"$cmd not relevant for GET_PHYSICAL_STATS")
   }
-  val get_all_terrain: Set[String] => AUTH[String] = server_keys => {
-    case GET_ALL_TERRAIN(id, non_relative) =>
-      for {
-        send <- ZIO.service[String]
-      } yield id == send || (non_relative && server_keys.contains(send))
-    case cmd => ZIO.fail(s"$cmd not relevant for GET_ALL_TERRAIN")
-  }
   val get_terrain_within_distance: Set[String] => AUTH[String] = server_keys =>
     {
       case GET_TERRAIN_WITHIN_DISTANCE(location, radius) =>
@@ -271,16 +245,6 @@ package object auth {
           sender <- ZIO.service[String]
         } yield server_keys.contains(sender)
       case cmd => ZIO.fail(s"$cmd not relevant for GET_TERRAIN_WITHIN_DISTANCE")
-    }
-
-  val get_terrain_within_player_distance: Set[String] => AUTH[String] =
-    server_keys => {
-      case GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id, radius) =>
-        for {
-          sender <- ZIO.service[String]
-        } yield sender == id || server_keys.contains(sender)
-      case cmd =>
-        ZIO.fail(s"$cmd not relevant for GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
     }
   val add_terrain: AUTH[String] = {
     case ADD_TERRAIN(id, location) =>
@@ -442,7 +406,6 @@ object AuthCommandService {
         .validateFirstPar(
           Seq(
             set_glob_location(server_keys)(op),
-            get_glob_location(op),
             relate_eggs(op),
             create_prowler(server_keys)(op),
             create_axis_spider(server_keys)(op),
@@ -454,8 +417,6 @@ object AuthCommandService {
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
             add_destination(server_keys)(op),
-            get_next_destination(server_keys)(op),
-            get_next_destination_client(op),
             set_active_destination(op),
             get_next_index(op),
             get_all_destinations(server_keys)(op),
@@ -470,9 +431,7 @@ object AuthCommandService {
             set_speed(server_keys)(op),
             adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
-            get_all_terrain(server_keys)(op),
             get_terrain_within_distance(server_keys)(op),
-            get_terrain_within_player_distance(server_keys)(op),
             add_terrain(op),
             get_top_level_terrain(op),
             get_top_level_terrain_in_distance(op),
@@ -509,7 +468,6 @@ object AuthCommandService {
         .validateFirstPar(
           Seq(
             set_glob_location(server_keys)(op),
-            get_glob_location(op),
             relate_eggs(op),
             create_prowler(server_keys)(op),
             create_axis_spider(server_keys)(op),
@@ -521,8 +479,6 @@ object AuthCommandService {
             add_health(server_keys)(op),
             remove_health(server_keys)(op),
             add_destination(server_keys)(op),
-            get_next_destination(server_keys)(op),
-            get_next_destination_client(op),
             set_active_destination(op),
             get_next_index(op),
             get_all_destinations(server_keys)(op),
@@ -537,9 +493,7 @@ object AuthCommandService {
             set_speed(server_keys)(op),
             adjust_max_speed(server_keys)(op),
             get_physical_stats(server_keys)(op),
-            get_all_terrain(server_keys)(op),
             get_terrain_within_distance(server_keys)(op),
-            get_terrain_within_player_distance(server_keys)(op),
             add_terrain(op),
             get_top_level_terrain(op),
             get_top_level_terrain_in_distance(op),

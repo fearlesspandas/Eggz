@@ -7,9 +7,14 @@ type PHYSICS_ID = Int
 trait PhysicalEntity {
   def physics_id() : UIO[Option[Int]]
   def with_physics_id(id:Int) : UIO[Unit]
+
+  @deprecated
   def getLocation: IO[PhysicsError, Vector[Double]]
+  @deprecated
   def getVelocity: IO[PhysicsError, Vector[Double]]
+  @deprecated
   def setVelocity(velocity: Vector[Double]): IO[PhysicsError, Unit]
+
   def teleport(location: Vector[Double]): IO[PhysicsError, Unit]
   def adjustMaxSpeed(delta: Double): IO[PhysicsError, Unit]
   def getMaxSpeed: IO[PhysicsError, Double]

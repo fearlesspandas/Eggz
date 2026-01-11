@@ -148,6 +148,28 @@ case class SocketSubscribe(socket: WebSocketChannel, sub: SUBSCRIBE)
     ).run
 }
 
+//deprecated for external calls but used in WebSocket
+@deprecated
+case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
+  override val REF_TYPE: Any = (GET_BLOB, id)
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
+    (for {
+      g <- WorldBlock.getBlobOption(id)
+      x <- ZIO.fromOption(g).flatMap(glob => glob.serializeGlob)
+    } yield Blob(Some(x)))
+      .orElseFail(GenericCommandError(s"Error finding blob with $id"))
+      .fold(err => Blob(None), x => x)
+}
+@deprecated
+object GET_BLOB {
+  implicit val encoder: JsonEncoder[GET_BLOB] = DeriveJsonEncoder.gen[GET_BLOB]
+  implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
+  def main(args: Array[String]) = {
+    val text =
+      "\"{\"GET_BLOB\":{\"id\":\"0f93593d-28ea-405d-b17c-703b9cc24a39\"}}\""
+    println(text.fromJson[SerializableCommand[_, _]])
+  }
+}
 case class CREATE_GLOB(globId: GLOBZ_ID, location: Vector[Double])
     extends ResponseQuery[Globz.Service with WorldBlock.Block] {
   val REF_TYPE: Any = CREATE_GLOB
@@ -517,49 +539,6 @@ object REMOVE_HEALTH {
     DeriveJsonEncoder.gen[REMOVE_HEALTH]
   implicit val decoder: JsonDecoder[REMOVE_HEALTH] =
     DeriveJsonDecoder.gen[REMOVE_HEALTH]
-}
-
-@deprecated
-case class GET_BLOB(id: GLOBZ_ID) extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = (GET_BLOB, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      g <- WorldBlock.getBlobOption(id)
-      x <- ZIO.fromOption(g).flatMap(glob => glob.serializeGlob)
-    } yield Blob(Some(x)))
-      .orElseFail(GenericCommandError(s"Error finding blob with $id"))
-      .fold(err => Blob(None), x => x)
-}
-@deprecated
-object GET_BLOB {
-  implicit val encoder: JsonEncoder[GET_BLOB] = DeriveJsonEncoder.gen[GET_BLOB]
-  implicit val decoder: JsonDecoder[GET_BLOB] = DeriveJsonDecoder.gen[GET_BLOB]
-  def main(args: Array[String]) = {
-    val text =
-      "\"{\"GET_BLOB\":{\"id\":\"0f93593d-28ea-405d-b17c-703b9cc24a39\"}}\""
-    println(text.fromJson[SerializableCommand[_, _]])
-  }
-}
-
-@deprecated
-case class GET_GLOB_LOCATION(id: GLOBZ_ID)
-    extends ResponseQuery[WorldBlock.Block] {
-  override val REF_TYPE: Any = (GET_GLOB_LOCATION, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      glob <- WorldBlock.getBlobOption(id)
-      location <- ZIO.fromOption(glob).flatMap { case g: PhysicalEntity =>
-        g.getLocation
-      }
-    } yield MSG(id, Location(id, (location(0), location(1), location(2)))))
-      .fold(_ => NoLocation(id), x => x)
-}
-@deprecated
-object GET_GLOB_LOCATION {
-  implicit val encoder: JsonEncoder[GET_GLOB_LOCATION] =
-    DeriveJsonEncoder.gen[GET_GLOB_LOCATION]
-  implicit val decoder: JsonDecoder[GET_GLOB_LOCATION] =
-    DeriveJsonDecoder.gen[GET_GLOB_LOCATION]
 }
 
 @deprecated
@@ -1057,139 +1036,6 @@ object GET_NEXT_INDEX {
   implicit val decoder: JsonDecoder[GET_NEXT_INDEX] =
     DeriveJsonDecoder.gen[GET_NEXT_INDEX]
 }
-
-//deprecated as of the godot 4 rebuild
-//this logic is instead handled on the game server itself.
-//this was a dumb idea to begin with, and is a remnant of
-//when the game was more scala reliant for it's core behavior.
-@deprecated
-case class GET_NEXT_DESTINATION(id: ID)
-    extends ResponseQuery[Globz.Service with WorldBlock.Block] {
-  override val REF_TYPE: Any = (GET_NEXT_DESTINATION, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    (for {
-      blob <- WorldBlock.getBlobOption(id)
-      result <- ZIO.fromOption(blob).flatMap {
-        case entity: Destinations with PhysicalEntity =>
-          for {
-            next <- entity.getNextDestination().flatMap(ZIO.fromOption(_))
-            loc <- entity.getLocation
-            r: QueryResponse <-
-              if (
-                GET_NEXT_DESTINATION.distance(next.location, loc) > next.radius
-              ) for {
-                x <- next.serialize
-              } yield MSG(id, NextDestination(id, x))
-              else
-                for {
-                  ser_dest <- entity
-                    .popNextDestination()
-                    .flatMap(ZIO.fromOption(_))
-                    .flatMap(_.serialize)
-                  res <- next.dest_type match {
-                    case TELEPORT =>
-                      for {
-                        teleport_to_destination <- entity
-                          .getNextDestination()
-                          .flatMap(ZIO.fromOption(_))
-                        teleport_to <- ZIO
-                          .succeed(teleport_to_destination.location(0))
-                          .zip(ZIO.succeed(teleport_to_destination.location(1)))
-                          .zip(ZIO.succeed(teleport_to_destination.location(2)))
-                        server_res = QueuedServerMessage( // USED TO BE PAGINATED RESPONSE
-                          Chunk(
-                            MSG(id, TeleportToNext(id, teleport_to)),
-                            MSG(id, NextDestination(id, ser_dest))
-                          )
-                        )
-                        client_res <- GET_TOP_LEVEL_TERRAIN_IN_DISTANCE(
-                          teleport_to_destination.location,
-                          1024
-                        ).run.map(qr =>
-                          QueuedClientMessage(
-                            id,
-                            Chunk(qr)
-                          )
-                        )
-                      } yield MultiResponse(
-                        Chunk(
-                          server_res,
-                          client_res
-                        )
-                      )
-                    case GRAVITY =>
-                      ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
-                    case WAYPOINT =>
-                      ZIO.succeed(MSG(id, NextDestination(id, ser_dest)))
-                  }
-                  index <- entity.getIndex()
-                } yield MultiResponse(
-                  Chunk(
-                    res,
-                    QueuedClientMessage(id, Chunk(NextIndex(id, index)))
-                  )
-                )
-
-          } yield r
-      }
-    } yield result)
-      .orElseFail(
-        GenericCommandError(s"Error retrieving destination for id $id")
-      )
-      .fold(err => NoLocation(id), x => x)
-}
-object GET_NEXT_DESTINATION {
-  implicit val encoder: JsonEncoder[GET_NEXT_DESTINATION] =
-    DeriveJsonEncoder.gen[GET_NEXT_DESTINATION]
-  implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION] =
-    DeriveJsonDecoder.gen[GET_NEXT_DESTINATION]
-
-  def distance(v1: Vector[Double], v2: Vector[Double]): Double = {
-    val minDist = v1.length min v2.length
-    val v1_trunc = v1.take(minDist)
-    val v2_trun = v2.take(minDist)
-    // performance of this might not be great
-    math.sqrt(
-      v1_trunc
-        .zip(v2_trun)
-        .foldLeft(0.0)((acc, curr) =>
-          acc + (curr._1 - curr._2) * (curr._1 - curr._2)
-        )
-    )
-  }
-}
-case class GET_NEXT_DESTINATION_CLIENT(id: ID)
-    extends ResponseQuery[WorldBlock.Block]:
-  override val REF_TYPE: Any = (GET_NEXT_DESTINATION_CLIENT, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    for {
-      blob <- ZIO
-        .serviceWithZIO[WorldBlock.Block](_.getBlobOption(id))
-        .flatMap(ZIO.fromOption(_))
-        .mapBoth(
-          err =>
-            GenericCommandError(
-              s"Error while getting next destination : Could not find glob with id $id"
-            ),
-          { case de: Destinations => de }
-        )
-      next_dest <- blob
-        .getNextDestination()
-        .flatMap(ZIO.fromOption(_))
-        .flatMap(_.serialize)
-        .orElseFail(
-          GenericCommandError(
-            s"Error while getting next destination for client $id"
-          )
-        )
-    } yield NextDestination(id, next_dest)
-
-object GET_NEXT_DESTINATION_CLIENT {
-  implicit val encoder: JsonEncoder[GET_NEXT_DESTINATION_CLIENT] =
-    DeriveJsonEncoder.gen[GET_NEXT_DESTINATION_CLIENT]
-  implicit val decoder: JsonDecoder[GET_NEXT_DESTINATION_CLIENT] =
-    DeriveJsonDecoder.gen[GET_NEXT_DESTINATION_CLIENT]
-}
 case class GET_ALL_DESTINATIONS(id: ID)
     extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (GET_ALL_DESTINATIONS, id)
@@ -1542,46 +1388,6 @@ object ADD_TERRAIN {
     DeriveJsonDecoder.gen[ADD_TERRAIN]
 }
 
-//removed as of godot 4 rebuild
-@deprecated
-case class GET_ALL_TERRAIN(id: ID, non_relative: Boolean = false)
-    extends ResponseQuery[WorldBlock.Block] {
-  val REF_TYPE: Any = GET_ALL_TERRAIN
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
-    // todo split between get_all_terrain_within_block and get_all_terrain_within_radius_of_loc
-    for {
-      loc <- WorldBlock
-        .getBlobOption(id)
-        .flatMap {
-          case Some(g: Player) => g.getLocation;
-          case None            => ZIO.succeed(Vector(0.0, 0, 0))
-        }
-        .orElseFail(GenericCommandError("failed to find player location"))
-        .debug
-        .fold(_ => Vector(0.0, 0, 0), x => x)
-      // .flatMapError(err => ZIO.log(err.msg))
-      _ <- ZIO.log(s"retrieving all terrain, non_relative:$non_relative")
-
-      r3 <- WorldBlock.getTerrain
-        .flatMap(
-          _.serializeMini(loc, non_relative, 1000)
-        )
-        .orElseFail(GenericCommandError("Could not serialize all terrain"))
-      rr = Chunk.from(
-        r3.terrain.toSeq
-          .grouped(100)
-          .map(x => TerrainSet(Set(TerrainRegionM(r3.region_uuid, x.toSet))))
-      )
-    } yield PaginatedResponse(rr)
-}
-
-object GET_ALL_TERRAIN {
-  implicit val encoder: JsonEncoder[GET_ALL_TERRAIN] =
-    DeriveJsonEncoder.gen[GET_ALL_TERRAIN]
-  implicit val decoder: JsonDecoder[GET_ALL_TERRAIN] =
-    DeriveJsonDecoder.gen[GET_ALL_TERRAIN]
-}
-
 case class GET_TERRAIN_WITHIN_DISTANCE(location: Vector[Double], radius: Double)
     extends ResponseQuery[WorldBlock.Block] {
   val REF_TYPE: Any = GET_TERRAIN_WITHIN_DISTANCE
@@ -1604,50 +1410,6 @@ object GET_TERRAIN_WITHIN_DISTANCE {
     DeriveJsonEncoder.gen[GET_TERRAIN_WITHIN_DISTANCE]
   implicit val decoder: JsonDecoder[GET_TERRAIN_WITHIN_DISTANCE] =
     DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_DISTANCE]
-}
-
-//removed as of godot4 rebuild
-@deprecated
-case class GET_TERRAIN_WITHIN_PLAYER_DISTANCE(id: ID, radius: Double)
-    extends ResponseQuery[WorldBlock.Block] {
-  val REF_TYPE: Any = (GET_TERRAIN_WITHIN_PLAYER_DISTANCE, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] = for {
-    _ <- ZIO.log("GET_TERRAIN_WITHIN_PLAYER_DISTANCE")
-    location <- WorldBlock
-      .getBlobOption(id)
-      .flatMap(ZIO.fromOption(_))
-      .flatMap {
-        case p: Player => p.getLocation;
-        case _ =>
-          ZIO.fail(
-            GenericCommandError(s"Player not found when retrieving terrain")
-          )
-      }
-      .orElseFail {
-        GenericCommandError(
-          s"could not retrieve player location while attempting to get terrain"
-        )
-      }
-    res <- WorldBlock.getTerrain
-      .flatMap(
-        _.get_terrain_within_distance(location, radius)
-      )
-      .flatMap(r => ZIO.foreachPar(r)(_.serialize()).map(_.flatten))
-      .orElseFail {
-        GenericCommandError(
-          s"Error while retrieving terrain within radius $radius around point $location"
-        )
-      }
-    _ <- ZIO.log(s"terrain within distance $res")
-    rr = Chunk.from(res.grouped(100).map(x => TerrainSet(x.toSet)))
-  } yield PaginatedResponse(rr)
-}
-
-object GET_TERRAIN_WITHIN_PLAYER_DISTANCE {
-  implicit val encoder: JsonEncoder[GET_TERRAIN_WITHIN_PLAYER_DISTANCE] =
-    DeriveJsonEncoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
-  implicit val decoder: JsonDecoder[GET_TERRAIN_WITHIN_PLAYER_DISTANCE] =
-    DeriveJsonDecoder.gen[GET_TERRAIN_WITHIN_PLAYER_DISTANCE]
 }
 
 case class GET_TOP_LEVEL_TERRAIN() extends ResponseQuery[WorldBlock.Block] {
