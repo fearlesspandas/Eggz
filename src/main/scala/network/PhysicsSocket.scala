@@ -30,7 +30,8 @@ trait PhysicsChannel {
             if (value) { lock_input(id) }
             else unlock_input(id)
 
-          case PhysicsTeleport(id, location) => set_location(id, location)
+          //case PhysicsTeleport(id, location) => set_location(id, location)
+          case PhysicsTeleport(_,_) => ZIO.unit
         }
         .fork
     } yield ()
@@ -96,7 +97,7 @@ trait PhysicsChannel {
       Handler
         .webSocket { channel =>
           channel.receiveAll {
-            case Read(WebSocketFrame.Binary(bytes)) => ZIO.log("bytes_received")
+            case Read(WebSocketFrame.Binary(bytes)) => ZIO.unit //ZIO.log("bytes_received")
             case Read(WebSocketFrame.Text(txt)) => ZIO.log(s"text received $txt")
             case UserEventTriggered(UserEvent.HandshakeComplete) =>
               (for {

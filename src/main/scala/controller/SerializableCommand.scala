@@ -839,9 +839,9 @@ object SET_ACTIVE {
 }
 //check if entities exist then initiate follow
 case class FOLLOW_ENTITY(id: ID, target: ID)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
+    extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (FOLLOW_ENTITY, id, target)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       worldblock <- ZIO.service[WorldBlock.Block]
       following_exists <- worldblock.hasBlob(id)
@@ -866,9 +866,9 @@ object FOLLOW_ENTITY {
     DeriveJsonDecoder.gen[FOLLOW_ENTITY]
 }
 case class UNFOLLOW_ENTITY(id: GLOBZ_ID)
-    extends SimpleCommandSerializable[WorldBlock.Block] {
+    extends ResponseQuery[WorldBlock.Block] {
   override val REF_TYPE: Any = (FOLLOW_ENTITY, id)
-  override def run: ZIO[WorldBlock.Block, CommandError, Unit] =
+  override def run: ZIO[WorldBlock.Block, CommandError, QueryResponse] =
     for {
       worldblock <- ZIO.service[WorldBlock.Block]
       res <- ZIO.succeed(Chunk(Unfollowing(id)))
